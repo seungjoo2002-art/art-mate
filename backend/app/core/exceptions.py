@@ -35,11 +35,26 @@ class ErrorCode(StrEnum):
     BAD_REQUEST = "BAD_REQUEST"
     VALIDATION_ERROR = "VALIDATION_ERROR"
     UNAUTHORIZED = "UNAUTHORIZED"
+    INVALID_TOKEN = "INVALID_TOKEN"
+    TOKEN_EXPIRED = "TOKEN_EXPIRED"
     AUTH_NOT_CONFIGURED = "AUTH_NOT_CONFIGURED"
+    AUTH_PROVIDER_UNAVAILABLE = "AUTH_PROVIDER_UNAVAILABLE"
     FORBIDDEN = "FORBIDDEN"
+    PROFILE_REQUIRED = "PROFILE_REQUIRED"
+    ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
     NOT_FOUND = "NOT_FOUND"
+    PROFILE_NOT_FOUND = "PROFILE_NOT_FOUND"
     METHOD_NOT_ALLOWED = "METHOD_NOT_ALLOWED"
     CONFLICT = "CONFLICT"
+    ALREADY_MEMBER = "ALREADY_MEMBER"
+    JOIN_REQUEST_ALREADY_PENDING = "JOIN_REQUEST_ALREADY_PENDING"
+    JOIN_REQUEST_ALREADY_REVIEWED = "JOIN_REQUEST_ALREADY_REVIEWED"
+    ACADEMY_NOT_ACCEPTING_MEMBERS = "ACADEMY_NOT_ACCEPTING_MEMBERS"
+    ACADEMY_ALREADY_REVIEWED = "ACADEMY_ALREADY_REVIEWED"
+    ACADEMY_APPLICATION_LIMIT = "ACADEMY_APPLICATION_LIMIT"
+    OWNER_CANNOT_LEAVE = "OWNER_CANNOT_LEAVE"
+    MEMBER_ROLE_NOT_CHANGEABLE = "MEMBER_ROLE_NOT_CHANGEABLE"
+    APPLICANT_INACTIVE = "APPLICANT_INACTIVE"
     INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     DATABASE_NOT_CONFIGURED = "DATABASE_NOT_CONFIGURED"
@@ -85,6 +100,16 @@ class UnauthorizedError(AppError):
         super().__init__(message, **kwargs)
 
 
+class InvalidTokenError(UnauthorizedError):
+    code = ErrorCode.INVALID_TOKEN
+    message = "Invalid access token"
+
+
+class TokenExpiredError(UnauthorizedError):
+    code = ErrorCode.TOKEN_EXPIRED
+    message = "Access token has expired"
+
+
 class ForbiddenError(AppError):
     status_code = HTTPStatus.FORBIDDEN
     code = ErrorCode.FORBIDDEN
@@ -107,6 +132,11 @@ class ServiceUnavailableError(AppError):
     status_code = HTTPStatus.SERVICE_UNAVAILABLE
     code = ErrorCode.SERVICE_UNAVAILABLE
     message = "Service temporarily unavailable"
+
+
+class AuthProviderUnavailableError(ServiceUnavailableError):
+    code = ErrorCode.AUTH_PROVIDER_UNAVAILABLE
+    message = "Authentication provider is temporarily unavailable"
 
 
 class DatabaseNotConfiguredError(ServiceUnavailableError):

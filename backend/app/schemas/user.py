@@ -1,0 +1,76 @@
+import re
+import uuid
+from datetime import datetime
+from typing import Annotated, Literal
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
+
+from app.models.enums import UserType
+from app.schemas.common import APIModel
+
+DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
+
+# Storage 객체 경로: avatars/<user_id>/<파일명>. URL·상위 경로(..)·절대 경로는 허용하지 않는다.
+_AVATAR_PATH = re.compile(r"^avatars/[0-9a-f-]{36}/(?!\.{1,2}$)[A-Za-z0-9._-]{1,200}$")
+
+
+class ProfileCreate(BaseModel):
+    """회원가입 직후 1회 호출. ADMIN은 선택할 수 없다."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: DisplayName
+    user_type: Literal[UserType.STUDENT, UserType.INSTRUCTOR] = Field(
+        description="STUDENT 또는 INSTRUCTOR (ADMIN 불가)"
+    )
+
+
+class ProfileUpdate(BaseModel):
+    """본인 프로필 수정. user_type·is_active 등은 변경할 수 없다 (보내면 422)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: DisplayName | None = None
+    avatar_path: str | None = Field(
+        default=None,
+        max_length=512,
+        description="Supabase Storage 경로 `avatars/<본인 user_id>/<파일명>`. null이면 삭제",
+    )
+
+    @field_validator("avatar_path")
+    @classmethod
+    def _validate_avatar_path(cls, value: str | None) -> str | None:
+        if value is not None and not _AVATAR_PATH.fullmatch(value):
+            raise ValueError("avatar_path must look like 'avatars/<user_id>/<file name>'")
+        return value
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> "ProfileUpdate":
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided")
+        if "display_name" in self.model_fields_set and self.display_name is None:
+            raise ValueError("display_name cannot be null")
+        return self
+
+
+class ProfileRead(APIModel):
+    id: uuid.UUID
+    display_name: str
+    user_type: UserType
+    avatar_path: str | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class MeRead(ProfileRead):
+    email: str | None = Field(
+        default=None, description="Supabase Auth 계정 이메일 (토큰에서 읽음, DB에 저장하지 않음)"
+    )

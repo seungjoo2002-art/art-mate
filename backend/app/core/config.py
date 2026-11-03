@@ -60,9 +60,15 @@ class Settings(BaseSettings):
     # None이면 포트 6543(transaction pooler)일 때 자동으로 prepared statement를 끈다.
     db_disable_prepared_statements: bool | None = None
 
-    # --- Supabase (v0.2 인증 연동에서 사용) -----------------------------------
+    # --- Supabase Auth ------------------------------------------------------
+    # 프로젝트 URL (https://<ref>.supabase.co). JWT 발급자(iss)와 JWKS 주소를 여기서 만든다.
+    # 비어 있으면 보호 API는 모두 401(AUTH_NOT_CONFIGURED)로 거부된다 (fail-closed).
     supabase_url: AnyHttpUrl | None = None
+    # 백엔드는 사용하지 않는다 (프론트엔드 SDK용 공개 키). service_role 키는 두지 않는다.
     supabase_anon_key: SecretStr | None = None
+    auth_jwt_audience: str = "authenticated"
+    auth_jwt_leeway_seconds: int = Field(default=10, ge=0, le=60)
+    auth_jwks_cache_seconds: int = Field(default=600, ge=60, le=86400)
 
     # --- HTTP --------------------------------------------------------------
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
@@ -163,6 +169,24 @@ class Settings(BaseSettings):
         if self.log_format is not None:
             return self.log_format
         return "text" if self.app_env in {"development", "test"} else "json"
+
+    @property
+    def auth_configured(self) -> bool:
+        return self.supabase_url is not None
+
+    @property
+    def supabase_base_url(self) -> str | None:
+        return str(self.supabase_url).rstrip("/") if self.supabase_url else None
+
+    @property
+    def auth_jwt_issuer(self) -> str | None:
+        base = self.supabase_base_url
+        return f"{base}/auth/v1" if base else None
+
+    @property
+    def auth_jwks_url(self) -> str | None:
+        base = self.supabase_base_url
+        return f"{base}/auth/v1/.well-known/jwks.json" if base else None
 
     @property
     def database_configured(self) -> bool:

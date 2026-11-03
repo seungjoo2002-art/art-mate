@@ -16,6 +16,7 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from app.core.security import build_token_verifier
 from app.db.session import create_database
 
 logger = logging.getLogger("app")
@@ -32,10 +33,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "env": settings.app_env,
             "version": settings.app_version,
             "database_configured": settings.database_configured,
+            "auth_configured": settings.auth_configured,
         },
     )
     if not settings.database_configured:
         logger.warning("DATABASE_URL is not set; database features are disabled")
+    if not settings.auth_configured:
+        logger.warning("SUPABASE_URL is not set; protected APIs will reject all requests")
     try:
         yield
     finally:
@@ -62,6 +66,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.database = None
+    # 테스트에서는 서명 키를 고정한 verifier로 교체할 수 있다.
+    app.state.token_verifier = build_token_verifier(settings)
 
     register_exception_handlers(app)
 

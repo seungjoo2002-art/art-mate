@@ -1,6 +1,6 @@
 # ART MATE 백엔드 아키텍처
 
-> 대상 버전: v0.1 (기반 구축) · 이후 버전에서 변경 시 이 문서를 함께 갱신합니다.
+> 대상 버전: v0.2 (인증·사용자·학원 소속) · 변경 시 이 문서를 함께 갱신합니다.
 
 ## 1. 전체 구성
 
@@ -79,14 +79,15 @@ Client
 | --- | --- | --- | --- |
 | 입력 검증 실패 | 422 | `VALIDATION_ERROR` (`details`에 field/message/type, 입력값은 미포함) | Pydantic |
 | 잘못된 요청(도메인) | 400 | `BAD_REQUEST` | `BadRequestError` |
-| 인증 없음/실패 | 401 | `UNAUTHORIZED` (+ `WWW-Authenticate: Bearer`) | `UnauthorizedError` |
-| 인증 미구현(v0.1) | 401 | `AUTH_NOT_CONFIGURED` | `verify_access_token` |
-| 권한 없음 | 403 | `FORBIDDEN` | `ForbiddenError` |
+| 인증 없음 | 401 | `UNAUTHORIZED` (+ `WWW-Authenticate: Bearer`) | `UnauthorizedError` |
+| 토큰 무효 / 만료 | 401 | `INVALID_TOKEN` / `TOKEN_EXPIRED` | `SupabaseJWTVerifier` |
+| 인증 설정 누락 | 401 | `AUTH_NOT_CONFIGURED` (`SUPABASE_URL` 미설정, fail-closed) | `get_current_user` |
+| 권한 없음 | 403 | `FORBIDDEN`, `PROFILE_REQUIRED`, `ACCOUNT_DISABLED` | `ForbiddenError` |
 | 리소스 없음 | 404 | `NOT_FOUND` | `NotFoundError`, 존재하지 않는 경로 |
 | 허용되지 않은 메서드 | 405 | `METHOD_NOT_ALLOWED` | 라우터 |
-| 중복·상태 충돌 | 409 | `CONFLICT` | `ConflictError` |
+| 중복·상태 충돌 | 409 | `CONFLICT` 및 도메인 코드 (`ALREADY_MEMBER` 등, docs/frontend-integration.md §8) | `ConflictError` |
 | 서버 내부 오류 | 500 | `INTERNAL_SERVER_ERROR` (메시지 고정, 스택트레이스 미노출) | 미들웨어 |
-| 일시적 불가 | 503 | `SERVICE_UNAVAILABLE`, `DATABASE_NOT_CONFIGURED`, `DATABASE_UNAVAILABLE` | `ServiceUnavailableError` 계열 |
+| 일시적 불가 | 503 | `SERVICE_UNAVAILABLE`, `DATABASE_NOT_CONFIGURED`, `DATABASE_UNAVAILABLE`, `AUTH_PROVIDER_UNAVAILABLE` | `ServiceUnavailableError` 계열 |
 
 새 도메인 에러 코드가 필요하면 `ErrorCode`에 추가합니다(예: `CALL_ALREADY_PENDING`). 프론트엔드는 `message`가 아니라 `code`로 분기합니다.
 
@@ -104,50 +105,79 @@ Client
 
 ## 5. 인증·권한 구조
 
+### 인증 방식 결정: 프론트엔드가 Supabase Auth SDK를 직접 사용
+
+| 기능 | 처리 위치 |
+| --- | --- |
+| 회원가입·로그인·로그아웃·토큰 갱신·비밀번호 재설정·이메일 인증 | **Supabase Auth SDK (프론트엔드)** |
+| access token 검증, 프로필·학원 권한 | ART MATE API |
+
+- 백엔드가 로그인 API를 감싸면 비밀번호가 백엔드를 거치고, 토큰 갱신·이메일 인증·재설정 로직이 중복됩니다. 그래서 인증은 Supabase에 맡기고 백엔드는 **검증만** 합니다.
+- 백엔드에는 service_role 키가 없습니다. Supabase Admin API(사용자 삭제 등)가 필요한 기능은 별도 배치나 운영 도구로 분리합니다.
+- 프론트엔드 연동 방법: [frontend-integration.md](frontend-integration.md)
+
 ### 공개 / 보호 API 분리
 
 | 구분 | 경로 | 인증 |
 | --- | --- | --- |
 | 공개 | `/`, `/health`, `/api/v1/health`, `/api/v1/health/db` | 없음 (내부 정보 미노출) |
-| 보호 | 그 외 모든 `/api/v1/*` 비즈니스 API | `CurrentUser` 의존성 필수 |
+| 보호 | 그 외 모든 `/api/v1/*` | `CurrentUser` 이상의 의존성 필수 |
 
-v0.1에서는 `verify_access_token()`이 항상 401(`AUTH_NOT_CONFIGURED`)을 반환합니다(**fail-closed**). 따라서 v0.2 이전에 보호 API를 추가해도 공개되지 않습니다.
+`SUPABASE_URL`이 없으면 verifier가 만들어지지 않고, 보호 API는 모두 401 `AUTH_NOT_CONFIGURED`로 거부됩니다(**fail-closed**).
 
-### Supabase JWT 검증 (v0.2 구현 방향)
+### Supabase JWT 검증 (`app/core/security.py`)
 
-1. `Authorization: Bearer <access_token>` 추출 (`HTTPBearer`, 누락 시 401)
-2. JWT 헤더의 `kid`로 Supabase JWKS(`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`) 공개키 선택 — 비대칭 서명키(ES256/RS256) 기준. JWKS는 메모리에 캐시(예: 10분)하고, 모르는 `kid`면 1회 재조회
-3. 검증 항목
-   - **서명**: 허용 알고리즘 화이트리스트(`alg: none`, HS/RS 혼동 공격 거부)
-   - **iss** = `{SUPABASE_URL}/auth/v1`
-   - **aud** = `authenticated`
-   - **exp / nbf / iat**, leeway ≤ 30초
-   - **sub**: UUID 형식 → `AuthenticatedUser.user_id`
-   - `role` 클레임이 `authenticated`인지 확인 (`anon` 토큰 거부)
-4. 실패 사유는 서버 로그에만 남기고 응답은 401 `UNAUTHORIZED`로 통일
-5. 라이브러리 후보: `PyJWT[crypto]` (`PyJWKClient`) — v0.2에서 추가
-6. 레거시 HS256 공유 시크릿 방식은 사용하지 않습니다(시크릿 유출 시 토큰 위조 가능). 프로젝트가 아직 레거시 키라면 Supabase 대시보드에서 비대칭 키로 전환합니다.
+1. `Authorization: Bearer <access_token>` 추출 (`HTTPBearer`, 누락 시 401 `UNAUTHORIZED`)
+2. 헤더 `alg`가 **ES256/RS256**이 아니면 거부합니다(`none`, HS256 알고리즘 혼동 차단). `kid`가 없어도 거부합니다.
+3. `kid`로 JWKS(`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`) 공개키를 찾습니다(`JWKSKeyResolver`).
+   - 메모리 캐시: `AUTH_JWKS_CACHE_SECONDS`(기본 600초)
+   - 모르는 `kid`이면 재조회하되 **최소 30초 간격**을 둡니다. 위조 `kid`로 Supabase를 반복 호출하게 만드는 공격을 막기 위해서입니다.
+   - 조회에 실패해도 캐시가 있으면 계속 쓰고, 캐시가 없으면 503 `AUTH_PROVIDER_UNAVAILABLE`을 반환합니다.
+4. `jwt.decode`로 서명과 클레임을 검증합니다.
+   - **iss** = `{SUPABASE_URL}/auth/v1`, **aud** = `AUTH_JWT_AUDIENCE`(기본 `authenticated`)
+   - `exp`, `iat`, `sub`, `aud`, `iss` 필수, 시계 오차 `AUTH_JWT_LEEWAY_SECONDS`(기본 10초)
+   - `role == "authenticated"`이어야 하고(anon·service_role 토큰 거부), `is_anonymous == true`(익명 로그인)도 거부
+   - `sub`는 UUID → `AuthenticatedUser.user_id`
+5. 만료는 401 `TOKEN_EXPIRED`, 그 밖의 실패는 401 `INVALID_TOKEN`입니다. 실패 사유(예외 종류)는 서버 로그에만 남기고, 토큰 원문은 기록하지 않습니다.
+6. 검증한 서울 개발 프로젝트는 ES256 비대칭 키(JWKS)를 사용합니다. 레거시 HS256 공유 시크릿 방식은 지원하지 않습니다.
 
-### 역할과 학원 소속
+> 로그아웃 후에도 이미 발급된 access token은 만료 전까지(기본 1시간) 유효합니다. 즉시 차단이 필요한 경우(계정 정지)는 `profiles.is_active=false`로 처리하며, 다음 요청부터 403 `ACCOUNT_DISABLED`가 됩니다.
 
-- 역할(`admin`/`teacher`/`student`)은 **학원별 소속(`academy_memberships`)의 속성**입니다. 같은 사용자가 A 학원에서는 강사, B 학원에서는 관리자일 수 있습니다.
-- 역할은 JWT 커스텀 클레임에 넣지 않고 DB에서 조회합니다 (변경 즉시 반영, 토큰 재발급 불필요).
-- 학원 범위 API는 경로에 학원을 명시합니다: `/api/v1/academies/{academy_id}/students/...`
-- v0.2에서 추가할 의존성 (라우터는 선언만):
+### 사용자 유형과 학원 내 역할 (권한 분리)
+
+| 구분 | 값 | 저장 위치 | 부여 방법 |
+| --- | --- | --- | --- |
+| 서비스 사용자 유형 | `STUDENT`, `INSTRUCTOR` | `profiles.user_type` | 가입 시 본인 선택 (`POST /users/me`), 이후 변경 불가 |
+| 시스템 관리자 | `ADMIN` | `profiles.user_type` | **API로 부여 불가**. DB에서 수동 지정 (development-guide.md §8) |
+| 학원 내 역할 | `OWNER`, `MANAGER`, `INSTRUCTOR`, `STUDENT` | `academy_memberships.role` | 아래 정책 |
+
+- **시스템 ADMIN ≠ 학원 관리자.** 시스템 ADMIN은 학원 등록 심사만 할 수 있고, 학원 소속이 아니면 학원 내부 데이터(멤버, 가입 요청)에 접근할 수 없습니다(404).
+- 역할은 JWT 클레임이 아니라 DB에서 매 요청 조회합니다. 변경이 즉시 반영됩니다.
+
+학원 정책 (v0.2 확정)
+
+| 항목 | 정책 |
+| --- | --- |
+| 학원 생성 | `INSTRUCTOR`가 등록 신청 → `PENDING_APPROVAL` → 시스템 ADMIN 승인 시 `ACTIVE`, 거절 시 `REJECTED`. 승인 대기 신청은 1인당 최대 3개 |
+| 학원 관리자 | 신청자가 `OWNER`(학원당 1명). OWNER가 소속 강사를 `MANAGER`로 지정·해제. OWNER 양도는 v0.3 |
+| 학생·강사 합류 | 본인이 가입 요청 → OWNER/MANAGER 승인. 신청 역할은 사용자 유형에서 결정(학생→STUDENT, 강사→INSTRUCTOR) |
+| 탈퇴·제외 | 본인 탈퇴 `LEFT`, 관리자 제외 `REMOVED`. OWNER는 탈퇴·제외 불가. MANAGER는 다른 MANAGER를 제외할 수 없음 |
+| 재가입 | 새 가입 요청 → 승인 시 기존 소속 행을 `ACTIVE`로 재활성화 (역할은 요청 역할로 초기화) |
+
+### 권한 의존성 (`app/api/deps.py`)
 
 ```python
-# app/api/deps.py (v0.2 예시)
-async def get_academy_member(academy_id: UUID, user: CurrentUser, session: DbSession) -> Membership:
-    membership = await MembershipRepository(session).get_active(academy_id, user.user_id)
-    if membership is None:
-        raise NotFoundError()          # 소속이 아니면 학원 존재 여부도 숨김
-    return membership
+CurrentUser                              # 유효한 토큰 (프로필 없어도 됨)          → 401
+ActiveProfile                            # + 프로필 존재, is_active               → 403 PROFILE_REQUIRED / ACCOUNT_DISABLED
+Depends(require_user_types(UserType.ADMIN))           # 서비스 사용자 유형         → 403
+Depends(require_academy_roles(*ACADEMY_ADMIN_ROLES))  # 경로 academy_id의 ACTIVE 소속·역할 → 404(비소속) / 403(역할 부족)
 
-def require_roles(*roles: AcademyRole): ...   # 역할 검사 의존성 팩토리
-
-@router.post("/academies/{academy_id}/classes")
-async def create_class(member: Annotated[Membership, Depends(require_roles(AcademyRole.ADMIN))], ...): ...
+@router.get("/{academy_id}/members")
+async def list_members(academy_id: UUID, _: AcademyStaff, session: DbSession, ...): ...
 ```
+
+- 학원 범위 API는 경로에 `academy_id`를 둡니다. 하위 리소스(요청, 멤버)는 **`academy_id`와 리소스 ID를 함께** 조회하므로, 다른 학원의 ID를 넣으면 404가 됩니다.
+- 동시성: 가입 요청 중복은 DB 부분 유니크 인덱스로 막고, 승인·거절은 요청 행을 `SELECT ... FOR UPDATE`로 잠가 한 번만 처리합니다.
 
 ## 6. 향후 AI 연동 구조
 

@@ -1,6 +1,6 @@
 # ART MATE 데이터베이스 설계
 
-> 상태: **설계안 (v0.1)**. ORM 모델·마이그레이션은 아직 없습니다. v0.2(인증·학원 연결)부터 이 문서를 기준으로 구현하고, 구현과 달라지면 문서를 함께 수정합니다.
+> 상태: **v0.2 구현 반영**. §3.1~3.3a(`profiles`, `academies`, `academy_memberships`, `academy_join_requests`)는 구현·마이그레이션 완료(리비전 `0001`). 나머지 엔티티는 설계안이며, 구현할 때 이 문서를 함께 수정합니다.
 
 ## 1. 공통 규칙
 
@@ -8,11 +8,11 @@
 | --- | --- |
 | DB | Supabase PostgreSQL, 앱 테이블은 `public` 스키마 |
 | 테이블명 | snake_case 복수형 (`academies`, `artwork_stages`) |
-| PK | `id uuid` (앱에서 uuid4 생성, `UUIDPrimaryKeyMixin`). 예외: `user_profiles.id` = `auth.users.id` |
+| PK | `id uuid` (앱에서 uuid4 생성, `UUIDPrimaryKeyMixin`). 예외: `profiles.id` = `auth.users.id` |
 | 시각 | `timestamptz`, UTC 저장. 모든 테이블에 `created_at`, `updated_at` (`TimestampMixin`) |
 | 학원 격리 | 학원 소유 데이터는 **모든 테이블에 `academy_id NOT NULL`** (자식 테이블도 비정규화해서 보유) |
 | 삭제 | 기본 soft delete(`deleted_at`) 또는 상태값. 물리 삭제는 보존기간 만료·법적 요청 시 배치로 수행 |
-| enum | PostgreSQL native enum 대신 `text + CHECK` (값 추가 시 마이그레이션이 단순) |
+| enum | PostgreSQL native enum 대신 `varchar(20) + CHECK`, 값은 대문자 (`STUDENT`, `ACTIVE`). `app/db/base.py`의 `enum_column()` 사용 |
 | 제약조건 이름 | `app/db/base.py`의 naming convention 사용 (Alembic 리비전 충돌 방지) |
 | 파일 | 이미지·음성은 Supabase Storage에 저장, DB에는 `storage_path`와 메타데이터만 |
 | JSON | 구조가 자주 바뀌는 데이터(이미지 주석, AI 출력)만 `jsonb`. 검색·조인 대상은 컬럼으로 |
@@ -20,8 +20,10 @@
 ## 2. ERD (개요)
 
 ```text
-auth.users 1─1 user_profiles 1─* academy_memberships *─1 academies
-                                      │ (role: admin/teacher/student)
+auth.users 1─1 profiles 1─* academy_memberships *─1 academies          (v0.2 구현)
+                  │          (role: OWNER/MANAGER/INSTRUCTOR/STUDENT)
+                  └─* academy_join_requests *─1 academies           (v0.2 구현)
+                                      │
                                       ├─1 student_profiles ─* consent_records
                                       │
 academies 1─* classes 1─* class_enrollments *─1 academy_memberships(student)
@@ -35,58 +37,80 @@ academies 1─* classes 1─* class_enrollments *─1 academy_memberships(studen
 academy_memberships(student) 1─* assignments, growth_reports, ai_analyses
 ```
 
-학생·강사를 가리키는 FK는 `user_profiles`가 아니라 **`academy_memberships.id`** 를 참조합니다.
+학생·강사를 가리키는 FK는 `profiles`가 아니라 **`academy_memberships.id`** 를 참조합니다.
 → "어느 학원에서의 학생/강사인가"가 FK 자체에 담기고, 학원을 떠나도 기록의 소속이 명확합니다.
 
 ## 3. 엔티티
 
 표기: **PK**, FK→대상, `?` = nullable
 
-### 3.1 UserProfile — `user_profiles`
-서비스 사용자 프로필. Supabase Auth 계정과 1:1.
+### 3.1 Profile — `profiles` ✅ v0.2
+서비스 사용자 프로필. Supabase Auth 계정과 1:1. **이메일·비밀번호는 저장하지 않음** (Supabase Auth가 관리).
 
-| 필드 | 설명 |
-| --- | --- |
-| **id** uuid | = `auth.users.id` (JWT `sub`). 앱에서 생성하지 않음 |
-| display_name | 표시 이름 |
-| phone? | 연락처 (최소 수집) |
-| birth_date? | 미성년 여부 판단용 (학생만) |
-| deleted_at? | 탈퇴(익명화) 시각 |
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| **id** | uuid | = `auth.users.id` (JWT `sub`). 앱에서 생성하지 않음 |
+| display_name | varchar(50) | 표시 이름. CHECK: 공백만 불가 |
+| user_type | varchar(20) | `STUDENT` / `INSTRUCTOR` / `ADMIN` (CHECK). ADMIN은 API로 부여 불가 |
+| avatar_path? | varchar(512) | Storage 경로 `avatars/<id>/<파일>` (API에서 본인 경로만 허용) |
+| is_active | bool | 기본 true. false면 보호 API 403 `ACCOUNT_DISABLED` |
+| created_at, updated_at | timestamptz | |
 
-- 관계: 1:N `academy_memberships`
-- 생성: 첫 로그인 시 `POST /api/v1/me/profile` 또는 `auth.users` insert 트리거 (v0.2에서 결정)
-- 삭제: 탈퇴 시 이름·연락처 익명화 + `deleted_at`. 작품·첨삭 등 학원 기록은 학원 보존정책에 따름
-- FK `auth.users(id)`는 cross-schema이므로 Alembic 리비전에서 수동 작성
-- 인덱스: PK
+- 생성: 회원가입 후 프론트엔드가 `POST /api/v1/users/me` 호출. `INSERT ... ON CONFLICT DO NOTHING`이라 **중복·재시도에 안전**합니다. 생성이 실패해도 다음 로그인 때 `GET /users/me` → 404 → 다시 생성하면 복구됩니다. `auth.users` 트리거는 쓰지 않습니다(auth 스키마 변경을 피하고, 사용자 유형 선택을 명시적으로 받기 위해).
+- FK `profiles.id → auth.users(id) ON DELETE CASCADE`: 마이그레이션에서 **auth 스키마가 있는 DB(Supabase)에만** 생성합니다. 로컬·CI PostgreSQL에서는 건너뜁니다. Alembic `check`는 이 FK를 비교 대상에서 제외합니다(`alembic/env.py`).
+- 삭제: Supabase 계정을 삭제하면 프로필, 소속, 가입 요청이 CASCADE로 삭제되고, `academies.created_by`·`reviewed_by`는 SET NULL이 됩니다. 일반 탈퇴 흐름(익명화)은 v0.3에서 구현합니다(privacy-and-data-policy.md §3.3).
+- 인덱스: PK, `ix_profiles_user_type`
 
-### 3.2 Academy — `academies`
-| 필드 | 설명 |
-| --- | --- |
-| **id**, name, slug(unique) | |
-| status | `active` / `suspended` / `closed` |
-| timezone | 기본 `Asia/Seoul` (수업 일정 표시용, 저장은 UTC) |
-| business_info? | 사업자 정보 (jsonb) |
-| deleted_at? | |
+### 3.2 Academy — `academies` ✅ v0.2
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| **id** | uuid | |
+| name | varchar(100) | 2~100자 (중복 허용: 지역별 동명 학원) |
+| description? | varchar(1000) | |
+| status | varchar(20) | `PENDING_APPROVAL` → `ACTIVE` / `REJECTED`, (`SUSPENDED`: v0.3 운영 정지) |
+| created_by? → profiles | uuid | 등록 신청자 (ON DELETE SET NULL) |
+| reviewed_by? → profiles, reviewed_at?, review_note? | | 시스템 ADMIN 심사 기록 |
 
-- 삭제: soft delete만. 폐원 시 보존기간 후 하위 데이터 일괄 파기 배치
-- 인덱스: `uq(slug)`
+- 생성 정책: INSTRUCTOR가 신청하면 `PENDING_APPROVAL`, 신청자는 같은 트랜잭션에서 `OWNER` 소속이 됩니다. 시스템 ADMIN이 승인해야 학원 찾기에 노출되고 가입 요청을 받을 수 있습니다.
+- 공개 범위: `ACTIVE`는 로그인 사용자 누구나 조회할 수 있습니다. 그 외 상태는 소속 멤버와 시스템 ADMIN만 볼 수 있습니다.
+- 삭제: API 없음 (v0.3에서 폐원 처리 정책과 함께)
+- 인덱스: `ix_academies_status_name(status, name)` (학원 찾기), `ix_academies_created_by`
+- 추후 후보: slug, timezone, 사업자 정보, 지역
 
-### 3.3 AcademyMembership — `academy_memberships`
-사용자의 학원 소속과 **학원별 역할**. 권한 판단의 기준.
+### 3.3 AcademyMembership — `academy_memberships` ✅ v0.2
+**실제 소속**과 학원별 역할. 권한 판단의 기준. (가입 *요청*은 3.3a로 분리)
 
-| 필드 | 설명 |
-| --- | --- |
-| **id** | |
-| academy_id → academies | |
-| user_id → user_profiles | |
-| role | `admin` / `teacher` / `student` |
-| status | `invited` / `active` / `suspended` / `left` |
-| joined_at?, left_at? | |
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| **id** | uuid | |
+| academy_id → academies | uuid | ON DELETE CASCADE |
+| user_id → profiles | uuid | ON DELETE CASCADE |
+| role | varchar(20) | `OWNER` / `MANAGER` / `INSTRUCTOR` / `STUDENT` |
+| status | varchar(20) | `ACTIVE` / `LEFT`(본인 탈퇴) / `REMOVED`(관리자 제외) |
+| joined_at, left_at? | timestamptz | |
 
-- 한 사용자는 여러 학원에 소속 가능, **학원당 멤버십 1개** (`uq(academy_id, user_id)`). 원장이 직접 수업하는 경우 `admin`이 강사 권한을 포함
-- 삭제: 물리 삭제 금지 → `status=left` (과거 작품·첨삭의 작성자 참조 유지)
-- 인덱스: `uq(academy_id, user_id)`, `ix(user_id, status)` (로그인 사용자의 학원 목록), `ix(academy_id, role, status)`
-- 복합 FK 대상: `uq(academy_id, id)` → 자식 테이블이 `(academy_id, student_id)`로 참조해 **다른 학원 학생과 잘못 연결되는 것을 DB 수준에서 차단**
+- 한 사용자는 여러 학원에 소속할 수 있지만, **학원당 소속 행은 1개**(`uq(academy_id, user_id)`)입니다. 재가입하면 같은 행을 `ACTIVE`로 재활성화합니다(`INSERT ... ON CONFLICT DO UPDATE WHERE status <> 'ACTIVE'`).
+- 역할 규칙(서비스 계층): STUDENT 유형은 STUDENT 역할만 가질 수 있습니다. INSTRUCTOR 유형은 INSTRUCTOR/MANAGER/OWNER, ADMIN 유형은 소속할 수 없습니다.
+- 삭제: API로는 물리 삭제하지 않고 상태만 바꿉니다(과거 기록의 작성자 참조 유지).
+- 인덱스: `uq_academy_memberships_academy_id_user_id`, `ix_academy_memberships_user_status(user_id, status)` (내 학원), `ix_academy_memberships_academy_status_role` (멤버 목록)
+- 추후: 자식 테이블의 교차 학원 연결 방지를 위해 `uq(academy_id, id)` + 복합 FK (작품 테이블 도입 시)
+
+### 3.3a AcademyJoinRequest — `academy_join_requests` ✅ v0.2
+학원 가입 요청 이력. 소속 상태와 섞지 않습니다.
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| **id** | uuid | |
+| academy_id → academies, user_id → profiles | uuid | ON DELETE CASCADE |
+| requested_role | varchar(20) | `STUDENT` / `INSTRUCTOR`만 (CHECK `requested_role_allowed`). 사용자 유형에서 결정 |
+| status | varchar(20) | `PENDING` → `APPROVED` / `REJECTED` |
+| message? | varchar(300) | 신청 메시지 |
+| reviewed_by? → profiles, reviewed_at?, review_note? | | 처리한 관리자 (ON DELETE SET NULL) |
+
+- **중복 방지**: 부분 유니크 인덱스 `uq_academy_join_requests_pending (academy_id, user_id) WHERE status = 'PENDING'`. 동시 요청도 DB가 막고 API는 409를 반환합니다. 거절·승인된 요청은 이력으로 남고, 다시 신청할 수 있습니다.
+- **승인 동시성**: 처리할 때 요청 행을 `SELECT ... FOR UPDATE`로 잠급니다. 두 관리자가 동시에 처리해도 한 번만 처리되고, 다른 쪽은 409 `JOIN_REQUEST_ALREADY_REVIEWED`를 받습니다.
+- 인덱스: `ix_academy_join_requests_academy_status(academy_id, status, created_at)` (관리자 목록), `ix_academy_join_requests_user(user_id, created_at)` (내 요청)
+- 추후: 강사 초대 코드(`academy_invitations`), 요청 취소(`CANCELLED`)
 
 ### 3.4 StudentProfile — `student_profiles` *(추가 제안)*
 학원 내 학생 정보 (입시 정보, 보호자).
@@ -306,11 +330,23 @@ Storage 객체 메타데이터를 한 곳에서 관리 → 권한 확인·보존
 4. 다른 학원 리소스 접근은 **404** (존재 여부 비노출)
 5. 복합 FK `(academy_id, student_id) → academy_memberships(academy_id, id)` 로 교차 학원 연결을 DB가 거부
 
-### 4.2 역할별 접근 범위 (초안)
+### 4.2 역할별 접근 범위
+
+v0.2 구현 (학원 내 역할 기준, 시스템 ADMIN은 학원 소속이 아니면 접근 불가)
+
+| 리소스 | OWNER | MANAGER | INSTRUCTOR | STUDENT |
+| --- | --- | --- | --- | --- |
+| 학원 정보 | 읽기 | 읽기 | 읽기 | 읽기 |
+| 멤버 목록 | 읽기 | 읽기 | 읽기 | ❌ (다른 학생 정보 보호) |
+| 가입 요청 목록·승인·거절 | ✅ | ✅ | ❌ | ❌ |
+| 멤버 제외 | ✅ (OWNER 제외 불가) | ✅ (OWNER·MANAGER 제외 불가) | ❌ | ❌ |
+| MANAGER 지정·해제 | ✅ | ❌ | ❌ | ❌ |
+| 학원 탈퇴 | ❌ | ✅ | ✅ | ✅ |
+
+이후 버전 설계안 (admin = OWNER/MANAGER, teacher = INSTRUCTOR 이상)
 
 | 리소스 | admin | teacher | student |
 | --- | --- | --- | --- |
-| 학원 정보·멤버 관리 | 읽기/쓰기 | 읽기 | 자신만 |
 | 반·수업 | 읽기/쓰기 | 담당 반 쓰기, 전체 읽기 | 수강 반 읽기 |
 | 작품·단계 사진 | 전체 읽기 | 전체 읽기 (v0.x에서 담당 반 한정 검토) | **자기 작품만** 읽기/업로드 |
 | 첨삭 | 전체 읽기 | 작성/수정 (본인 작성분) | 자기 작품의 `published`만 |
@@ -332,9 +368,10 @@ Supabase는 `public` 스키마를 Data API(PostgREST)로 노출하며 anon key�
 
 ## 5. 인증·권한 고려사항
 
-- `user_profiles.id = auth.users.id = JWT sub` → 토큰 검증 후 추가 매핑 없이 사용자 식별
+- `profiles.id = auth.users.id = JWT sub` → 토큰 검증 후 추가 매핑 없이 사용자 식별
 - 역할은 JWT가 아니라 `academy_memberships.role`에서 조회 (학원마다 다르고, 변경이 즉시 반영돼야 함)
-- 초대 흐름(v0.2~): admin이 초대 생성(`status=invited`) → 사용자가 로그인 후 수락 → `active`
+- 학원 합류(v0.2): 본인 가입 요청 → OWNER/MANAGER 승인 (`academy_join_requests`). 강사 초대 코드는 v0.3 이후
+- 상세 정책: architecture.md §5, 개인정보·삭제 정책: privacy-and-data-policy.md
 - 학원 선택: 클라이언트가 현재 학원을 경로의 `academy_id`로 전달 (서버 세션 상태 없음)
 - 미성년 학생: `student_profiles.is_minor`와 `consent_records`로 기능 게이트, 보호자 연락처는 리포트 발송에만 사용
 
