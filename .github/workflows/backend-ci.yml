@@ -34,8 +34,8 @@ jobs:
       ENV_FILE: ""
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/artmate_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "0.12.3"
       - name: Install dependencies
@@ -46,18 +46,21 @@ jobs:
         run: uv run ruff format --check .
       - name: Tests (unit + integration)
         run: uv run pytest
-      - name: Alembic migrations apply cleanly
+      - name: Alembic migrations (upgrade / downgrade roundtrip / drift check)
         env:
           APP_ENV: test
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
         run: |
           uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
           uv run alembic check
+          uv run alembic current
 
   docker-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build image
         run: docker build -t artmate-api:ci .
       - name: Smoke test /health
