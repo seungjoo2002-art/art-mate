@@ -1,0 +1,70 @@
+name: backend-ci
+
+on:
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+  push:
+    branches: [main, develop]
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    services:
+      # 테스트 전용 Postgres (운영 Supabase에 접근하지 않음)
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: artmate_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      ENV_FILE: ""
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/artmate_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.3"
+      - name: Install dependencies
+        run: uv sync --frozen --python 3.12
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format
+        run: uv run ruff format --check .
+      - name: Tests (unit + integration)
+        run: uv run pytest
+      - name: Alembic migrations apply cleanly
+        env:
+          APP_ENV: test
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t artmate-api:ci .
+      - name: Smoke test /health
+        run: |
+          docker run -d --name api -p 8000:8000 \
+            -e DATABASE_URL=postgresql://u:p@127.0.0.1:1/none \
+            -e CORS_ORIGINS=https://example.com \
+            artmate-api:ci
+          for i in $(seq 1 20); do curl -fsS localhost:8000/health && exit 0; sleep 1; done
+          docker logs api; exit 1
