@@ -171,3 +171,56 @@ uv run ruff check . --fix && uv run ruff format .   # PR 전
 - [ ] 비밀값·개인정보가 커밋/로그에 없는지 확인
 - [ ] `develop` → `main` PR merge 후 태그: `git tag v0.x.0 && git push origin v0.x.0`
 - [ ] 운영 배포 시: DB 백업 확인 → 마이그레이션 수동 적용 → 배포 → `/health`, `/api/v1/health/db` 확인
+
+## 8. 운영 절차 (v0.2~)
+
+### 8.1 Supabase DB에 마이그레이션 적용
+
+마이그레이션은 서버 기동이나 CI에서 자동 적용하지 않습니다. 리뷰된 리비전을 사람이 적용합니다.
+
+```bash
+cd backend
+# 0) 대상 확인: backend/.env 의 DATABASE_URL 이 의도한 프로젝트(개발/운영)인지 확인
+uv run alembic current                       # 현재 리비전 (처음이면 비어 있음)
+uv run alembic upgrade head --sql > ../migration-preview.sql   # 1) 실행될 SQL 미리 보기 (커밋하지 말 것)
+# 2) 운영 DB라면: Supabase 대시보드에서 백업(또는 PITR) 확인
+uv run alembic upgrade head                  # 3) 적용
+uv run alembic check                         # 4) 모델과 일치 확인 → "No new upgrade operations detected."
+```
+
+- 운영(`APP_ENV=production`)은 `ALLOW_PRODUCTION_MIGRATIONS=true`를 함께 지정해야만 실행됩니다.
+- 적용 후 Supabase 대시보드 → Table Editor에서 4개 테이블에 **RLS enabled**가 표시되는지, `profiles`에 `fk_profiles_id_auth_users` FK가 생겼는지 확인합니다.
+- 되돌리기: `uv run alembic downgrade -1`. 이 경우 테이블과 데이터가 삭제되므로 운영에서는 사용하지 않습니다.
+
+### 8.2 시스템 관리자(ADMIN) 지정
+
+ADMIN은 API로 만들 수 없습니다. 대상 사용자가 먼저 가입하고 프로필을 생성한 뒤, Supabase 대시보드 → SQL Editor에서 실행합니다.
+
+```sql
+-- user id 는 Authentication > Users 에서 확인
+UPDATE profiles SET user_type = 'ADMIN', updated_at = now()
+WHERE id = '<user-uuid>';
+```
+
+- 지정·해제 시 날짜, 대상, 사유를 팀 문서에 기록합니다(감사 로그 기능은 후속 구현).
+- ADMIN 계정은 학원에 소속할 수 없으므로, 강사로도 활동할 사람은 별도 계정을 씁니다.
+
+### 8.3 계정 비활성화
+
+```sql
+UPDATE profiles SET is_active = false, updated_at = now() WHERE id = '<user-uuid>';
+```
+
+다음 요청부터 보호 API가 403 `ACCOUNT_DISABLED`를 반환합니다. 이미 발급된 토큰에도 즉시 적용됩니다.
+
+### 8.4 로컬 테스트 DB
+
+DB 기반 테스트(`tests/db/`)는 `TEST_DATABASE_URL`이 있을 때만 실행됩니다. 이 값은 **로컬 DB만** 허용됩니다. Supabase 호스트이거나 원격 호스트이면 테스트가 중단됩니다.
+
+```bash
+# 예: 로컬 PostgreSQL (Docker 또는 설치형)
+docker run -d --name artmate-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=artmate_test -p 5432:5432 postgres:16
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/artmate_test uv run pytest
+```
+
+테스트는 시작할 때 `alembic downgrade base` → `upgrade head`를 실행하고, 테스트마다 테이블을 비웁니다. **개발용 데이터가 있는 DB를 지정하지 마세요.** PR에서는 CI의 임시 PostgreSQL로 자동 실행됩니다.

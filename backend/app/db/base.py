@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from enum import Enum as PyEnum
 
-from sqlalchemy import DateTime, MetaData, func
+from sqlalchemy import DateTime, Enum, MetaData, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 NAMING_CONVENTION = {
@@ -39,4 +40,20 @@ class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+def enum_column(enum_cls: type[PyEnum], name: str) -> Enum:
+    """enum 값을 varchar + CHECK 제약으로 저장한다 (native enum보다 값 추가 마이그레이션이 쉽다).
+
+    `name`은 CHECK 제약 이름(ck_<table>_<name>)에 쓰인다.
+    """
+    return Enum(
+        enum_cls,
+        name=name,
+        native_enum=False,
+        create_constraint=True,
+        length=20,
+        values_callable=lambda e: [member.value for member in e],
+        validate_strings=True,
     )

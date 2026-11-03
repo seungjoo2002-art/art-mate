@@ -37,11 +37,24 @@ def _load_settings() -> Settings:
     return settings
 
 
+def _include_object(
+    obj: object, name: str | None, type_: str, reflected: bool, compare_to: object
+) -> bool:
+    # Supabase 전용 FK(profiles.id -> auth.users.id)는 마이그레이션에서 조건부로 만들며
+    # ORM 메타데이터에는 없다. autogenerate/check가 이를 "삭제 대상"으로 보지 않게 제외한다.
+    if type_ == "foreign_key_constraint" and reflected:
+        referred = getattr(obj, "referred_table", None)
+        if referred is not None and referred.schema == "auth":
+            return False
+    return True
+
+
 def _configure(**kwargs: object) -> None:
     context.configure(
         target_metadata=target_metadata,
         compare_type=True,
         compare_server_default=True,
+        include_object=_include_object,
         **kwargs,
     )
 
