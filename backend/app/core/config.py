@@ -22,6 +22,9 @@ LogFormat = Literal["json", "text"]
 # 운영 성격의 환경: DEBUG 금지, CORS 와일드카드 금지, API 문서 기본 비공개
 DEPLOYED_ENVIRONMENTS: frozenset[str] = frozenset({"staging", "production"})
 
+# 작품 사진으로 허용할 수 있는 이미지 형식 (실제 바이트 검증은 app/services/images.py)
+SUPPORTED_IMAGE_TYPES: frozenset[str] = frozenset({"image/jpeg", "image/png", "image/webp"})
+
 # Supabase Supavisor transaction pooler 기본 포트 (prepared statement 미지원)
 SUPABASE_TRANSACTION_POOLER_PORT = 6543
 
@@ -64,11 +67,29 @@ class Settings(BaseSettings):
     # 프로젝트 URL (https://<ref>.supabase.co). JWT 발급자(iss)와 JWKS 주소를 여기서 만든다.
     # 비어 있으면 보호 API는 모두 401(AUTH_NOT_CONFIGURED)로 거부된다 (fail-closed).
     supabase_url: AnyHttpUrl | None = None
-    # 백엔드는 사용하지 않는다 (프론트엔드 SDK용 공개 키). service_role 키는 두지 않는다.
+    # 공개 키. v0.4부터 Storage API 호출의 apikey 헤더로 사용한다 (권한은 사용자 토큰으로 판단).
+    # service_role 키는 두지 않는다.
     supabase_anon_key: SecretStr | None = None
     auth_jwt_audience: str = "authenticated"
     auth_jwt_leeway_seconds: int = Field(default=10, ge=0, le=60)
     auth_jwks_cache_seconds: int = Field(default=600, ge=60, le=86400)
+
+    # --- Supabase Storage (v0.4 작품 사진) -----------------------------------
+    # 비공개 버킷 이름. backend/supabase/storage-setup.sql 과 같아야 한다.
+    storage_bucket: str = Field(default="artworks", pattern=r"^[a-z0-9][a-z0-9_-]{1,62}$")
+    storage_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    # 사진 조회용 Signed URL 만료 (초)
+    storage_signed_url_seconds: int = Field(default=300, ge=30, le=3600)
+    # 업로드 요청 후 완료 처리까지 허용 시간 (초). Supabase signed upload URL 유효시간(2시간) 이하
+    artwork_upload_ttl_seconds: int = Field(default=3600, ge=60, le=7200)
+    artwork_max_upload_bytes: int = Field(default=10 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+    # 허용 MIME 타입 (쉼표 구분). 지원: image/jpeg, image/png, image/webp
+    artwork_allowed_content_types: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["image/jpeg", "image/png", "image/webp"]
+    )
+    artwork_max_photos_per_stage: int = Field(default=10, ge=1, le=50)
+    # 디컴프레션 폭탄 방지: 이미지 최대 픽셀 수
+    artwork_max_image_pixels: int = Field(default=50_000_000, ge=1_000_000, le=200_000_000)
 
     # --- HTTP --------------------------------------------------------------
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
@@ -107,6 +128,24 @@ class Settings(BaseSettings):
                         "http:// 또는 https:// 로 시작해야 합니다"
                     )
             return origins
+        return value
+
+    @field_validator("artwork_allowed_content_types", mode="before")
+    @classmethod
+    def _split_content_types(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.split(",")
+        if isinstance(value, list | tuple):
+            types = [str(item).strip().lower() for item in value if str(item).strip()]
+            unsupported = sorted(set(types) - SUPPORTED_IMAGE_TYPES)
+            if unsupported:
+                raise ValueError(
+                    f"지원하지 않는 이미지 형식입니다: {', '.join(unsupported)} "
+                    f"(지원: {', '.join(sorted(SUPPORTED_IMAGE_TYPES))})"
+                )
+            if not types:
+                raise ValueError("허용 이미지 형식이 비어 있습니다")
+            return types
         return value
 
     @field_validator("database_url", mode="before")
@@ -187,6 +226,16 @@ class Settings(BaseSettings):
     def auth_jwks_url(self) -> str | None:
         base = self.supabase_base_url
         return f"{base}/auth/v1/.well-known/jwks.json" if base else None
+
+    @property
+    def storage_configured(self) -> bool:
+        """Storage API 호출에는 프로젝트 URL과 공개 anon(publishable) 키가 필요하다."""
+        return self.supabase_url is not None and self.supabase_anon_key is not None
+
+    @property
+    def storage_api_url(self) -> str | None:
+        base = self.supabase_base_url
+        return f"{base}/storage/v1" if base else None
 
     @property
     def database_configured(self) -> bool:

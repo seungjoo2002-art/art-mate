@@ -24,7 +24,7 @@ import logging
 import time
 import urllib.request
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Annotated, Any, Protocol
 
 import jwt
@@ -54,6 +54,9 @@ class AuthenticatedUser:
     user_id: uuid.UUID
     email: str | None = None
     claims: dict[str, Any] = field(default_factory=dict, repr=False)
+    # 원본 access token. Supabase Storage를 '사용자 권한'으로 호출할 때만 사용한다
+    # (service_role 키 없이 Storage RLS 정책이 적용되도록). 로그·repr에 남기지 않는다.
+    access_token: str = field(default="", repr=False)
 
 
 class SigningKeyResolver(Protocol):
@@ -209,7 +212,8 @@ async def get_current_user(
         raise UnauthorizedError(
             "Authentication is not available", code=ErrorCode.AUTH_NOT_CONFIGURED
         )
-    return await verifier.verify(credentials.credentials)
+    user = await verifier.verify(credentials.credentials)
+    return replace(user, access_token=credentials.credentials)
 
 
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]

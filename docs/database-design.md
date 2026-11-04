@@ -1,6 +1,6 @@
 # ART MATE 데이터베이스 설계
 
-> 상태: **v0.3 구현 반영**. §3.1~3.3a(`profiles`, `academies`, `academy_memberships`, `academy_join_requests`)는 리비전 `0001`, §3.6(반·일정·출석·주제·과제·개인 할 일 10개 테이블)은 리비전 `0002`로 구현했습니다. 나머지 엔티티는 설계안이며, 구현할 때 이 문서를 함께 수정합니다.
+> 상태: **v0.4 구현 반영** (§3.9 작품·사진, §3.10 시험 타이머, 리비전 `0003`). §3.1~3.3a(`profiles`, `academies`, `academy_memberships`, `academy_join_requests`)는 리비전 `0001`, §3.6(반·일정·출석·주제·과제·개인 할 일 10개 테이블)은 리비전 `0002`로 구현했습니다. 나머지 엔티티는 설계안이며, 구현할 때 이 문서를 함께 수정합니다.
 
 ## 1. 공통 규칙
 
@@ -276,37 +276,57 @@ user_id → profiles (CASCADE), title, note?, due_date?(date), completed_at?. �
 
 - 인덱스: `ix(academy_id, scheduled_start)`, `ix(class_id, scheduled_start)`
 
-### 3.9 Artwork — `artworks`
-학생 1명의 작품 1점. 수업·과제와 연결.
+### 3.9 v0.4 작품·단계 사진 ✅ v0.4 (리비전 `0003`)
 
+#### `artworks`
 | 필드 | 설명 |
 | --- | --- |
-| **id**, academy_id, student_id → academy_memberships | |
-| lesson_id? → lessons | 수업 중 작품 |
-| assignment_id? → assignments | 과제 작품 |
-| title?, subject | |
-| current_stage | `sketch` / `coloring` / `finishing` / `complete` |
-| time_limit_minutes?, started_at?, completed_at? | 실기 타이머 |
-| deleted_at? | |
+| owner_id → profiles | 작품 소유 학생 (CASCADE). **학원 미소속 학생도 생성 가능** |
+| academy_id?, student_membership_id? | 학원 연결(선택). 3열 복합 FK `(academy_id, student_membership_id, owner_id) → academy_memberships(academy_id, id, user_id)`: 본인의 그 학원 소속만 연결 가능 |
+| class_id?, task_id? | 복합 FK `(academy_id, class_id)`, `(academy_id, task_id)` → 다른 학원 반·과제 연결 불가 |
+| title, description?, work_date | work_date = Asia/Seoul 날짜 |
+| deleted_at? | soft delete |
 
-- 삭제: soft delete. 원본 이미지는 3.10 정책
-- 인덱스: `ix(academy_id, student_id, created_at desc)` (학생 포트폴리오), `ix(lesson_id)`
+- CHECK: `academy_id`와 `student_membership_id`는 함께 null/not null, 학원 없이 반·과제 연결 불가.
+- 학원 연결 FK는 NO ACTION: 학원·소속 행을 물리 삭제하려면 작품과 Storage 파일을 먼저 처리해야 합니다(고아 파일 방지).
+- 진행 상태(`NOT_STARTED/SKETCH/PROGRESS/FINAL`)는 저장하지 않고 ACTIVE 사진에서 계산합니다.
+- 인덱스: `ix(owner_id, work_date)`, `ix(academy_id, student_membership_id, work_date)`, `uq(id, owner_id)`(사진 복합 FK 대상)
 
-### 3.10 ArtworkStage — `artwork_stages`
-단계별 작품 사진 (스케치·채색·마무리·완성).
-
+#### `artwork_photos`
 | 필드 | 설명 |
 | --- | --- |
-| **id**, academy_id, artwork_id | |
-| stage | `sketch` / `coloring` / `finishing` / `complete` |
-| seq | 같은 단계 내 순번 (여러 장 허용) |
-| storage_path | `academies/{academy_id}/artworks/{artwork_id}/{stage_id}.jpg` |
-| width, height, content_type, size_bytes | |
-| uploaded_by → academy_memberships | |
-| captured_at | |
+| artwork_id, owner_id | 복합 FK → artworks(id, owner_id) CASCADE. owner_id는 Storage 정책 판단용 비정규화 |
+| stage | `SKETCH` / `PROGRESS` / `FINAL` |
+| status | `PENDING`(업로드 URL 발급) → `ACTIVE`(검증 완료) → `DELETED` |
+| storage_path (unique) | `{owner_id}/{artwork_id}/{photo_id}.{ext}` — 서버가 생성, 사용자 파일명 미사용 |
+| content_type, size_bytes?, width?, height?, sha256? | ACTIVE면 필수 (CHECK `active_has_metadata`) |
+| is_representative | 단계 대표 사진 |
+| upload_expires_at, uploaded_at?, deleted_at? | |
+| replaces_photo_id? | 교체 업로드 대상 |
+| storage_cleanup_pending | DB는 DELETED인데 Storage 파일 삭제 미확인 → 다음 요청에서 재시도 |
 
-- 인덱스: `uq(artwork_id, stage, seq)`
-- 업로드 흐름(향후): API가 업로드용 signed URL 발급 → 클라이언트가 Storage에 직접 업로드 → API에 완료 등록
+- 부분 유니크: 단계별 대표 1장 `uq(artwork_id, stage) WHERE is_representative`, 같은 파일 중복 방지 `uq(artwork_id, sha256) WHERE status = 'ACTIVE'`.
+- DB·Storage 일관성: ACTIVE 전환은 Storage에서 파일을 받아 검증한 뒤에만, 삭제는 DB 먼저(cleanup 플래그) → Storage 삭제.
+- 파일은 Supabase Storage 비공개 버킷 `artworks`. DB에는 경로·메타데이터만 저장합니다.
+
+#### Storage 권한 (`artmate_private.can_access_artwork_object`)
+- `backend/supabase/storage-setup.sql`의 `storage.objects` RLS 정책이 호출하는 SECURITY DEFINER 함수입니다. Data API에 노출되지 않는 `artmate_private` 스키마에 있고, search_path를 고정했으며 PUBLIC 실행 권한은 회수했습니다.
+- write(업로드·삭제): 사진 행 소유자 + 경로 첫 폴더 = 본인. read: 소유자, 또는 학원 연결 작품의 담당 강사·학원 관리자(학생 소속 ACTIVE).
+- 백엔드는 service_role 키 없이 사용자 토큰으로 Storage를 호출하므로 이 정책이 2차 방어가 됩니다.
+
+### 3.10 v0.4 시험 타이머 ✅ v0.4 (리비전 `0003`)
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `exam_templates` | academy_id(CASCADE), name, exam_type(자유 입력), description?, total_minutes(1~720), is_archived, created_by?. `uq(academy_id, id)` |
+| `exam_stage_targets` | (academy_id, template_id) 복합 FK, stage, offset_minutes(시작 후 분). `uq(template_id, stage)` |
+| `exam_sessions` | (academy_id, class_id) 복합 FK, template_id?(SET NULL), title·exam_type·total_minutes 스냅샷, status `SCHEDULED/RUNNING/ENDED/CANCELLED`, started_at·ends_at·ended_at, end_reason `MANUAL/TIME_UP`, created_by/started_by/ended_by. **부분 유니크 `uq(class_id) WHERE status = 'RUNNING'`**(반당 진행 중 1개) |
+| `exam_session_stages` | 세션별 단계 목표 스냅샷: offset_minutes, target_at(시작 시 저장). `uq(session_id, stage)` |
+| `exam_participants` | (academy_id, session_id), (academy_id, student_membership_id) 복합 FK, current_stage `NOT_STARTED/SKETCH/PROGRESS/FINAL/DONE`, 단계별 최초 진입 시각. `uq(session_id, student_membership_id)` |
+
+- 서버는 시작·종료 예정·단계 목표 시각만 저장하고, 남은 시간은 매 응답에서 서버 시각으로 계산합니다(`app/services/exam_timer.py`).
+- `ends_at`이 지나면 응답은 ENDED(TIME_UP), DB 반영은 다음 쓰기 작업(종료·단계 변경·같은 반 새 시험 시작)에서 합니다.
+- 세션은 생성 시 템플릿을 복사하므로 템플릿을 수정해도 기존 세션에는 영향이 없습니다.
 
 ### 3.11 Feedback — `feedbacks` (강사 첨삭)
 | 필드 | 설명 |

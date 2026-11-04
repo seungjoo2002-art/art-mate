@@ -18,6 +18,7 @@ from app.core.logging import configure_logging
 from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 from app.core.security import build_token_verifier
 from app.db.session import create_database
+from app.integrations.supabase.storage import build_storage
 
 logger = logging.getLogger("app")
 
@@ -68,6 +69,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.database = None
     # 테스트에서는 서명 키를 고정한 verifier로 교체할 수 있다.
     app.state.token_verifier = build_token_verifier(settings)
+    # Supabase Storage (작품 사진). 테스트에서는 가짜 구현으로 교체한다.
+    app.state.storage = build_storage(settings)
 
     register_exception_handlers(app)
 

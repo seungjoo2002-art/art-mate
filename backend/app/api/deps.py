@@ -23,9 +23,16 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.exceptions import DatabaseNotConfiguredError, ErrorCode, ForbiddenError, NotFoundError
+from app.core.exceptions import (
+    DatabaseNotConfiguredError,
+    ErrorCode,
+    ForbiddenError,
+    NotFoundError,
+    StorageNotConfiguredError,
+)
 from app.core.security import CurrentUser
 from app.db.session import Database
+from app.integrations.supabase.storage import StorageClient
 from app.models.enums import ACADEMY_ADMIN_ROLES, ACADEMY_STAFF_ROLES, MembershipRole, UserType
 from app.models.membership import AcademyMembership
 from app.models.profile import Profile
@@ -51,7 +58,21 @@ async def get_db_session(
         yield session
 
 
+def get_storage(request: Request) -> StorageClient:
+    storage: StorageClient | None = request.app.state.storage
+    if storage is None:
+        raise StorageNotConfiguredError()
+    return storage
+
+
+def get_optional_storage(request: Request) -> StorageClient | None:
+    return request.app.state.storage
+
+
 AppSettings = Annotated[Settings, Depends(get_app_settings)]
+Storage = Annotated[StorageClient, Depends(get_storage)]
+# Storage가 필요 없는 요청(작품 생성 등)도 있는 서비스용. 필요한 시점에 서비스가 503을 낸다.
+OptionalStorage = Annotated[StorageClient | None, Depends(get_optional_storage)]
 DatabaseDep = Annotated[Database, Depends(get_database)]
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 

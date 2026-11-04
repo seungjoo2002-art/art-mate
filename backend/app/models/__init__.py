@@ -13,7 +13,15 @@ from app.models.academy_class import (
     ClassSchedule,
     ScheduleException,
 )
+from app.models.artwork import Artwork, ArtworkPhoto
 from app.models.attendance import AttendanceAuditLog, AttendanceRecord
+from app.models.exam import (
+    ExamParticipant,
+    ExamSession,
+    ExamSessionStage,
+    ExamStageTarget,
+    ExamTemplate,
+)
 from app.models.membership import AcademyJoinRequest, AcademyMembership
 from app.models.personal_todo import PersonalTodo
 from app.models.profile import Profile
@@ -24,11 +32,18 @@ __all__ = [
     "AcademyClass",
     "AcademyJoinRequest",
     "AcademyMembership",
+    "Artwork",
+    "ArtworkPhoto",
     "AttendanceAuditLog",
     "AttendanceRecord",
     "Base",
     "ClassMembership",
     "ClassSchedule",
+    "ExamParticipant",
+    "ExamSession",
+    "ExamSessionStage",
+    "ExamStageTarget",
+    "ExamTemplate",
     "LessonTopic",
     "PersonalTodo",
     "Profile",

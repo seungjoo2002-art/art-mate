@@ -23,6 +23,7 @@ from sqlalchemy.engine import make_url
 from app.main import create_app
 from tests.auth_utils import TEST_SUPABASE_URL, TokenFactory, make_verifier
 from tests.conftest import make_settings, running_client
+from tests.fake_storage import FakeStorage
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
@@ -30,7 +31,8 @@ APP_TABLES = (
     "profiles, academies, academy_memberships, academy_join_requests, "
     "classes, class_memberships, class_schedules, schedule_exceptions, "
     "attendance_records, attendance_audit_logs, lesson_topics, tasks, task_assignments, "
-    "personal_todos"
+    "personal_todos, artworks, artwork_photos, exam_templates, exam_stage_targets, "
+    "exam_sessions, exam_session_stages, exam_participants"
 )
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -94,6 +96,8 @@ async def app(migrated_database: str, tokens: TokenFactory):  # type: ignore[no-
         make_settings(database_url=migrated_database, supabase_url=TEST_SUPABASE_URL)
     )
     application.state.token_verifier = make_verifier(tokens)
+    # 외부 Storage 대신 메모리 구현 (lifespan은 storage를 다시 만들지 않는다)
+    application.state.storage = FakeStorage()
     yield application
 
 
