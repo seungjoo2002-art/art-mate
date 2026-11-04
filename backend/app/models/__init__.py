@@ -7,7 +7,32 @@
 
 from app.db.base import Base
 from app.models.academy import Academy
+from app.models.academy_class import (
+    AcademyClass,
+    ClassMembership,
+    ClassSchedule,
+    ScheduleException,
+)
+from app.models.attendance import AttendanceAuditLog, AttendanceRecord
 from app.models.membership import AcademyJoinRequest, AcademyMembership
+from app.models.personal_todo import PersonalTodo
 from app.models.profile import Profile
+from app.models.task import LessonTopic, Task, TaskAssignment
 
-__all__ = ["Academy", "AcademyJoinRequest", "AcademyMembership", "Base", "Profile"]
+__all__ = [
+    "Academy",
+    "AcademyClass",
+    "AcademyJoinRequest",
+    "AcademyMembership",
+    "AttendanceAuditLog",
+    "AttendanceRecord",
+    "Base",
+    "ClassMembership",
+    "ClassSchedule",
+    "LessonTopic",
+    "PersonalTodo",
+    "Profile",
+    "ScheduleException",
+    "Task",
+    "TaskAssignment",
+]

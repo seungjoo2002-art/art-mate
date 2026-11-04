@@ -33,6 +33,16 @@ class MembershipRepository:
             return None
         return membership
 
+    async def get_active_in_academy(
+        self, academy_id: uuid.UUID, membership_id: uuid.UUID
+    ) -> AcademyMembership | None:
+        stmt = select(AcademyMembership).where(
+            AcademyMembership.academy_id == academy_id,
+            AcademyMembership.id == membership_id,
+            AcademyMembership.status == MembershipStatus.ACTIVE,
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
     async def get_in_academy_for_update(
         self, academy_id: uuid.UUID, membership_id: uuid.UUID
     ) -> AcademyMembership | None:

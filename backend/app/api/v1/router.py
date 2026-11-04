@@ -6,10 +6,29 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import academies, admin, health, users
+from app.api.v1.endpoints import (
+    academies,
+    admin,
+    attendance,
+    classes,
+    dashboard,
+    health,
+    lesson_topics,
+    personal_todos,
+    schedules,
+    tasks,
+    users,
+)
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(academies.router)
 api_v1_router.include_router(admin.router)
+api_v1_router.include_router(attendance.router)
+api_v1_router.include_router(classes.router)
+api_v1_router.include_router(dashboard.router)
 api_v1_router.include_router(health.router)
+api_v1_router.include_router(lesson_topics.router)
+api_v1_router.include_router(personal_todos.router)
+api_v1_router.include_router(schedules.router)
+api_v1_router.include_router(tasks.router)
 api_v1_router.include_router(users.router)

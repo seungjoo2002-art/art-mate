@@ -23,6 +23,7 @@ from app.models.enums import (
 from app.models.membership import AcademyJoinRequest, AcademyMembership
 from app.models.profile import Profile
 from app.repositories.academies import AcademyRepository
+from app.repositories.classes import ClassRepository
 from app.repositories.memberships import JoinRequestRepository, MembershipRepository
 from app.repositories.profiles import ProfileRepository
 from app.schemas.academy import JoinRequestCreate, JoinRequestReview
@@ -164,6 +165,8 @@ class MembershipService:
             raise NotFoundError("Membership not found")
         locked.status = MembershipStatus.LEFT
         locked.left_at = datetime.now(UTC)
+        # v0.3: 학원을 떠나면 반 배정·담당 강사 지정도 함께 해제 (같은 트랜잭션)
+        await ClassRepository(self.session).end_all_for_membership(locked.id, locked.left_at)
         await self.session.commit()
 
     async def change_role(
@@ -207,4 +210,5 @@ class MembershipService:
             raise ForbiddenError("You cannot remove this member")
         target.status = MembershipStatus.REMOVED
         target.left_at = datetime.now(UTC)
+        await ClassRepository(self.session).end_all_for_membership(target.id, target.left_at)
         await self.session.commit()
