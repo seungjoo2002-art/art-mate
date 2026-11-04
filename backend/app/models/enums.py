@@ -125,3 +125,61 @@ class TaskTargetType(StrEnum):
 class TaskStatus(StrEnum):
     ACTIVE = "ACTIVE"
     CANCELLED = "CANCELLED"
+
+
+# --------------------------------------------------------------------------- v0.4 작품·시험
+
+
+class ArtworkStage(StrEnum):
+    """작품 사진 단계 (작업 순서대로)."""
+
+    SKETCH = "SKETCH"
+    PROGRESS = "PROGRESS"
+    FINAL = "FINAL"
+
+
+ARTWORK_STAGE_ORDER: tuple[ArtworkStage, ...] = (
+    ArtworkStage.SKETCH,
+    ArtworkStage.PROGRESS,
+    ArtworkStage.FINAL,
+)
+
+
+class ArtworkProgress(StrEnum):
+    """작품 진행 상태 (응답 전용, 업로드된 사진 중 가장 늦은 단계)."""
+
+    NOT_STARTED = "NOT_STARTED"
+    SKETCH = "SKETCH"
+    PROGRESS = "PROGRESS"
+    FINAL = "FINAL"
+
+
+class PhotoStatus(StrEnum):
+    PENDING = "PENDING"  # 업로드 URL 발급됨, 완료 처리 전
+    ACTIVE = "ACTIVE"  # 검증 완료, 작품에 연결됨
+    DELETED = "DELETED"  # 삭제·교체됨 (Storage 파일 정리는 storage_cleanup_pending)
+
+
+class ExamSessionStatus(StrEnum):
+    SCHEDULED = "SCHEDULED"
+    RUNNING = "RUNNING"
+    ENDED = "ENDED"
+    CANCELLED = "CANCELLED"
+
+
+class ExamEndReason(StrEnum):
+    MANUAL = "MANUAL"  # 강사가 종료
+    TIME_UP = "TIME_UP"  # 총시간 경과
+
+
+class ExamWorkStage(StrEnum):
+    """시험 중 학생의 현재 작업 단계."""
+
+    NOT_STARTED = "NOT_STARTED"
+    SKETCH = "SKETCH"
+    PROGRESS = "PROGRESS"
+    FINAL = "FINAL"
+    DONE = "DONE"
+
+
+EXAM_WORK_STAGE_ORDER: tuple[ExamWorkStage, ...] = tuple(ExamWorkStage)

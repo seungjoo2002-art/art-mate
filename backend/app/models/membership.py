@@ -17,6 +17,9 @@ class AcademyMembership(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         # v0.3: 학원 소유 테이블의 (academy_id, *_membership_id) 복합 FK 대상.
         # 다른 학원의 학생·강사를 참조하는 행을 DB가 거부한다.
         UniqueConstraint("academy_id", "id"),
+        # v0.4: artworks의 (academy_id, student_membership_id, owner_id) 복합 FK 대상.
+        # 작품에 연결한 소속이 '작품 소유자 본인의 그 학원 소속'인지 DB가 보장한다.
+        UniqueConstraint("academy_id", "id", "user_id"),
         Index("ix_academy_memberships_academy_status_role", "academy_id", "status", "role"),
         Index("ix_academy_memberships_user_status", "user_id", "status"),
     )

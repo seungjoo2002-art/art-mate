@@ -193,6 +193,16 @@ uv run alembic check                         # 4) 모델과 일치 확인 → "N
 - 0002는 `academy_memberships`에 `uq(academy_id, id)`를 추가합니다. 기존 행이 있어도 `id`가 PK라 항상 성공합니다.
 - 되돌리기: `uv run alembic downgrade -1`. 이 경우 테이블과 데이터가 삭제되므로 운영에서는 사용하지 않습니다.
 
+### 8.1a Supabase Storage 설정 (v0.4, 한 번만)
+
+작품 사진은 비공개 버킷 `artworks`와 `storage.objects` RLS 정책이 필요합니다. 이것들은 Supabase 전용이라 Alembic이 아니라 `backend/supabase/storage-setup.sql`로 적용합니다.
+
+1. Alembic `0003` 적용 (권한 함수 `artmate_private.can_access_artwork_object` 생성)
+2. Supabase 대시보드 → SQL Editor에서 `backend/supabase/storage-setup.sql` 실행 (여러 번 실행해도 안전)
+3. 확인: Storage → `artworks` 버킷이 **Private**, Policies에 `artmate_artworks_select/insert/delete` 3개
+4. Settings → API → Exposed schemas에 `artmate_private`를 **추가하지 않습니다**
+5. 백엔드 환경변수 `SUPABASE_URL`, `SUPABASE_ANON_KEY`(공개 키) 설정. service_role 키는 넣지 않습니다
+
 ### 8.2 시스템 관리자(ADMIN) 지정
 
 ADMIN은 API로 만들 수 없습니다. 대상 사용자가 먼저 가입하고 프로필을 생성한 뒤, Supabase 대시보드 → SQL Editor에서 실행합니다.
