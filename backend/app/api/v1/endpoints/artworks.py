@@ -12,7 +12,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.api.deps import AcademyStaff, AppSettings, DbSession, OptionalStorage, require_user_types
+from app.api.deps import (
+    AcademyStaff,
+    AppSettings,
+    AudioStorage,
+    DbSession,
+    OptionalStorage,
+    require_user_types,
+)
 from app.api.responses import AUTH_ERRORS, error_responses
 from app.core.security import CurrentUser
 from app.models.enums import UserType
@@ -34,6 +41,7 @@ from app.schemas.artworks import (
 from app.schemas.common import Page, PaginationQuery
 from app.services.artworks import ArtworkService, artwork_read
 from app.services.exams import student_ref
+from app.services.recordings import RecordingService
 
 router = APIRouter(prefix="/artworks", tags=["artworks"])
 staff_router = APIRouter(prefix="/academies/{academy_id}/artworks", tags=["artworks"])
@@ -136,8 +144,13 @@ async def delete_artwork(
     session: DbSession,
     settings: AppSettings,
     storage: OptionalStorage,
+    audio_storage: AudioStorage,
 ) -> None:
     await _service(session, settings, storage).delete(owner, artwork_id, user.access_token)
+    # 작품에 연결된 녹음 파일 정리 (실패하면 다음 요청에서 재시도)
+    await RecordingService(session, settings, audio_storage).cleanup_storage(
+        owner, user.access_token
+    )
 
 
 @router.get("/{artwork_id}/progress", summary="작품 진행 상태", responses=READ_ERRORS)

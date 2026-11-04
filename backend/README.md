@@ -2,7 +2,8 @@
 
 미대입시·예중·예고 입시학원을 위한 **AI 기반 실기교육·학생관리 플랫폼** ART MATE의 백엔드입니다.
 
-> **현재 버전: v0.4** — v0.3 + **단계별 작품 사진 업로드(Supabase Storage 비공개 버킷, Signed URL)**, **시험 타이머·단계 목표 알림 데이터**.
+> **현재 버전: v0.5** — v0.4 + **질문 콜·대기열(폴링)**, **피드백 음성 녹음 저장·녹음 동의**.
+> 이전(v0.4): v0.3 + **단계별 작품 사진 업로드(Supabase Storage 비공개 버킷, Signed URL)**, **시험 타이머·단계 목표 알림 데이터**.
 > 이전: v0.2(Supabase Auth JWT 인증, 사용자 프로필, 학원 등록·심사·가입·소속) + **학원 운영: 반·반 배정·담당 강사, 정규 수업·휴강·보강 일정, 출석·수정 이력, 수업 주제·과제 배포, 학생 개인 할 일, 오늘 할 일 통합, 강사 수업 현황 대시보드**.
 > 작품 업로드, 질문 콜, 녹음, AI 피드백, 커뮤니티는 이후 버전에서 구현합니다.
 
@@ -12,6 +13,7 @@
 | [docs/database-design.md](../docs/database-design.md) | 엔티티 설계, 학원별 데이터 격리, RLS 방향 |
 | [docs/development-guide.md](../docs/development-guide.md) | Git 협업 규칙, 새 API 추가 방법, 버전 체크리스트, 운영 절차(마이그레이션 적용·ADMIN 지정) |
 | [docs/frontend-integration.md](../docs/frontend-integration.md) | 프론트엔드 인증 연동, API 예시, 오류 코드 |
+| [docs/frontend-integration-v0.5.md](../docs/frontend-integration-v0.5.md) | v0.5 질문 콜 상태·폴링·예상 대기시간, 녹음 업로드·MediaRecorder·동의 UI |
 | [docs/frontend-integration-v0.4.md](../docs/frontend-integration-v0.4.md) | v0.4 작품 사진 업로드 절차·Signed URL, 시험 타이머 응답·알림 처리 |
 | [docs/frontend-integration-v0.3.md](../docs/frontend-integration-v0.3.md) | v0.3 학원 운영 API: 출석·일정·과제·개인 할 일·대시보드, 권한, 날짜·시간 규칙 |
 | [docs/privacy-and-data-policy.md](../docs/privacy-and-data-policy.md) | 개인정보 최소 수집, 미성년자·탈퇴 후속 과제 |
@@ -126,6 +128,18 @@ v0.4 작품·시험 API (상세: docs/frontend-integration-v0.4.md)
 | `/api/v1/academies/{id}/exam-sessions[...]` | 반 시험 생성·시작·종료·현황 | 담당 강사·관리자 |
 | `/api/v1/academies/{id}/exam-sessions/me`, `/{sid}/me[/stage]` | 내 시험 타이머, 작업 단계 변경 | STUDENT |
 
+v0.5 질문 콜·녹음 API (상세: docs/frontend-integration-v0.5.md)
+
+| 경로 | 설명 | 권한 |
+| --- | --- | --- |
+| `POST /api/v1/academies/{id}/help-requests`, `/me[/{rid}[/cancel]]` | 질문 요청·내 상태(순번·예상 대기)·취소 | 반 학생 |
+| `/api/v1/academies/{id}/classes/{cid}/help-queue[/call-next]` | 반 대기열, 다음 학생 호출 | 담당 강사·관리자 |
+| `POST /api/v1/academies/{id}/help-requests/{rid}/{action}` | call·start·complete·skip·requeue·cancel | 담당 강사·관리자 |
+| `GET /api/v1/academies/{id}/classes/{cid}/help-queue/estimate` | 예상 대기시간 | 반 학생·강사 |
+| `/api/v1/recording-consents[/me]` | 녹음 동의·철회 | STUDENT 사용자 |
+| `/api/v1/artworks/{id}/recordings[...]` | 녹음 업로드 요청·완료·목록·재생 URL·삭제 | 작품 소유자 |
+| `/api/v1/academies/{id}/artworks/{aid}/recordings[...]` | 담당 학생 녹음 조회·재생 | 강사 이상 (담당 학생) |
+
 ## API 문서
 
 development/test 환경에서 다음 주소로 접근할 수 있습니다. staging/production에서는 기본적으로 비공개이며 `DOCS_ENABLED=true`로 켤 수 있습니다.
@@ -210,8 +224,8 @@ backend/
 │   │                        # schedules, attendance, tasks, personal_todos, dashboard
 │   ├── integrations/        # supabase/, ai/ 외부 연동
 │   └── utils/
-├── alembic/                 # env.py(async), versions/0001 (v0.2), 0002 (v0.3 학원 운영), 0003 (v0.4 작품·시험)
-├── supabase/storage-setup.sql  # Supabase 전용: 작품 버킷·storage.objects RLS 정책 (수동 적용)
+├── alembic/                 # env.py(async), versions/0001 (v0.2), 0002 (v0.3 학원 운영), 0003 (v0.4 작품·시험), 0004 (v0.5 질문 콜·녹음)
+├── supabase/storage-setup.sql  # Supabase 전용: artworks·feedback-audio 버킷, storage.objects RLS 정책 (수동 적용)
 ├── tests/
 ├── .env.example
 ├── alembic.ini

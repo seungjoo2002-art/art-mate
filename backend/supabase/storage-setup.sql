@@ -1,9 +1,9 @@
 -- =============================================================================
--- ART MATE v0.4 Supabase Storage 설정 (작품 사진 비공개 버킷 + RLS 정책)
+-- ART MATE Supabase Storage 설정 (v0.4 작품 사진 + v0.5 피드백 녹음, 비공개 버킷 + RLS 정책)
 --
 -- 적용 대상: Supabase 프로젝트 (SQL Editor 또는 psql). 로컬·CI PostgreSQL에는 storage 스키마가 없으므로
 --           적용하지 않는다.
--- 선행 조건: Alembic 0003 적용 (artmate_private.can_access_artwork_object 함수가 있어야 함)
+-- 선행 조건: Alembic 0004 적용 (artmate_private 권한 함수 3개가 있어야 함)
 -- 여러 번 실행해도 같은 결과가 되도록 작성했다 (idempotent).
 --
 -- 권한 모델
@@ -59,7 +59,56 @@ CREATE POLICY "artmate_artworks_delete" ON storage.objects
 
 COMMIT;
 
+-- =============================================================================
+-- v0.5 피드백 녹음: 비공개 오디오 버킷 feedback-audio
+--   * 업로드·삭제: 녹음 행(feedback_recordings)의 소유 학생, 경로 첫 폴더 = 본인 user id
+--   * 읽기(재생 Signed URL): 소유 학생, 또는 학원 연결 작품의 담당 강사·학원 관리자
+--   * 크기·형식 제한은 RECORDING_MAX_UPLOAD_BYTES, RECORDING_ALLOWED_CONTENT_TYPES 와 맞춘다
+-- =============================================================================
+
+BEGIN;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'feedback-audio', 'feedback-audio', false, 26214400,
+    ARRAY['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav']
+)
+ON CONFLICT (id) DO UPDATE
+SET public = false,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+GRANT EXECUTE ON FUNCTION artmate_private.manages_student(uuid, uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION artmate_private.can_access_recording_object(uuid, text, text) TO authenticated;
+
+DROP POLICY IF EXISTS "artmate_audio_select" ON storage.objects;
+CREATE POLICY "artmate_audio_select" ON storage.objects
+    FOR SELECT TO authenticated
+    USING (
+        bucket_id = 'feedback-audio'
+        AND artmate_private.can_access_recording_object(auth.uid(), name, 'read')
+    );
+
+DROP POLICY IF EXISTS "artmate_audio_insert" ON storage.objects;
+CREATE POLICY "artmate_audio_insert" ON storage.objects
+    FOR INSERT TO authenticated
+    WITH CHECK (
+        bucket_id = 'feedback-audio'
+        AND artmate_private.can_access_recording_object(auth.uid(), name, 'write')
+    );
+
+DROP POLICY IF EXISTS "artmate_audio_delete" ON storage.objects;
+CREATE POLICY "artmate_audio_delete" ON storage.objects
+    FOR DELETE TO authenticated
+    USING (
+        bucket_id = 'feedback-audio'
+        AND artmate_private.can_access_recording_object(auth.uid(), name, 'write')
+    );
+
+COMMIT;
+
 -- 확인용
--- SELECT id, public, file_size_limit, allowed_mime_types FROM storage.buckets WHERE id = 'artworks';
+-- SELECT id, public, file_size_limit, allowed_mime_types FROM storage.buckets
+--   WHERE id IN ('artworks', 'feedback-audio');
 -- SELECT policyname, cmd FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'
---   AND policyname LIKE 'artmate_artworks_%';
+--   AND policyname LIKE 'artmate_%';  -- artworks 3개 + audio 3개

@@ -183,3 +183,62 @@ class ExamWorkStage(StrEnum):
 
 
 EXAM_WORK_STAGE_ORDER: tuple[ExamWorkStage, ...] = tuple(ExamWorkStage)
+
+
+# --------------------------------------------------------------------------- v0.5 질문 콜·녹음
+
+
+class HelpRequestStatus(StrEnum):
+    WAITING = "WAITING"  # 대기 중 (순번 있음)
+    CALLED = "CALLED"  # 강사가 호출함 (학생이 오기를 기다림)
+    IN_PROGRESS = "IN_PROGRESS"  # 질문 처리 중
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"  # 학생 또는 강사가 취소
+    SKIPPED = "SKIPPED"  # 호출했지만 응답 없음 등으로 건너뜀
+
+
+ACTIVE_HELP_STATUSES: frozenset[HelpRequestStatus] = frozenset(
+    {HelpRequestStatus.WAITING, HelpRequestStatus.CALLED, HelpRequestStatus.IN_PROGRESS}
+)
+
+
+class HelpQueueEventType(StrEnum):
+    CREATED = "CREATED"
+    CALLED = "CALLED"
+    REQUEUED = "REQUEUED"  # 호출 취소 → 원래 순번으로 대기열 복귀
+    STARTED = "STARTED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+    SKIPPED = "SKIPPED"
+
+
+class EstimateSource(StrEnum):
+    """예상 대기시간 근거 (응답 전용)."""
+
+    RECENT_AVERAGE = "RECENT_AVERAGE"  # 이 반의 최근 완료 질문 평균 처리시간
+    DEFAULT = "DEFAULT"  # 기록이 부족해 기본값 사용
+
+
+class RecordingStatus(StrEnum):
+    PENDING = "PENDING"  # 업로드 URL 발급됨, 완료 처리 전
+    ACTIVE = "ACTIVE"
+    DELETED = "DELETED"
+
+
+class TranscriptionStatus(StrEnum):
+    """STT 처리 상태 (v0.6에서 사용, v0.5는 항상 NOT_REQUESTED)."""
+
+    NOT_REQUESTED = "NOT_REQUESTED"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class ConsentType(StrEnum):
+    VOICE_RECORDING = "VOICE_RECORDING"
+
+
+class ConsentGrantor(StrEnum):
+    SELF = "SELF"  # 본인 동의
+    GUARDIAN = "GUARDIAN"  # 법정대리인 동의 (만 14세 미만)
