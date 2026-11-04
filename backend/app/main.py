@@ -19,6 +19,7 @@ from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 from app.core.security import build_token_verifier
 from app.db.session import create_database
 from app.integrations.supabase.storage import build_storage
+from app.services.help_events import NullHelpQueuePublisher
 
 logger = logging.getLogger("app")
 
@@ -71,6 +72,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.token_verifier = build_token_verifier(settings)
     # Supabase Storage (작품 사진). 테스트에서는 가짜 구현으로 교체한다.
     app.state.storage = build_storage(settings)
+    # 피드백 녹음 (v0.5): 별도 비공개 오디오 버킷
+    app.state.audio_storage = build_storage(settings, settings.recording_bucket)
+    # 질문 대기열 변경 알림 (v0.5는 폴링이라 no-op, SSE/WebSocket 도입 시 교체)
+    app.state.help_publisher = NullHelpQueuePublisher()
 
     register_exception_handlers(app)
 

@@ -163,13 +163,14 @@ class SupabaseStorage:
             )
 
 
-def build_storage(settings: Settings) -> StorageClient | None:
+def build_storage(settings: Settings, bucket: str | None = None) -> StorageClient | None:
+    """버킷 하나당 클라이언트 하나. 기본은 작품 사진 버킷 (`STORAGE_BUCKET`)."""
     if not settings.storage_configured:
         return None
     assert settings.storage_api_url and settings.supabase_anon_key
     return SupabaseStorage(
         api_url=settings.storage_api_url,
         anon_key=settings.supabase_anon_key.get_secret_value(),
-        bucket=settings.storage_bucket,
+        bucket=bucket or settings.storage_bucket,
         timeout=settings.storage_timeout_seconds,
     )

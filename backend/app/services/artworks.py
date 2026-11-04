@@ -56,9 +56,11 @@ from app.models.enums import (
     MembershipRole,
     MembershipStatus,
     PhotoStatus,
+    RecordingStatus,
 )
 from app.models.membership import AcademyMembership
 from app.models.profile import Profile
+from app.models.recording import FeedbackRecording
 from app.models.task import Task, TaskAssignment
 from app.repositories.pagination import fetch_page
 from app.schemas.artworks import (
@@ -177,7 +179,7 @@ class ArtworkService:
             result[photo.artwork_id].append(photo)
         return result
 
-    async def _owned(
+    async def owned(
         self, owner: Profile, artwork_id: uuid.UUID, *, for_update: bool = False
     ) -> Artwork:
         stmt = select(Artwork).where(
@@ -356,17 +358,17 @@ class ArtworkService:
     async def get_mine(
         self, owner: Profile, artwork_id: uuid.UUID, token: str, include_urls: bool
     ) -> ArtworkDetail:
-        artwork = await self._owned(owner, artwork_id)
+        artwork = await self.owned(owner, artwork_id)
         return ArtworkDetail(**await self._detail_dict(artwork, token, include_urls))
 
     async def progress(self, owner: Profile, artwork_id: uuid.UUID) -> ArtworkProgressRead:
-        artwork = await self._owned(owner, artwork_id)
+        artwork = await self.owned(owner, artwork_id)
         return summarize(artwork.id, (await self._photos([artwork.id]))[artwork.id])
 
     async def update(
         self, owner: Profile, artwork_id: uuid.UUID, data: ArtworkUpdate, token: str
     ) -> ArtworkDetail:
-        artwork = await self._owned(owner, artwork_id, for_update=True)
+        artwork = await self.owned(owner, artwork_id, for_update=True)
         changes = data.changes()
         link_fields = {"academy_id", "class_id", "task_id"}
         if link_fields & changes.keys():
@@ -387,7 +389,7 @@ class ArtworkService:
         return ArtworkDetail(**await self._detail_dict(artwork, token, include_urls=False))
 
     async def delete(self, owner: Profile, artwork_id: uuid.UUID, token: str) -> None:
-        artwork = await self._owned(owner, artwork_id, for_update=True)
+        artwork = await self.owned(owner, artwork_id, for_update=True)
         now = clock.utc_now()
         artwork.deleted_at = now
         await self.session.execute(
@@ -401,6 +403,20 @@ class ArtworkService:
                 updated_at=func.now(),
             )
         )
+        # v0.5: 작품의 피드백 녹음도 같은 트랜잭션에서 삭제 처리 (파일 정리는 RecordingService)
+        await self.session.execute(
+            update(FeedbackRecording)
+            .where(
+                FeedbackRecording.artwork_id == artwork.id,
+                FeedbackRecording.status.in_([RecordingStatus.PENDING, RecordingStatus.ACTIVE]),
+            )
+            .values(
+                status=RecordingStatus.DELETED,
+                deleted_at=now,
+                storage_cleanup_pending=True,
+                updated_at=func.now(),
+            )
+        )
         await self.session.commit()
         await self.cleanup_storage(owner, token)
 
@@ -409,7 +425,7 @@ class ArtworkService:
     async def list_photos(
         self, owner: Profile, artwork_id: uuid.UUID, token: str, include_urls: bool
     ) -> list[PhotoRead]:
-        artwork = await self._owned(owner, artwork_id)
+        artwork = await self.owned(owner, artwork_id)
         photos = (await self._photos([artwork.id]))[artwork.id]
         return await self._photo_reads(photos, token, include_urls)
 
@@ -427,7 +443,7 @@ class ArtworkService:
         )
         content_type = data.content_type.lower()
         # 작품 행 잠금: 단계별 장수 제한·대표 사진 지정을 직렬화
-        artwork = await self._owned(owner, artwork_id, for_update=True)
+        artwork = await self.owned(owner, artwork_id, for_update=True)
         now = clock.utc_now()
         await self._expire_pending(artwork.id, now)
 
@@ -529,7 +545,7 @@ class ArtworkService:
     ) -> PhotoRead:
         storage = self._require_storage()
         settings = self.settings
-        artwork = await self._owned(owner, artwork_id, for_update=True)
+        artwork = await self.owned(owner, artwork_id, for_update=True)
         photo = await self._photo(artwork.id, photo_id, for_update=True)
         if photo.status == PhotoStatus.ACTIVE:
             return photo_read(photo)  # 재시도·중복 호출: 같은 결과 (멱등)
@@ -633,7 +649,7 @@ class ArtworkService:
     async def set_representative(
         self, owner: Profile, artwork_id: uuid.UUID, photo_id: uuid.UUID, value: bool
     ) -> PhotoRead:
-        artwork = await self._owned(owner, artwork_id, for_update=True)
+        artwork = await self.owned(owner, artwork_id, for_update=True)
         photo = await self._photo(artwork.id, photo_id, for_update=True)
         if photo.status != PhotoStatus.ACTIVE:
             raise ConflictError("The photo is not uploaded yet", code=ErrorCode.PHOTO_NOT_ACTIVE)
@@ -659,7 +675,7 @@ class ArtworkService:
     async def delete_photo(
         self, owner: Profile, artwork_id: uuid.UUID, photo_id: uuid.UUID, token: str
     ) -> None:
-        artwork = await self._owned(owner, artwork_id, for_update=True)
+        artwork = await self.owned(owner, artwork_id, for_update=True)
         photo = await self._photo(artwork.id, photo_id, for_update=True)
         was_representative = photo.is_representative
         photo.status = PhotoStatus.DELETED
@@ -703,7 +719,7 @@ class ArtworkService:
     async def owner_photo_url(
         self, owner: Profile, artwork_id: uuid.UUID, photo_id: uuid.UUID, token: str
     ) -> SignedUrl:
-        await self._owned(owner, artwork_id)
+        await self.owned(owner, artwork_id)
         return await self.photo_url(artwork_id, photo_id, token)
 
     async def cleanup_storage(self, owner: Profile, token: str) -> None:
