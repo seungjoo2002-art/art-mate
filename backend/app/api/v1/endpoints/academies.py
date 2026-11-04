@@ -13,11 +13,17 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.api.deps import ActiveProfile, DbSession, require_academy_roles, require_user_types
+from app.api.deps import (
+    AcademyAdmin,
+    AcademyMember,
+    AcademyOwner,
+    AcademyStaff,
+    ActiveProfile,
+    DbSession,
+    require_user_types,
+)
 from app.api.responses import AUTH_ERRORS, error_responses
 from app.models.enums import (
-    ACADEMY_ADMIN_ROLES,
-    ACADEMY_STAFF_ROLES,
     JoinRequestStatus,
     MembershipRole,
     MembershipStatus,
@@ -45,10 +51,6 @@ from app.services.memberships import MembershipService
 
 router = APIRouter(prefix="/academies", tags=["academies"])
 
-AcademyAdmin = Annotated[AcademyMembership, Depends(require_academy_roles(*ACADEMY_ADMIN_ROLES))]
-AcademyStaff = Annotated[AcademyMembership, Depends(require_academy_roles(*ACADEMY_STAFF_ROLES))]
-AcademyOwner = Annotated[AcademyMembership, Depends(require_academy_roles(MembershipRole.OWNER))]
-AcademyMember = Annotated[AcademyMembership, Depends(require_academy_roles())]
 Instructor = Annotated[Profile, Depends(require_user_types(UserType.INSTRUCTOR))]
 
 NOT_MEMBER = error_responses(404)

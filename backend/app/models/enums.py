@@ -57,3 +57,129 @@ class JoinRequestStatus(StrEnum):
 class ReviewDecision(StrEnum):
     APPROVE = "APPROVE"
     REJECT = "REJECT"
+
+
+# --------------------------------------------------------------------------- v0.3 학원 운영
+
+
+class ClassStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    ARCHIVED = "ARCHIVED"  # 종료된 반. 기록은 유지, 새 배정·과제·일정 불가
+
+
+class ClassMemberRole(StrEnum):
+    """반 안에서의 역할. 학원 역할에서 결정된다 (STUDENT → STUDENT, 그 외 → INSTRUCTOR)."""
+
+    INSTRUCTOR = "INSTRUCTOR"  # 담당 강사
+    STUDENT = "STUDENT"
+
+
+class ClassMemberStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    REMOVED = "REMOVED"  # 반 배정 해제 또는 학원 탈퇴·제외
+
+
+class ScheduleExceptionKind(StrEnum):
+    CANCELLATION = "CANCELLATION"  # 정규 수업 1회 휴강
+    RESCHEDULE = "RESCHEDULE"  # 정규 수업 1회 날짜·시간 변경
+    MAKEUP = "MAKEUP"  # 보강 (반 전체 또는 특정 학생)
+
+
+class OccurrenceKind(StrEnum):
+    """일정 조회 응답 전용 (DB에 저장하지 않음)."""
+
+    REGULAR = "REGULAR"
+    MAKEUP = "MAKEUP"
+
+
+class OccurrenceStatus(StrEnum):
+    """일정 조회 응답 전용 (DB에 저장하지 않음)."""
+
+    SCHEDULED = "SCHEDULED"
+    RESCHEDULED = "RESCHEDULED"  # 원래 날짜(original_date)에서 옮겨진 정규 수업
+    CANCELLED = "CANCELLED"
+
+
+class AttendanceStatus(StrEnum):
+    PRESENT = "PRESENT"
+    LATE = "LATE"
+    ABSENT = "ABSENT"
+    EXCUSED = "EXCUSED"  # 사유 결석 (병결 등)
+
+
+class AttendanceSource(StrEnum):
+    SELF_CHECK_IN = "SELF_CHECK_IN"  # 학생 출석 버튼
+    INSTRUCTOR = "INSTRUCTOR"  # 강사가 직접 기록
+
+
+class AttendanceAuditAction(StrEnum):
+    CREATED = "CREATED"
+    UPDATED = "UPDATED"
+
+
+class TaskTargetType(StrEnum):
+    CLASS = "CLASS"  # 배포 시점의 반 학생 전체
+    STUDENTS = "STUDENTS"  # 반의 특정 학생
+
+
+class TaskStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    CANCELLED = "CANCELLED"
+
+
+# --------------------------------------------------------------------------- v0.4 작품·시험
+
+
+class ArtworkStage(StrEnum):
+    """작품 사진 단계 (작업 순서대로)."""
+
+    SKETCH = "SKETCH"
+    PROGRESS = "PROGRESS"
+    FINAL = "FINAL"
+
+
+ARTWORK_STAGE_ORDER: tuple[ArtworkStage, ...] = (
+    ArtworkStage.SKETCH,
+    ArtworkStage.PROGRESS,
+    ArtworkStage.FINAL,
+)
+
+
+class ArtworkProgress(StrEnum):
+    """작품 진행 상태 (응답 전용, 업로드된 사진 중 가장 늦은 단계)."""
+
+    NOT_STARTED = "NOT_STARTED"
+    SKETCH = "SKETCH"
+    PROGRESS = "PROGRESS"
+    FINAL = "FINAL"
+
+
+class PhotoStatus(StrEnum):
+    PENDING = "PENDING"  # 업로드 URL 발급됨, 완료 처리 전
+    ACTIVE = "ACTIVE"  # 검증 완료, 작품에 연결됨
+    DELETED = "DELETED"  # 삭제·교체됨 (Storage 파일 정리는 storage_cleanup_pending)
+
+
+class ExamSessionStatus(StrEnum):
+    SCHEDULED = "SCHEDULED"
+    RUNNING = "RUNNING"
+    ENDED = "ENDED"
+    CANCELLED = "CANCELLED"
+
+
+class ExamEndReason(StrEnum):
+    MANUAL = "MANUAL"  # 강사가 종료
+    TIME_UP = "TIME_UP"  # 총시간 경과
+
+
+class ExamWorkStage(StrEnum):
+    """시험 중 학생의 현재 작업 단계."""
+
+    NOT_STARTED = "NOT_STARTED"
+    SKETCH = "SKETCH"
+    PROGRESS = "PROGRESS"
+    FINAL = "FINAL"
+    DONE = "DONE"
+
+
+EXAM_WORK_STAGE_ORDER: tuple[ExamWorkStage, ...] = tuple(ExamWorkStage)

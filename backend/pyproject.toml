@@ -13,6 +13,9 @@ dependencies = [
     "asyncpg>=0.32",
     "alembic[tz]>=1.20",
     "pyjwt[crypto]>=2.15",
+    "tzdata>=2025.2",
+    "pillow>=11.0",
+    "httpx>=0.28",
 ]
 
 [dependency-groups]

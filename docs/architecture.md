@@ -179,6 +179,22 @@ async def list_members(academy_id: UUID, _: AcademyStaff, session: DbSession, ..
 - 학원 범위 API는 경로에 `academy_id`를 둡니다. 하위 리소스(요청, 멤버)는 **`academy_id`와 리소스 ID를 함께** 조회하므로, 다른 학원의 ID를 넣으면 404가 됩니다.
 - 동시성: 가입 요청 중복은 DB 부분 유니크 인덱스로 막고, 승인·거절은 요청 행을 `SELECT ... FOR UPDATE`로 잠가 한 번만 처리합니다.
 
+### 파일 저장 (v0.4, Supabase Storage)
+
+- 작품 사진은 비공개 버킷에 저장하고 DB에는 경로·메타데이터만 둡니다. 업로드는 브라우저 → Storage 직접(Signed upload URL), 백엔드는 업로드 요청 시 1차 검증, 완료 처리 시 파일을 받아 실제 이미지·크기·중복을 검증합니다.
+- **service_role 키 없음**: 백엔드는 요청한 사용자의 access token + 공개 anon 키로 Storage API를 호출합니다 (`app/integrations/supabase/storage.py`). Storage의 RLS 정책(`backend/supabase/storage-setup.sql`)이 `artmate_private.can_access_artwork_object`로 다시 권한을 확인합니다.
+- Storage 클라이언트는 `app.state.storage`(프로토콜 `StorageClient`)이며 테스트에서는 메모리 구현으로 교체합니다.
+
+### 학원 운영 권한 (v0.3, `app/services/access.py`)
+
+- 경로 의존성(`AcademyMember`/`AcademyStudent`/`AcademyStaff`/`AcademyAdmin`)으로 학원 소속·역할을 먼저 확인하고, 반·학생 단위 권한은 서비스 계층의 `AccessService`가 판단합니다.
+- **담당 반**: `class_memberships`에 담당 강사(INSTRUCTOR)로 지정된 ACTIVE 반. **담당 학생**: 담당 반의 ACTIVE 학생. OWNER/MANAGER는 학원 전체.
+- 강사 이상은 반·일정·주제를 학원 전체 읽기, 쓰기와 학생 데이터(출석·과제 완료)는 담당 범위만. 학생은 배정된 반과 본인 기록만.
+- 개인 할 일(`personal_todos`)은 학원 데이터가 아니므로 `academy_id`가 없고, 본인 토큰으로만 접근합니다.
+- 2차 방어: 학원 소유 테이블의 부모 참조는 `(academy_id, id)` 복합 FK → 교차 학원 연결을 DB가 거부합니다.
+- 동시성: 출석·반 배정은 유니크 제약 + `ON CONFLICT`, 출석 수정·일정 겹침 검사·과제 배포는 행 잠금(`FOR UPDATE`).
+- 시간대: `app/core/timezone.py` (시각=UTC timestamptz, 운영 날짜=Asia/Seoul date, 정규 수업 시간=Asia/Seoul time).
+
 ## 6. 향후 AI 연동 구조
 
 ```text

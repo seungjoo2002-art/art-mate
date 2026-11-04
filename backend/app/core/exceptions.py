@@ -55,6 +55,39 @@ class ErrorCode(StrEnum):
     OWNER_CANNOT_LEAVE = "OWNER_CANNOT_LEAVE"
     MEMBER_ROLE_NOT_CHANGEABLE = "MEMBER_ROLE_NOT_CHANGEABLE"
     APPLICANT_INACTIVE = "APPLICANT_INACTIVE"
+    # v0.3 학원 운영
+    ACADEMY_NOT_ACTIVE = "ACADEMY_NOT_ACTIVE"
+    ALREADY_CHECKED_IN = "ALREADY_CHECKED_IN"
+    ATTENDANCE_ALREADY_RECORDED = "ATTENDANCE_ALREADY_RECORDED"
+    CLASS_ARCHIVED = "CLASS_ARCHIVED"
+    ALREADY_IN_CLASS = "ALREADY_IN_CLASS"
+    INVALID_CLASS_MEMBER = "INVALID_CLASS_MEMBER"
+    SCHEDULE_OVERLAP = "SCHEDULE_OVERLAP"
+    INVALID_OCCURRENCE = "INVALID_OCCURRENCE"
+    SCHEDULE_EXCEPTION_EXISTS = "SCHEDULE_EXCEPTION_EXISTS"
+    INVALID_DATE_RANGE = "INVALID_DATE_RANGE"
+    LESSON_TOPIC_EXISTS = "LESSON_TOPIC_EXISTS"
+    TASK_CANCELLED = "TASK_CANCELLED"
+    INVALID_TASK_TARGET = "INVALID_TASK_TARGET"
+    # v0.4 작품 사진
+    UNSUPPORTED_FILE_TYPE = "UNSUPPORTED_FILE_TYPE"
+    FILE_TOO_LARGE = "FILE_TOO_LARGE"
+    INVALID_IMAGE = "INVALID_IMAGE"
+    PHOTO_LIMIT_REACHED = "PHOTO_LIMIT_REACHED"
+    DUPLICATE_PHOTO = "DUPLICATE_PHOTO"
+    UPLOAD_NOT_FOUND = "UPLOAD_NOT_FOUND"
+    UPLOAD_EXPIRED = "UPLOAD_EXPIRED"
+    PHOTO_NOT_ACTIVE = "PHOTO_NOT_ACTIVE"
+    INVALID_ARTWORK_LINK = "INVALID_ARTWORK_LINK"
+    STORAGE_NOT_CONFIGURED = "STORAGE_NOT_CONFIGURED"
+    STORAGE_UNAVAILABLE = "STORAGE_UNAVAILABLE"
+    # v0.4 시험 타이머
+    INVALID_STAGE_TARGETS = "INVALID_STAGE_TARGETS"
+    TEMPLATE_ARCHIVED = "TEMPLATE_ARCHIVED"
+    EXAM_ALREADY_RUNNING = "EXAM_ALREADY_RUNNING"
+    EXAM_INVALID_STATE = "EXAM_INVALID_STATE"
+    EXAM_NOT_RUNNING = "EXAM_NOT_RUNNING"
+    NOT_EXAM_PARTICIPANT = "NOT_EXAM_PARTICIPANT"
     INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     DATABASE_NOT_CONFIGURED = "DATABASE_NOT_CONFIGURED"
@@ -128,6 +161,14 @@ class ConflictError(AppError):
     message = "Resource conflict"
 
 
+class UnprocessableError(AppError):
+    """형식은 맞지만 도메인 규칙상 처리할 수 없는 입력 (예: 존재하지 않는 수업 회차)."""
+
+    status_code = 422  # Unprocessable Content (3.12 HTTPStatus 이름이 버전마다 다름)
+    code = ErrorCode.VALIDATION_ERROR
+    message = "Request cannot be processed"
+
+
 class ServiceUnavailableError(AppError):
     status_code = HTTPStatus.SERVICE_UNAVAILABLE
     code = ErrorCode.SERVICE_UNAVAILABLE
@@ -142,6 +183,16 @@ class AuthProviderUnavailableError(ServiceUnavailableError):
 class DatabaseNotConfiguredError(ServiceUnavailableError):
     code = ErrorCode.DATABASE_NOT_CONFIGURED
     message = "Database is not configured"
+
+
+class StorageNotConfiguredError(ServiceUnavailableError):
+    code = ErrorCode.STORAGE_NOT_CONFIGURED
+    message = "File storage is not configured"
+
+
+class StorageUnavailableError(ServiceUnavailableError):
+    code = ErrorCode.STORAGE_UNAVAILABLE
+    message = "File storage is temporarily unavailable"
 
 
 class DatabaseUnavailableError(ServiceUnavailableError):
