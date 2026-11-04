@@ -140,8 +140,9 @@ async def test_dashboard_numbers(client: httpx.AsyncClient, world: World) -> Non
     # ---------------------------------------------------------------- 원장 (학원 전체)
     owner_board = (await client.get(f"{world.base}/dashboard", headers=world.owner.headers)).json()
     assert owner_board["scope"] == "all"
-    assert [c["name"] for c in owner_board["classes"]] == ["기초 B반", "입시 A반"]
-    b_class = owner_board["classes"][0]
+    # 반 이름 정렬 순서는 DB collation에 따라 다르므로 순서와 무관하게 비교
+    assert {c["name"] for c in owner_board["classes"]} == {"기초 B반", "입시 A반"}
+    b_class = next(c for c in owner_board["classes"] if c["name"] == "기초 B반")
     assert b_class["student_count"] == 2
     assert b_class["attendance"]["present"] == 1 and b_class["attendance"]["not_recorded"] == 1
     assert b_class["open_assignment_count"] == 2
