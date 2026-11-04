@@ -1,6 +1,6 @@
 # ART MATE 데이터베이스 설계
 
-> 상태: **v0.4 구현 반영** (§3.9 작품·사진, §3.10 시험 타이머, 리비전 `0003`). §3.1~3.3a(`profiles`, `academies`, `academy_memberships`, `academy_join_requests`)는 리비전 `0001`, §3.6(반·일정·출석·주제·과제·개인 할 일 10개 테이블)은 리비전 `0002`로 구현했습니다. 나머지 엔티티는 설계안이며, 구현할 때 이 문서를 함께 수정합니다.
+> 상태: **v0.5 구현 반영** (§3.10a 질문 콜, §3.10b 피드백 녹음·동의, 리비전 `0004`). v0.4: §3.9 작품·사진, §3.10 시험 타이머 (`0003`). §3.1~3.3a(`profiles`, `academies`, `academy_memberships`, `academy_join_requests`)는 리비전 `0001`, §3.6(반·일정·출석·주제·과제·개인 할 일 10개 테이블)은 리비전 `0002`로 구현했습니다. 나머지 엔티티는 설계안이며, 구현할 때 이 문서를 함께 수정합니다.
 
 ## 1. 공통 규칙
 
@@ -327,6 +327,36 @@ user_id → profiles (CASCADE), title, note?, due_date?(date), completed_at?. �
 - 서버는 시작·종료 예정·단계 목표 시각만 저장하고, 남은 시간은 매 응답에서 서버 시각으로 계산합니다(`app/services/exam_timer.py`).
 - `ends_at`이 지나면 응답은 ENDED(TIME_UP), DB 반영은 다음 쓰기 작업(종료·단계 변경·같은 반 새 시험 시작)에서 합니다.
 - 세션은 생성 시 템플릿을 복사하므로 템플릿을 수정해도 기존 세션에는 영향이 없습니다.
+
+### 3.10a v0.5 질문 콜·대기열 ✅ v0.5 (리비전 `0004`)
+
+> 기존 설계안 §3.12 `teacher_calls`(수업 회차 기준)를 반 기준 `help_requests`로 구현했습니다.
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `help_requests` | (academy_id, class_id) → classes, (academy_id, student_membership_id) → academy_memberships 복합 FK. artwork_id?(SET NULL), note?, status `WAITING/CALLED/IN_PROGRESS/COMPLETED/CANCELLED/SKIPPED`, **queue_seq**(BIGINT IDENTITY, 처리 순서), requested_at, called_at·called_by, started_at, completed_at, handled_by, closed_at·closed_by. 상태별 시각 CHECK |
+| `help_queue_events` | 상태 전이 기록 (append-only): help_request_id(복합 FK), class_id, event_type `CREATED/CALLED/REQUEUED/STARTED/COMPLETED/CANCELLED/SKIPPED`, from/to status, actor. created_at = 잠금 후 앱 시각 |
+
+- 활성 요청 1개: 부분 유니크 `uq(class_id, student_membership_id) WHERE status IN ('WAITING','CALLED','IN_PROGRESS')`.
+- 순서: `queue_seq` 오름차순. 같은 시각 요청도 INSERT 순서로 확정됩니다. 순번은 조회 시 계산합니다.
+- 동시성: 다음 학생 호출 `FOR UPDATE SKIP LOCKED`(강사 여러 명이어도 서로 다른 학생), 개별 전이는 행 잠금 + 상태 확인.
+- 예상 대기시간: 최근 30일 완료 질문(최대 20건)의 평균 `completed_at - coalesce(started_at, called_at)`, 3건 미만이면 기본 180초 (`ix_help_requests_class_completed` 부분 인덱스).
+- 실시간 확장: 상태 변경 후 `HelpQueuePublisher.publish()`를 호출합니다(v0.5 no-op). SSE/WebSocket을 도입할 때 구현을 교체하고, 누락 이벤트는 `help_queue_events`로 복구합니다.
+- 인덱스: `ix(class_id, status, queue_seq)`, `ix(student_membership_id, requested_at)`, `ix(class_id, created_at)`(events)
+
+### 3.10b v0.5 피드백 녹음·녹음 동의 ✅ v0.5 (리비전 `0004`)
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `feedback_recordings` | (artwork_id, owner_id) → artworks 복합 FK (CASCADE), consent_id → recording_consents, speaker_notice_confirmed, title?, status `PENDING/ACTIVE/DELETED`, storage_path(unique, `{owner}/{artwork}/{recording}.{ext}`), content_type, size_bytes, duration_ms(>0), sha256, recorded_at?, upload_expires_at, uploaded_at, deleted_at, storage_cleanup_pending, **transcription_status** `NOT_REQUESTED/PENDING/PROCESSING/COMPLETED/FAILED`(v0.6 STT용), transcription_updated_at |
+| `recording_consents` | user_id → profiles, consent_type `VOICE_RECORDING`, policy_version, granted_by `SELF/GUARDIAN`, granted_at, revoked_at?. 부분 유니크 `uq(user_id, consent_type) WHERE revoked_at IS NULL` |
+
+- 학원·접근 범위는 연결된 작품(`artworks.academy_id`, `student_membership_id`)을 따릅니다(중복 저장 안 함). 개인 작품의 녹음은 본인만 볼 수 있습니다.
+- 파일은 비공개 버킷 `feedback-audio`. DB·Storage 일관성 원칙(파일 확인 후 ACTIVE, DB 먼저 삭제 → Storage 정리 재시도)은 사진과 같습니다. 작품을 삭제하면 녹음도 같은 트랜잭션에서 DELETED로 바뀝니다.
+- 중복 방지: `uq(artwork_id, sha256) WHERE status = 'ACTIVE'`.
+- 동의: 업로드 요청 시 현재 버전(`RECORDING_CONSENT_VERSION`)에 유효한 동의가 있어야 하고, 녹음마다 근거 동의(consent_id)를 남깁니다. 동의 행은 삭제하지 않고 철회 시각만 기록합니다(증빙, §3.5 방향과 같음).
+- STT 큐: `ix(transcription_status, created_at) WHERE transcription_status IN ('PENDING','PROCESSING')` (v0.6 작업자용).
+- Storage 권한 함수: `artmate_private.manages_student()`, `can_access_recording_object()` (SECURITY DEFINER, PUBLIC 실행 회수). 정책은 `backend/supabase/storage-setup.sql`.
 
 ### 3.11 Feedback — `feedbacks` (강사 첨삭)
 | 필드 | 설명 |

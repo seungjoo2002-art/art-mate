@@ -1,6 +1,8 @@
 """테스트용 Supabase Storage 대체 구현 (메모리). 실제 Supabase에 접근하지 않는다."""
 
 import io
+import os
+import wave
 from dataclasses import dataclass, field
 
 from PIL import Image
@@ -67,3 +69,23 @@ def image_bytes(fmt: str = "PNG", size: tuple[int, int] = (32, 24), color: str =
     buffer = io.BytesIO()
     Image.new("RGB", size, color).save(buffer, format=fmt)
     return buffer.getvalue()
+
+
+def audio_bytes(kind: str = "webm", size: int = 2048) -> bytes:
+    """형식 시그니처만 맞춘 테스트용 오디오 (WAV는 실제 1초 PCM). 호출마다 내용이 달라진다."""
+    noise = os.urandom(size)
+    if kind == "wav":
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(8000)
+            wav.writeframes(noise[:2] * 8000)  # 1초
+        return buffer.getvalue()
+    headers = {
+        "webm": bytes.fromhex("1a45dfa39f42868101428284" + "7765626d" + "42878104"),
+        "ogg": b"OggS" + bytes(22) + b"\x01\x13OpusHead\x01\x01",
+        "mp4": bytes.fromhex("00000020") + b"ftypM4A " + bytes(4) + b"M4A mp42isom",
+        "mp3": b"ID3" + bytes(7),
+    }
+    return headers[kind] + noise

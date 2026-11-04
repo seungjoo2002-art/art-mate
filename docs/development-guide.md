@@ -195,11 +195,11 @@ uv run alembic check                         # 4) 모델과 일치 확인 → "N
 
 ### 8.1a Supabase Storage 설정 (v0.4, 한 번만)
 
-작품 사진은 비공개 버킷 `artworks`와 `storage.objects` RLS 정책이 필요합니다. 이것들은 Supabase 전용이라 Alembic이 아니라 `backend/supabase/storage-setup.sql`로 적용합니다.
+작품 사진(v0.4)과 피드백 녹음(v0.5)은 비공개 버킷 `artworks`, `feedback-audio`와 `storage.objects` RLS 정책이 필요합니다. 이것들은 Supabase 전용이라 Alembic이 아니라 `backend/supabase/storage-setup.sql`로 적용합니다.
 
-1. Alembic `0003` 적용 (권한 함수 `artmate_private.can_access_artwork_object` 생성)
+1. Alembic `0004`까지 적용 (권한 함수 `artmate_private.can_access_artwork_object`, `manages_student`, `can_access_recording_object` 생성)
 2. Supabase 대시보드 → SQL Editor에서 `backend/supabase/storage-setup.sql` 실행 (여러 번 실행해도 안전)
-3. 확인: Storage → `artworks` 버킷이 **Private**, Policies에 `artmate_artworks_select/insert/delete` 3개
+3. 확인: Storage → `artworks`, `feedback-audio` 버킷이 **Private**, Policies에 `artmate_artworks_*` 3개 + `artmate_audio_*` 3개
 4. Settings → API → Exposed schemas에 `artmate_private`를 **추가하지 않습니다**
 5. 백엔드 환경변수 `SUPABASE_URL`, `SUPABASE_ANON_KEY`(공개 키) 설정. service_role 키는 넣지 않습니다
 

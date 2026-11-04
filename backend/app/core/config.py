@@ -25,6 +25,11 @@ DEPLOYED_ENVIRONMENTS: frozenset[str] = frozenset({"staging", "production"})
 # 작품 사진으로 허용할 수 있는 이미지 형식 (실제 바이트 검증은 app/services/images.py)
 SUPPORTED_IMAGE_TYPES: frozenset[str] = frozenset({"image/jpeg", "image/png", "image/webp"})
 
+# 피드백 녹음으로 허용할 수 있는 오디오 형식 (실제 바이트 검증은 app/services/audio.py)
+SUPPORTED_AUDIO_TYPES: frozenset[str] = frozenset(
+    {"audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"}
+)
+
 # Supabase Supavisor transaction pooler 기본 포트 (prepared statement 미지원)
 SUPABASE_TRANSACTION_POOLER_PORT = 6543
 
@@ -91,6 +96,29 @@ class Settings(BaseSettings):
     # 디컴프레션 폭탄 방지: 이미지 최대 픽셀 수
     artwork_max_image_pixels: int = Field(default=50_000_000, ge=1_000_000, le=200_000_000)
 
+    # --- 피드백 녹음 (v0.5) -------------------------------------------------
+    # 비공개 오디오 버킷. backend/supabase/storage-setup.sql 과 같아야 한다.
+    recording_bucket: str = Field(default="feedback-audio", pattern=r"^[a-z0-9][a-z0-9_-]{1,62}$")
+    recording_upload_ttl_seconds: int = Field(default=3600, ge=60, le=7200)
+    recording_max_upload_bytes: int = Field(default=25 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
+    recording_max_duration_seconds: int = Field(default=1200, ge=10, le=7200)
+    # 허용 MIME 타입 (쉼표 구분). 지원: audio/webm, audio/ogg, audio/mp4, audio/mpeg, audio/wav
+    recording_allowed_content_types: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: sorted(SUPPORTED_AUDIO_TYPES)
+    )
+    recording_max_per_artwork: int = Field(default=20, ge=1, le=100)
+    # 현재 녹음 동의서 버전. 바꾸면 학생은 새 버전에 다시 동의해야 녹음할 수 있다.
+    recording_consent_version: str = Field(
+        default="2026-11-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+    )
+
+    # --- 질문 콜 (v0.5) ------------------------------------------------------
+    # 최근 완료 기록이 부족할 때 쓰는 질문 1건 기본 처리 시간 (초)
+    help_default_handle_seconds: int = Field(default=180, ge=10, le=3600)
+    help_eta_sample_size: int = Field(default=20, ge=1, le=200)
+    help_eta_min_samples: int = Field(default=3, ge=1, le=50)
+    help_eta_window_days: int = Field(default=30, ge=1, le=365)
+
     # --- HTTP --------------------------------------------------------------
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
@@ -145,6 +173,24 @@ class Settings(BaseSettings):
                 )
             if not types:
                 raise ValueError("허용 이미지 형식이 비어 있습니다")
+            return types
+        return value
+
+    @field_validator("recording_allowed_content_types", mode="before")
+    @classmethod
+    def _split_audio_types(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.split(",")
+        if isinstance(value, list | tuple):
+            types = [str(item).strip().lower() for item in value if str(item).strip()]
+            unsupported = sorted(set(types) - SUPPORTED_AUDIO_TYPES)
+            if unsupported:
+                raise ValueError(
+                    f"지원하지 않는 오디오 형식입니다: {', '.join(unsupported)} "
+                    f"(지원: {', '.join(sorted(SUPPORTED_AUDIO_TYPES))})"
+                )
+            if not types:
+                raise ValueError("허용 오디오 형식이 비어 있습니다")
             return types
         return value
 

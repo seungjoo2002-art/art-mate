@@ -22,9 +22,11 @@ from app.models.exam import (
     ExamStageTarget,
     ExamTemplate,
 )
+from app.models.help import HelpQueueEvent, HelpRequest
 from app.models.membership import AcademyJoinRequest, AcademyMembership
 from app.models.personal_todo import PersonalTodo
 from app.models.profile import Profile
+from app.models.recording import FeedbackRecording, RecordingConsent
 from app.models.task import LessonTopic, Task, TaskAssignment
 
 __all__ = [
@@ -44,9 +46,13 @@ __all__ = [
     "ExamSessionStage",
     "ExamStageTarget",
     "ExamTemplate",
+    "FeedbackRecording",
+    "HelpQueueEvent",
+    "HelpRequest",
     "LessonTopic",
     "PersonalTodo",
     "Profile",
+    "RecordingConsent",
     "ScheduleException",
     "Task",
     "TaskAssignment",

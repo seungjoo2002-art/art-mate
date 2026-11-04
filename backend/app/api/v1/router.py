@@ -15,8 +15,10 @@ from app.api.v1.endpoints import (
     dashboard,
     exams,
     health,
+    help,
     lesson_topics,
     personal_todos,
+    recordings,
     schedules,
     tasks,
     users,
@@ -33,8 +35,13 @@ api_v1_router.include_router(dashboard.router)
 api_v1_router.include_router(exams.sessions)
 api_v1_router.include_router(exams.templates)
 api_v1_router.include_router(health.router)
+api_v1_router.include_router(help.queues)
+api_v1_router.include_router(help.requests)
 api_v1_router.include_router(lesson_topics.router)
 api_v1_router.include_router(personal_todos.router)
+api_v1_router.include_router(recordings.consents)
+api_v1_router.include_router(recordings.router)
+api_v1_router.include_router(recordings.staff_router)
 api_v1_router.include_router(schedules.router)
 api_v1_router.include_router(tasks.router)
 api_v1_router.include_router(users.router)
