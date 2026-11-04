@@ -2,8 +2,8 @@
 
 미대입시·예중·예고 입시학원을 위한 **AI 기반 실기교육·학생관리 플랫폼** ART MATE의 백엔드입니다.
 
-> **현재 버전: v0.2** — v0.1 기반(설정, DB, 공통 예외·로깅, Health API) + **Supabase Auth JWT 인증, 사용자 프로필, 학원 등록·심사, 학원 가입 요청·승인, 소속 관리**.
-> 작품 업로드, 첨삭, AI 기능 등은 이후 버전에서 구현합니다.
+> **현재 버전: v0.3** — v0.2(Supabase Auth JWT 인증, 사용자 프로필, 학원 등록·심사·가입·소속) + **학원 운영: 반·반 배정·담당 강사, 정규 수업·휴강·보강 일정, 출석·수정 이력, 수업 주제·과제 배포, 학생 개인 할 일, 오늘 할 일 통합, 강사 수업 현황 대시보드**.
+> 작품 업로드, 질문 콜, 녹음, AI 피드백, 커뮤니티는 이후 버전에서 구현합니다.
 
 | 문서 | 내용 |
 | --- | --- |
@@ -11,6 +11,7 @@
 | [docs/database-design.md](../docs/database-design.md) | 엔티티 설계, 학원별 데이터 격리, RLS 방향 |
 | [docs/development-guide.md](../docs/development-guide.md) | Git 협업 규칙, 새 API 추가 방법, 버전 체크리스트, 운영 절차(마이그레이션 적용·ADMIN 지정) |
 | [docs/frontend-integration.md](../docs/frontend-integration.md) | 프론트엔드 인증 연동, API 예시, 오류 코드 |
+| [docs/frontend-integration-v0.3.md](../docs/frontend-integration-v0.3.md) | v0.3 학원 운영 API: 출석·일정·과제·개인 할 일·대시보드, 권한, 날짜·시간 규칙 |
 | [docs/privacy-and-data-policy.md](../docs/privacy-and-data-policy.md) | 개인정보 최소 수집, 미성년자·탈퇴 후속 과제 |
 
 ## 기술 스택
@@ -95,6 +96,23 @@ v0.2 인증 API (모두 `Authorization: Bearer <Supabase access token>` 필요, 
 | `PATCH /api/v1/academies/{id}/join-requests/{request_id}` | 승인·거절 | OWNER/MANAGER |
 | `GET /api/v1/admin/academies`, `PATCH /api/v1/admin/academies/{id}` | 학원 등록 심사 | 시스템 ADMIN |
 
+v0.3 학원 운영 API (경로 접두사 `/api/v1/academies/{id}`, 상세: docs/frontend-integration-v0.3.md)
+
+| 경로 | 설명 | 권한 |
+| --- | --- | --- |
+| `/classes`, `/classes/{class_id}` | 반 생성·목록·상세·수정·보관 | 생성·수정 OWNER/MANAGER, 조회 멤버(학생은 배정 반) |
+| `/classes/{class_id}/members` | 학생 배정·담당 강사 지정·해제 | OWNER/MANAGER, 담당 강사(학생만) |
+| `/classes/{class_id}/schedules`, `/schedule-exceptions` | 정규 수업, 휴강·1회 변경·보강 | OWNER/MANAGER, 담당 강사 |
+| `GET /schedules?from&to` | 날짜 범위 일정 (학생별·강사별·반별) | 멤버 |
+| `/attendance/check-in`, `/attendance/me[/today]` | 출석하기, 내 출석 | STUDENT |
+| `/attendance`, `/attendance/records[/{id}[/history]]` | 출석 현황·기록·수정·이력 | 강사 이상 (담당 학생) |
+| `/classes/{class_id}/lesson-topics` | 수업 주제·다음 수업 공지 | 조회 반 멤버, 쓰기 담당 강사 |
+| `/tasks`, `/tasks/{task_id}` | 과제 배포·수정·취소·완료 현황 | 강사 이상 (담당 반) |
+| `/tasks/me`, `PUT /tasks/{task_id}/completion` | 받은 과제, 완료 체크 | STUDENT |
+| `GET /dashboard` | 강사 수업 현황 대시보드 | 강사 이상 |
+| `/api/v1/personal-todos[/{id}]` | 개인 할 일 (본인만) | STUDENT 사용자 |
+| `GET /api/v1/users/me/today` | 오늘 할 일 통합 (학원 과제 + 개인 할 일 + 주제) | STUDENT 사용자 |
+
 ## API 문서
 
 development/test 환경에서 다음 주소로 접근할 수 있습니다. staging/production에서는 기본적으로 비공개이며 `DOCS_ENABLED=true`로 켤 수 있습니다.
@@ -157,6 +175,7 @@ backend/
 │   │   ├── logging.py       # JSON/text 구조화 로깅, request_id 주입
 │   │   ├── middleware.py    # request id, 접근 로그, 안전한 500 응답
 │   │   ├── exceptions.py    # AppError 계층, 공통 에러 응답 형식
+│   │   ├── timezone.py      # Asia/Seoul 날짜·시각 규칙 (local_today, local_day_bounds)
 │   │   └── security.py      # Supabase JWT 검증 (JWKS, ES256/RS256), CurrentUser
 │   ├── api/
 │   │   ├── router.py        # /, /health + /api/v1 마운트
@@ -164,17 +183,21 @@ backend/
 │   │   ├── responses.py     # OpenAPI 공통 에러 응답
 │   │   └── v1/
 │   │       ├── router.py    # v1 도메인 라우터 등록
-│   │       └── endpoints/   # health, users, academies, admin
+│   │       └── endpoints/   # health, users, academies, admin, classes, schedules, attendance,
+│   │                        # lesson_topics, tasks, personal_todos, dashboard
 │   ├── db/
 │   │   ├── base.py          # Declarative Base, naming convention, UUID/timestamp mixin
 │   │   └── session.py       # Database(engine, session_factory, ping), Supabase pooler 대응
-│   ├── models/              # profile, academy, membership(소속·가입 요청), enums
-│   ├── schemas/             # common(에러·페이지네이션), user, academy, health
-│   ├── repositories/        # profiles, academies, memberships, pagination
-│   ├── services/            # profiles, academies, memberships (권한 규칙·트랜잭션)
+│   ├── models/              # profile, academy, membership, academy_class, attendance, task,
+│   │                        # personal_todo, enums
+│   ├── schemas/             # common, fields, user, academy, classes, attendance, tasks,
+│   │                        # personal_todo, dashboard, health
+│   ├── repositories/        # profiles, academies, memberships, classes, attendance, tasks
+│   ├── services/            # access(담당 반·학생 권한), academies, memberships, classes,
+│   │                        # schedules, attendance, tasks, personal_todos, dashboard
 │   ├── integrations/        # supabase/, ai/ 외부 연동
 │   └── utils/
-├── alembic/                 # env.py(async), versions/0001 (v0.2 테이블·RLS·auth FK)
+├── alembic/                 # env.py(async), versions/0001 (v0.2), 0002 (v0.3 학원 운영 10개 테이블·RLS)
 ├── tests/
 ├── .env.example
 ├── alembic.ini

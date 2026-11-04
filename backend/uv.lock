@@ -64,6 +64,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "tzdata" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -84,6 +85,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.16,<3" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.6,<2.2" },
+    { name = "tzdata", specifier = ">=2025.2" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54" },
 ]
 

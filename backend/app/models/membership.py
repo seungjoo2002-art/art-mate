@@ -14,6 +14,9 @@ class AcademyMembership(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "academy_memberships"
     __table_args__ = (
         UniqueConstraint("academy_id", "user_id"),
+        # v0.3: 학원 소유 테이블의 (academy_id, *_membership_id) 복합 FK 대상.
+        # 다른 학원의 학생·강사를 참조하는 행을 DB가 거부한다.
+        UniqueConstraint("academy_id", "id"),
         Index("ix_academy_memberships_academy_status_role", "academy_id", "status", "role"),
         Index("ix_academy_memberships_user_status", "user_id", "status"),
     )

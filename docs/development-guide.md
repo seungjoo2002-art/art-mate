@@ -189,7 +189,8 @@ uv run alembic check                         # 4) 모델과 일치 확인 → "N
 ```
 
 - 운영(`APP_ENV=production`)은 `ALLOW_PRODUCTION_MIGRATIONS=true`를 함께 지정해야만 실행됩니다.
-- 적용 후 Supabase 대시보드 → Table Editor에서 4개 테이블에 **RLS enabled**가 표시되는지, `profiles`에 `fk_profiles_id_auth_users` FK가 생겼는지 확인합니다.
+- 적용 후 Supabase 대시보드 → Table Editor에서 모든 앱 테이블(0001: 4개, 0002: 10개)에 **RLS enabled**가 표시되는지, `profiles`에 `fk_profiles_id_auth_users` FK가 생겼는지 확인합니다.
+- 0002는 `academy_memberships`에 `uq(academy_id, id)`를 추가합니다. 기존 행이 있어도 `id`가 PK라 항상 성공합니다.
 - 되돌리기: `uv run alembic downgrade -1`. 이 경우 테이블과 데이터가 삭제되므로 운영에서는 사용하지 않습니다.
 
 ### 8.2 시스템 관리자(ADMIN) 지정

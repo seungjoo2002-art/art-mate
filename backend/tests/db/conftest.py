@@ -26,7 +26,12 @@ from tests.conftest import make_settings, running_client
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
-APP_TABLES = "profiles, academies, academy_memberships, academy_join_requests"
+APP_TABLES = (
+    "profiles, academies, academy_memberships, academy_join_requests, "
+    "classes, class_memberships, class_schedules, schedule_exceptions, "
+    "attendance_records, attendance_audit_logs, lesson_topics, tasks, task_assignments, "
+    "personal_todos"
+)
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 pytestmark = pytest.mark.integration
@@ -107,6 +112,8 @@ async def client(app) -> AsyncIterator[httpx.AsyncClient]:  # type: ignore[no-un
 class Actor:
     user_id: uuid.UUID
     headers: dict[str, str]
+    # 학원 멤버 ID (academy_memberships.id). v0.3 시나리오 fixture에서 채운다.
+    membership_id: str | None = None
 
 
 @pytest.fixture
@@ -171,3 +178,74 @@ def actors(client: httpx.AsyncClient, tokens: TokenFactory, app):  # type: ignor
             return requested.json()["id"]
 
     return Actors()
+
+
+# --------------------------------------------------------------------------- v0.3 시나리오
+
+
+@dataclass
+class World:
+    """학원 1곳: 원장(OWNER), 담당 강사, 비담당 강사, 학생 3명, 반 1개(강사 + 학생 2명)."""
+
+    academy_id: str
+    owner: Actor
+    teacher: Actor
+    other_teacher: Actor
+    students: list[Actor]
+    class_id: str
+    admin: Actor
+
+    @property
+    def base(self) -> str:
+        return f"/api/v1/academies/{self.academy_id}"
+
+    @property
+    def class_base(self) -> str:
+        return f"{self.base}/classes/{self.class_id}"
+
+
+async def membership_ids(client: httpx.AsyncClient, academy_id: str, viewer: Actor) -> dict:
+    members = await client.get(
+        f"/api/v1/academies/{academy_id}/members?limit=100", headers=viewer.headers
+    )
+    assert members.status_code == 200, members.text
+    return {m["user_id"]: m["id"] for m in members.json()["items"]}
+
+
+@pytest.fixture
+def build_world(client: httpx.AsyncClient, actors):  # type: ignore[no-untyped-def]
+    async def build(name: str = "아트메이트 미술학원", admin: Actor | None = None) -> World:
+        admin = admin or await actors.admin()
+        owner = await actors.signup("INSTRUCTOR", name=f"{name}-원장")
+        academy_id = await actors.active_academy(owner, admin, name=name)
+        teacher = await actors.signup("INSTRUCTOR", name=f"{name}-담당강사")
+        other_teacher = await actors.signup("INSTRUCTOR", name=f"{name}-다른강사")
+        students = [await actors.signup("STUDENT", name=f"{name}-학생{i}") for i in (1, 2, 3)]
+        for member in (teacher, other_teacher, *students):
+            await actors.join(academy_id, member, owner)
+        ids = await membership_ids(client, academy_id, owner)
+        for member in (owner, teacher, other_teacher, *students):
+            member.membership_id = ids[str(member.user_id)]
+
+        created = await client.post(
+            f"/api/v1/academies/{academy_id}/classes",
+            json={"name": "입시 A반", "subject": "소묘"},
+            headers=owner.headers,
+        )
+        assert created.status_code == 201, created.text
+        class_id = created.json()["id"]
+        for member in (teacher, students[0], students[1]):
+            added = await client.post(
+                f"/api/v1/academies/{academy_id}/classes/{class_id}/members",
+                json={"membership_id": member.membership_id},
+                headers=owner.headers,
+            )
+            assert added.status_code == 201, added.text
+        return World(academy_id, owner, teacher, other_teacher, students, class_id, admin)
+
+    return build
+
+
+@pytest.fixture
+async def world(build_world) -> World:  # type: ignore[no-untyped-def]
+    return await build_world()

@@ -11,6 +11,8 @@
 - `require_user_types(...)`: + 서비스 사용자 유형(STUDENT/INSTRUCTOR/ADMIN) → 403
 - `require_academy_roles(...)`: + 경로의 academy_id 학원에 ACTIVE 소속과 역할
   → 404(비소속) / 403(역할 부족)
+  단축형: `AcademyMember`(모든 역할), `AcademyStudent`, `AcademyStaff`(INSTRUCTOR 이상),
+  `AcademyAdmin`(OWNER/MANAGER), `AcademyOwner`
 """
 
 import uuid
@@ -24,7 +26,7 @@ from app.core.config import Settings
 from app.core.exceptions import DatabaseNotConfiguredError, ErrorCode, ForbiddenError, NotFoundError
 from app.core.security import CurrentUser
 from app.db.session import Database
-from app.models.enums import MembershipRole, UserType
+from app.models.enums import ACADEMY_ADMIN_ROLES, ACADEMY_STAFF_ROLES, MembershipRole, UserType
 from app.models.membership import AcademyMembership
 from app.models.profile import Profile
 from app.repositories.memberships import MembershipRepository
@@ -104,3 +106,13 @@ def require_academy_roles(*allowed: MembershipRole) -> Callable[..., Awaitable[A
         return membership
 
     return dependency
+
+
+# 학원 역할별 의존성 (경로 파라미터 academy_id 기준)
+AcademyAdmin = Annotated[AcademyMembership, Depends(require_academy_roles(*ACADEMY_ADMIN_ROLES))]
+AcademyStaff = Annotated[AcademyMembership, Depends(require_academy_roles(*ACADEMY_STAFF_ROLES))]
+AcademyOwner = Annotated[AcademyMembership, Depends(require_academy_roles(MembershipRole.OWNER))]
+AcademyStudent = Annotated[
+    AcademyMembership, Depends(require_academy_roles(MembershipRole.STUDENT))
+]
+AcademyMember = Annotated[AcademyMembership, Depends(require_academy_roles())]
