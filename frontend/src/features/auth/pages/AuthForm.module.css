@@ -1,0 +1,54 @@
+/* 회원가입·로그인·온보딩 화면 공통 스타일 */
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--color-surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--gutter) var(--space-10);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.formError {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: #fbeeee;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.footer {
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.link {
+  margin-left: var(--space-1);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+}

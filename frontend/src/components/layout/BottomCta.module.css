@@ -1,0 +1,8 @@
+.cta {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: var(--space-5) var(--gutter) calc(var(--space-5) + env(safe-area-inset-bottom));
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
