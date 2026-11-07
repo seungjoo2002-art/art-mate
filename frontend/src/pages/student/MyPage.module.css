@@ -1,0 +1,39 @@
+.profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-xl);
+  background: var(--color-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+}
+
+.name {
+  font-size: var(--text-xl);
+}
+
+.email {
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.menu {
+  padding: var(--space-2) var(--space-5);
+}
+
+.logout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-4) 0;
+  color: var(--color-danger);
+}
