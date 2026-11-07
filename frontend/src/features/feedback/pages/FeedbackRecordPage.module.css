@@ -1,0 +1,130 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--gutter) var(--space-10);
+  text-align: center;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-ink);
+  text-align: left;
+}
+
+.wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 64px;
+  margin-top: var(--space-6);
+}
+
+.wave span {
+  width: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+}
+
+.waveActive span {
+  background: var(--color-primary);
+  animation: pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    transform: scaleY(0.4);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.clock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.time {
+  font-size: 48px;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.recDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e5484d;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.hint {
+  margin-top: calc(var(--space-4) * -1);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.mic {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 112px;
+  height: 112px;
+  border: 14px solid var(--color-primary-soft);
+  border-radius: 50%;
+  background: var(--color-primary);
+  background-clip: padding-box;
+  color: var(--color-text-on-dark);
+  box-sizing: content-box;
+  transition: transform 0.1s;
+}
+
+.mic:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.mic:disabled {
+  background-color: var(--color-primary-disabled);
+  cursor: not-allowed;
+}
+
+.micRecording {
+  background-color: #e5484d;
+  border-color: #fde7e8;
+}
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.preview {
+  width: 100%;
+  margin-bottom: var(--space-3);
+}
+
+.error {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}

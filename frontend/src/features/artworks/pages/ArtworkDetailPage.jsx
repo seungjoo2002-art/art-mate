@@ -11,7 +11,8 @@ import StageStepper from '../components/StageStepper'
 import { isCompleted, stagesWithPhotos } from '../stages'
 import styles from './ArtworkPage.module.css'
 
-export default function ArtworkDetailPage() {
+/** feedbackSection: 녹음 영역 (features끼리 직접 import하지 않도록 라우터에서 주입) */
+export default function ArtworkDetailPage({ feedbackSection }) {
   const { artworkId } = useParams()
   const navigate = useNavigate()
   const load = useCallback(() => getArtwork(artworkId), [artworkId])
@@ -80,7 +81,7 @@ export default function ArtworkDetailPage() {
         </div>
         {uploadError && <p className={styles.error}>{uploadError}</p>}
 
-        {/* TODO(v0.5): 피드백 녹음 버튼 */}
+        {feedbackSection?.(artwork.id)}
         <Button disabled={!completed} onClick={() => navigate('/archive')}>
           작품 완료하기
         </Button>
