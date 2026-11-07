@@ -1,0 +1,66 @@
+/* 디자인 토큰 — 색·간격·폰트는 반드시 이 변수로만 사용 */
+:root {
+  /* Brand */
+  --color-primary: #f2933a;
+  --color-primary-hover: #e5842a;
+  --color-primary-disabled: #f7c590;
+  --color-primary-soft: #fdf3e1; /* 아이콘 배경, 배지 배경 */
+  --color-primary-ink: #8a4b12; /* soft 배경 위 글자 */
+
+  --color-dark: #3e2f30; /* 강조 카드, 선택된 칩 */
+  --color-dark-2: #5e3f22; /* 보조 강조 카드 */
+
+  /* Neutral */
+  --color-bg: #f8f7f5; /* 페이지 배경 */
+  --color-surface: #ffffff; /* 카드·헤더 */
+  --color-surface-muted: #f2f1ee; /* 세그먼트 탭 배경, 아이콘 버튼 */
+  --color-border: #e4e3e0;
+  --color-text: #1f1f1f;
+  --color-text-sub: #6b6b6b;
+  --color-text-muted: #9a9a9a;
+  --color-text-on-dark: #ffffff;
+  --color-danger: #8a3b3b;
+
+  /* Typography */
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
+    'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 34px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --tracking-eyebrow: 0.12em;
+
+  /* Spacing (4px 단위) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --gutter: 20px; /* 화면 좌우 여백 */
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px; /* 아이콘 박스, 배지 */
+  --radius-lg: 16px; /* 버튼, 입력창 */
+  --radius-xl: 24px; /* 카드 */
+  --radius-full: 999px; /* 칩, 토글 */
+
+  /* Shadow */
+  --shadow-card: 0 2px 12px rgba(31, 31, 31, 0.04);
+  --shadow-primary: 0 8px 20px rgba(242, 147, 58, 0.28);
+
+  /* Layout */
+  --app-max-width: 480px;
+  --header-height: 64px;
+  --bottom-nav-height: 72px;
+}

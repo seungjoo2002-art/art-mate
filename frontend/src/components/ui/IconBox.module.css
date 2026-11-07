@@ -1,0 +1,32 @@
+.box {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.md {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+}
+
+.lg {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-xl);
+}
+
+.soft {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.dark {
+  background: var(--color-dark);
+  color: var(--color-text-on-dark);
+}
+
+.muted {
+  background: var(--color-surface-muted);
+  color: var(--color-dark);
+}

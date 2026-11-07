@@ -1,0 +1,23 @@
+.card {
+  display: block;
+  width: 100%;
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  text-align: left;
+}
+
+.default {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+}
+
+.dark {
+  background: var(--color-dark);
+  color: var(--color-text-on-dark);
+}
+
+.soft {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-ink);
+}
