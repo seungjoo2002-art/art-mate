@@ -1,0 +1,40 @@
+.mode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.modeText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.modeTitle {
+  margin-top: var(--space-1);
+  font-size: var(--text-xl);
+}
+
+.modeSub {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.continue {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.continueTitle {
+  display: block;
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+
+.continueSub {
+  display: block;
+  font-size: var(--text-sm);
+}

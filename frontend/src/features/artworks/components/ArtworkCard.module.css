@@ -1,0 +1,38 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.cover {
+  position: relative;
+  margin-bottom: var(--space-2);
+}
+
+.image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 0.9;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-muted);
+  object-fit: cover;
+}
+
+.badge {
+  position: absolute;
+  bottom: var(--space-3);
+  left: var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}

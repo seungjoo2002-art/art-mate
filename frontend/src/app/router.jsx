@@ -1,5 +1,8 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
+import SubLayout from '../components/layout/SubLayout'
+import ArtworkCreatePage from '../features/artworks/pages/ArtworkCreatePage'
+import ArtworkDetailPage from '../features/artworks/pages/ArtworkDetailPage'
 import AuthCallbackPage from '../features/auth/pages/AuthCallbackPage'
 import CheckEmailPage from '../features/auth/pages/CheckEmailPage'
 import LandingPage from '../features/auth/pages/LandingPage'
@@ -44,6 +47,13 @@ export const router = createBrowserRouter([
           { path: '/archive', element: <ArchivePage /> },
           { path: '/community', element: <CommunityPage /> },
           { path: '/my', element: <MyPage /> },
+        ],
+      },
+      {
+        element: <SubLayout />,
+        children: [
+          { path: '/artworks/new', element: <ArtworkCreatePage /> },
+          { path: '/artworks/:artworkId', element: <ArtworkDetailPage /> },
         ],
       },
     ],

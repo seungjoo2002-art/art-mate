@@ -1,0 +1,65 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--gutter) var(--space-10);
+}
+
+.error {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.hint {
+  margin-top: calc(var(--space-3) * -1);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-success);
+  white-space: nowrap;
+}
+
+.status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.statusDone {
+  color: var(--color-primary);
+}
+
+.topic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.topicLabel {
+  font-size: var(--text-sm);
+}
+
+.topicText {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+
+.stageList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}

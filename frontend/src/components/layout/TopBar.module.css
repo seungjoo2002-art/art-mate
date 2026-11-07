@@ -3,7 +3,7 @@
   top: 0;
   z-index: 10;
   display: grid;
-  grid-template-columns: 40px 1fr 40px;
+  grid-template-columns: 72px 1fr 72px;
   align-items: center;
   height: var(--header-height);
   padding: 0 var(--space-3);
@@ -18,13 +18,22 @@
   height: 40px;
 }
 
+.belowHeader {
+  top: var(--header-height);
+  background: var(--color-bg);
+}
+
 .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: center;
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
 }
 
 .step {
+  justify-self: end;
   text-align: right;
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
