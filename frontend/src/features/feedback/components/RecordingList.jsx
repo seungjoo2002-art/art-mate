@@ -12,7 +12,7 @@ import styles from './RecordingList.module.css'
 export default function RecordingList({ artworkId }) {
   const load = useCallback(() => listRecordings(artworkId), [artworkId])
   const { data } = useAsync(load)
-  const recordings = data?.items ?? []
+  const recordings = data ?? [] // 이 API는 페이지 객체가 아니라 배열을 그대로 돌려줌
 
   return (
     <section className={styles.section}>
