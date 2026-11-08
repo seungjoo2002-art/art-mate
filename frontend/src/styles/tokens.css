@@ -20,6 +20,9 @@
   --color-text-muted: #9a9a9a;
   --color-text-on-dark: #ffffff;
   --color-danger: #8a3b3b;
+  --color-danger-soft: #fbeeee;
+  --color-success: #4fa37a;
+  --color-success-soft: #e8f5ee;
 
   /* Typography */
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
