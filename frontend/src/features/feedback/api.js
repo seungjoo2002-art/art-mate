@@ -13,6 +13,9 @@ export const saveConsent = ({ policyVersion, grantedBy }) =>
 export const listRecordings = (artworkId) =>
   api(`/artworks/${artworkId}/recordings?include_urls=true`)
 
+export const deleteRecording = (artworkId, recordingId) =>
+  api(`/artworks/${artworkId}/recordings/${recordingId}`, { method: 'DELETE' })
+
 export const getRecordingUrl = (artworkId, recordingId) =>
   api(`/artworks/${artworkId}/recordings/${recordingId}/url`)
 
