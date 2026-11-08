@@ -11,7 +11,11 @@ import StageStepper from '../components/StageStepper'
 import { isCompleted, stagesWithPhotos } from '../stages'
 import styles from './ArtworkPage.module.css'
 
-export default function ArtworkDetailPage() {
+/**
+ * renderTimeline({ artworkId, items }): 단계 사진 카드(items)에 녹음 등을 시간순으로 섞어 그리는 함수.
+ * features끼리 직접 import하지 않도록 라우터에서 주입. 없으면 단계 순서대로 그림
+ */
+export default function ArtworkDetailPage({ renderTimeline }) {
   const { artworkId } = useParams()
   const navigate = useNavigate()
   const load = useCallback(() => getArtwork(artworkId), [artworkId])
@@ -70,6 +74,23 @@ export default function ArtworkDetailPage() {
     }
   }
 
+  // 타임라인 항목: 사진이 있는 단계는 업로드 시각, 빈 단계는 시각 없음(맨 뒤)
+  const stageItems = stages.map((stage, index) => ({
+    key: stage.key,
+    time: stage.photo ? stage.uploadedAt : null,
+    node: (
+      <StagePhotoCard
+        key={stage.key}
+        artworkId={artwork.id}
+        stage={stage}
+        index={index}
+        busy={busyStage === stage.key}
+        onSelectFile={(file) => handleSelectFile(stage, file)}
+        onDelete={() => handleDeletePhoto(stage)}
+      />
+    ),
+  }))
+
   return (
     <>
       <TopBar
@@ -91,22 +112,13 @@ export default function ArtworkDetailPage() {
 
         <StageStepper stages={stages} />
 
-        <div className={styles.stageList}>
-          {stages.map((stage, index) => (
-            <StagePhotoCard
-              key={stage.key}
-              artworkId={artwork.id}
-              stage={stage}
-              index={index}
-              busy={busyStage === stage.key}
-              onSelectFile={(file) => handleSelectFile(stage, file)}
-              onDelete={() => handleDeletePhoto(stage)}
-            />
-          ))}
-        </div>
+        {renderTimeline ? (
+          renderTimeline({ artworkId: artwork.id, items: stageItems })
+        ) : (
+          <div className={styles.stageList}>{stageItems.map((item) => item.node)}</div>
+        )}
         {actionError && <p className={styles.error}>{actionError}</p>}
 
-        {/* TODO(v0.5): 피드백 녹음 버튼 */}
         <Button disabled={!completed} onClick={() => navigate('/archive')}>
           작품 완료하기
         </Button>

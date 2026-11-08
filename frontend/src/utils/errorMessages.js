@@ -23,13 +23,19 @@ const API_MESSAGES = {
 
   // 작품 사진 (docs/frontend-integration-v0.4.md §7)
   UNSUPPORTED_FILE_TYPE: 'JPG, PNG, WEBP 사진만 올릴 수 있어요.',
-  FILE_TOO_LARGE: '10MB 이하 사진만 올릴 수 있어요.',
+  FILE_TOO_LARGE: '파일이 너무 커요. 사진은 10MB, 녹음은 25MB 이하만 올릴 수 있어요.',
   INVALID_IMAGE: '사진 파일을 읽을 수 없어요. 다른 사진을 선택해 주세요.',
   PHOTO_LIMIT_REACHED: '이 단계에 올릴 수 있는 사진 수를 넘었어요.',
   DUPLICATE_PHOTO: '이미 올린 사진이에요.',
   UPLOAD_EXPIRED: '업로드 시간이 지났어요. 다시 올려 주세요.',
   UPLOAD_NOT_FOUND: '업로드가 끝나지 않았어요. 다시 올려 주세요.',
   STORAGE_UNAVAILABLE: '사진 저장소가 잠시 불안정해요. 잠시 후 다시 시도해 주세요.',
+  // 피드백 녹음 (docs/frontend-integration-v0.5.md §3)
+  RECORDING_CONSENT_REQUIRED: '녹음 동의가 필요해요. 화면을 새로고침해 주세요.',
+  AUDIO_TOO_LONG: '20분 이하로 나눠서 녹음해 주세요.',
+  INVALID_AUDIO: '녹음 파일을 읽을 수 없어요. 다시 녹음해 주세요.',
+  DUPLICATE_RECORDING: '이미 올린 녹음이에요.',
+  RECORDING_LIMIT_REACHED: '작품당 녹음은 20개까지 올릴 수 있어요.',
   STORAGE_NOT_CONFIGURED: '서버 사진 저장소 설정이 필요해요. 백엔드 담당자에게 문의해 주세요.',
 }
 
