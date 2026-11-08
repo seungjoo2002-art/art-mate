@@ -29,58 +29,35 @@
 .recording {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-xl);
   background: var(--color-surface);
 }
 
-.recording audio {
-  width: 100%;
-}
-
-.header {
+.label {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-}
-
-.icon {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  background: var(--color-primary-soft);
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
   color: var(--color-primary);
 }
 
-.meta {
+.row {
   display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.title {
-  font-weight: var(--weight-bold);
-}
-
-.sub {
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .delete {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
   color: var(--color-text-muted);
 }
 

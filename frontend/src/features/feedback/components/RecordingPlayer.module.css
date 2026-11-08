@@ -1,0 +1,54 @@
+.player {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.play {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-on-dark);
+}
+
+.play:disabled {
+  background: var(--color-primary-disabled);
+}
+
+.track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  cursor: pointer;
+}
+
+/* 터치 영역 넓히기 */
+.track::before {
+  content: '';
+  position: absolute;
+  inset: -12px 0;
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--color-primary);
+}
+
+.time {
+  flex-shrink: 0;
+  min-width: 40px;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-sub);
+  text-align: right;
+}

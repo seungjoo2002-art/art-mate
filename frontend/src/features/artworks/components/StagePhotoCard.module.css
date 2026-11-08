@@ -4,18 +4,6 @@
   background: var(--color-surface);
 }
 
-.pick {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  padding: var(--space-4);
-  cursor: pointer;
-}
-
-.card[aria-busy='true'] .pick {
-  cursor: progress;
-}
-
 .filled {
   border: 1.5px solid var(--color-border);
 }
@@ -29,17 +17,23 @@
   outline-offset: 2px;
 }
 
-.delete {
-  position: absolute;
-  top: var(--space-2);
-  left: var(--space-2);
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(31, 31, 31, 0.6);
-  color: var(--color-text-on-dark);
+.pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4);
+  cursor: pointer;
+}
+
+.card[aria-busy='true'] .pick {
+  cursor: progress;
+}
+
+/* 사진이 있으면 위에 큰 사진, 아래에 설명 */
+.pickFilled {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
 }
 
 .input {
@@ -49,18 +43,30 @@
   opacity: 0;
 }
 
-.thumb {
-  flex-shrink: 0;
-  width: 88px;
-  height: 88px;
+.image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
   border-radius: var(--radius-lg);
   background: var(--color-surface-muted);
   object-fit: cover;
 }
 
-.placeholder {
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-1);
+}
+
+.thumb {
   display: grid;
   place-items: center;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
   color: var(--color-text-muted);
 }
 
@@ -92,11 +98,24 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--color-success-soft);
   color: var(--color-success);
+}
+
+.delete {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(31, 31, 31, 0.6);
+  color: var(--color-text-on-dark);
 }
 
 .spinner {

@@ -5,7 +5,6 @@ import { useAsync } from '../../../hooks/useAsync'
 import { formatUploadedAt } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { deleteRecording, listRecordings } from '../api'
-import { formatDuration } from '../format'
 import RecordingPlayer from './RecordingPlayer'
 import styles from './FeedbackTimeline.module.css'
 
@@ -48,14 +47,12 @@ export default function FeedbackTimeline({ artworkId, items }) {
     time: recording.recorded_at ?? recording.uploaded_at ?? recording.created_at,
     node: (
       <div className={styles.recording}>
-        <div className={styles.header}>
-          <span className={styles.icon}>
-            <Mic size={20} aria-hidden />
-          </span>
-          <div className={styles.meta}>
-            <span className={styles.title}>{recording.title ?? '피드백 녹음'}</span>
-            <span className={styles.sub}>{formatDuration(recording.duration_ms)}</span>
-          </div>
+        <span className={styles.label}>
+          <Mic size={16} aria-hidden />
+          {recording.title ?? '피드백 녹음'}
+        </span>
+        <div className={styles.row}>
+          <RecordingPlayer artworkId={artworkId} recording={recording} />
           <button
             type="button"
             className={styles.delete}
@@ -63,10 +60,9 @@ export default function FeedbackTimeline({ artworkId, items }) {
             disabled={deletingId === recording.id}
             aria-label="녹음 삭제"
           >
-            <Trash2 size={20} />
+            <Trash2 size={18} />
           </button>
         </div>
-        <RecordingPlayer artworkId={artworkId} recording={recording} />
       </div>
     ),
   }))
