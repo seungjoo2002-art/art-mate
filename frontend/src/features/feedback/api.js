@@ -20,14 +20,14 @@ export const getRecordingUrl = (artworkId, recordingId) =>
   api(`/artworks/${artworkId}/recordings/${recordingId}/url`)
 
 /** 사진 업로드와 같은 절차: 업로드 요청 → Storage 업로드 → 완료 처리 (v0.5 문서 §2.1) */
-export async function uploadRecording(artworkId, { blob, mimeType, durationMs }) {
+export async function uploadRecording(artworkId, { blob, mimeType, durationMs, recordedAt }) {
   const ticket = await api(`/artworks/${artworkId}/recordings`, {
     method: 'POST',
     body: {
       content_type: mimeType,
       file_size: blob.size,
       duration_ms: durationMs,
-      recorded_at: new Date().toISOString(),
+      recorded_at: recordedAt, // 저장한 시각이 아니라 녹음을 시작한 시각
       speaker_notice_confirmed: true, // 녹음 화면에서 확인받은 경우에만 호출
     },
   })

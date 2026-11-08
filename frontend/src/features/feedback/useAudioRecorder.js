@@ -6,7 +6,7 @@ const MAX_DURATION_MS = 20 * 60 * 1000 // 서버 제한 20분
 /**
  * 브라우저 마이크 녹음 (v0.5 문서 §2.4)
  * status: idle → recording → recorded
- * result: { blob, mimeType, durationMs, url(미리듣기용) }
+ * result: { blob, mimeType, durationMs, recordedAt(시작 시각), url(미리듣기용) }
  */
 export function useAudioRecorder() {
   const [status, setStatus] = useState('idle')
@@ -50,10 +50,12 @@ export function useAudioRecorder() {
     const recorder = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 64_000 })
     const chunks = []
     let startedAt = 0
+    let startedAtIso = null // 타임라인 정렬용 실제 시작 시각
 
     recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
     recorder.onstart = () => {
       startedAt = performance.now()
+      startedAtIso = new Date().toISOString()
       timerRef.current = setInterval(() => {
         const elapsed = performance.now() - startedAt
         setElapsedMs(elapsed)
@@ -65,7 +67,13 @@ export function useAudioRecorder() {
       // WebM은 파일에 길이 정보가 없을 수 있어 직접 잰 값을 사용
       const durationMs = Math.round(performance.now() - startedAt)
       const blob = new Blob(chunks, { type: recorder.mimeType })
-      setResult({ blob, mimeType: recorder.mimeType, durationMs, url: URL.createObjectURL(blob) })
+      setResult({
+        blob,
+        mimeType: recorder.mimeType,
+        durationMs,
+        recordedAt: startedAtIso,
+        url: URL.createObjectURL(blob),
+      })
       setElapsedMs(durationMs)
       setStatus('recorded')
     }

@@ -3,7 +3,7 @@ import AppLayout from '../components/layout/AppLayout'
 import SubLayout from '../components/layout/SubLayout'
 import ArtworkCreatePage from '../features/artworks/pages/ArtworkCreatePage'
 import ArtworkDetailPage from '../features/artworks/pages/ArtworkDetailPage'
-import RecordingList from '../features/feedback/components/RecordingList'
+import FeedbackTimeline from '../features/feedback/components/FeedbackTimeline'
 import FeedbackRecordPage from '../features/feedback/pages/FeedbackRecordPage'
 import AuthCallbackPage from '../features/auth/pages/AuthCallbackPage'
 import CheckEmailPage from '../features/auth/pages/CheckEmailPage'
@@ -22,7 +22,7 @@ import ProtectedRoute from './ProtectedRoute'
 import PublicOnlyRoute from './PublicOnlyRoute'
 import RoleHome from './RoleHome'
 
-const renderFeedbackSection = (artworkId) => <RecordingList artworkId={artworkId} />
+const renderArtworkTimeline = (props) => <FeedbackTimeline {...props} />
 
 export const router = createBrowserRouter([
   // 로그인 전
@@ -59,7 +59,7 @@ export const router = createBrowserRouter([
           { path: '/artworks/new', element: <ArtworkCreatePage /> },
           {
             path: '/artworks/:artworkId',
-            element: <ArtworkDetailPage feedbackSection={renderFeedbackSection} />,
+            element: <ArtworkDetailPage renderTimeline={renderArtworkTimeline} />,
           },
           { path: '/artworks/:artworkId/recordings/new', element: <FeedbackRecordPage /> },
         ],

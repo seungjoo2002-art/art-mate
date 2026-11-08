@@ -1,5 +1,4 @@
 import { Camera, Check, Trash2, Upload } from 'lucide-react'
-import { formatUploadedAt } from '../../../utils/date'
 import ArtworkPhoto from './ArtworkPhoto'
 import styles from './StagePhotoCard.module.css'
 
@@ -48,7 +47,7 @@ export default function StagePhotoCard({ artworkId, stage, index, busy, onSelect
             {busy
               ? '처리하는 중…'
               : photo
-                ? `${formatUploadedAt(stage.uploadedAt)} 업로드 · 눌러서 교체`
+                ? '눌러서 사진 교체'
                 : '탭하여 사진 촬영 또는 업로드'}
           </span>
         </span>
