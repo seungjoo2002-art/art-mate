@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react'
-import { Check, Mic, Square } from 'lucide-react'
+import { Mic, Square } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
-import { Button, Checkbox } from '../../../components/ui'
+import { Button } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getConsent, uploadRecording } from '../api'
@@ -45,7 +45,6 @@ export default function FeedbackRecordPage() {
 function Recorder({ artworkId }) {
   const navigate = useNavigate()
   const { status, elapsedMs, result, error, start, stop, reset } = useAudioRecorder()
-  const [speakerNotified, setSpeakerNotified] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const recording = status === 'recording'
@@ -65,20 +64,6 @@ function Recorder({ artworkId }) {
 
   return (
     <>
-      {/* 강사 목소리도 함께 녹음되므로 시작 전 확인 필수 (speaker_notice_confirmed) */}
-      {speakerNotified ? (
-        <p className={styles.notice}>
-          <Check size={20} aria-hidden />
-          선생님께 녹음 사실을 알렸어요.
-        </p>
-      ) : (
-        <div className={styles.notice}>
-          <Checkbox checked={speakerNotified} onChange={setSpeakerNotified}>
-            선생님께 녹음한다고 말씀드렸어요.
-          </Checkbox>
-        </div>
-      )}
-
       <div className={`${styles.wave} ${recording ? styles.waveActive : ''}`} aria-hidden>
         {WAVE.map((height, i) => (
           <span key={i} style={{ height, animationDelay: `${i * 70}ms` }} />
@@ -116,15 +101,11 @@ function Recorder({ artworkId }) {
             type="button"
             className={`${styles.mic} ${recording ? styles.micRecording : ''}`}
             onClick={recording ? stop : start}
-            disabled={!speakerNotified}
             aria-label={recording ? '녹음 멈추기' : '녹음 시작'}
           >
             {recording ? <Square size={30} fill="currentColor" /> : <Mic size={34} />}
           </button>
           {error && <p className={styles.error}>{error}</p>}
-          {!speakerNotified && (
-            <p className={styles.hint}>선생님께 녹음 사실을 알린 뒤 시작할 수 있어요.</p>
-          )}
         </>
       )}
       {/* TODO(v0.6): AI로 피드백 정리하기 */}

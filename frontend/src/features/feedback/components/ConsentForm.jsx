@@ -17,12 +17,13 @@ const ITEMS = [
 /** 녹음 전 필수 동의 화면. 체크박스는 기본 해제 */
 export default function ConsentForm({ requiredVersion, onSaved }) {
   const [agreed, setAgreed] = useState(false)
+  const [willNotifySpeaker, setWillNotifySpeaker] = useState(false)
   const [underFourteen, setUnderFourteen] = useState(false)
   const [guardianAgreed, setGuardianAgreed] = useState(false)
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const canSubmit = agreed && (!underFourteen || guardianAgreed) && !submitting
+  const canSubmit = agreed && willNotifySpeaker && (!underFourteen || guardianAgreed) && !submitting
 
   async function handleSubmit() {
     setSubmitting(true)
@@ -61,6 +62,10 @@ export default function ConsentForm({ requiredVersion, onSaved }) {
       <div className={styles.checks}>
         <Checkbox checked={agreed} onChange={setAgreed}>
           위 내용을 확인했고 피드백 음성 녹음에 동의합니다.
+        </Checkbox>
+        {/* 강사 목소리도 함께 녹음되므로 필요 (녹음 저장 시 speaker_notice_confirmed로 전송) */}
+        <Checkbox checked={willNotifySpeaker} onChange={setWillNotifySpeaker}>
+          녹음할 때는 선생님께 녹음 사실을 먼저 알릴게요.
         </Checkbox>
         <Checkbox checked={underFourteen} onChange={setUnderFourteen}>
           만 14세 미만이에요.

@@ -7,17 +7,6 @@
   text-align: center;
 }
 
-.notice {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-radius: var(--radius-xl);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-ink);
-  text-align: left;
-}
-
 .wave {
   display: flex;
   align-items: center;

@@ -28,7 +28,7 @@ export async function uploadRecording(artworkId, { blob, mimeType, durationMs, r
       file_size: blob.size,
       duration_ms: durationMs,
       recorded_at: recordedAt, // 저장한 시각이 아니라 녹음을 시작한 시각
-      speaker_notice_confirmed: true, // 녹음 화면에서 확인받은 경우에만 호출
+      speaker_notice_confirmed: true, // 녹음 동의 화면에서 '선생님께 알리기'에 동의한 사용자만 녹음 가능
     },
   })
 
