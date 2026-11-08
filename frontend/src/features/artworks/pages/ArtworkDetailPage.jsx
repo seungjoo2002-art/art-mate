@@ -5,7 +5,7 @@ import TopBar from '../../../components/layout/TopBar'
 import { Button, Card } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
-import { getArtwork, uploadStagePhoto } from '../api'
+import { deleteArtwork, deletePhoto, getArtwork, uploadStagePhoto } from '../api'
 import StagePhotoCard from '../components/StagePhotoCard'
 import StageStepper from '../components/StageStepper'
 import { isCompleted, stagesWithPhotos } from '../stages'
@@ -17,8 +17,9 @@ export default function ArtworkDetailPage({ feedbackSection }) {
   const navigate = useNavigate()
   const load = useCallback(() => getArtwork(artworkId), [artworkId])
   const { data: artwork, error, reload } = useAsync(load)
-  const [uploadingStage, setUploadingStage] = useState(null)
-  const [uploadError, setUploadError] = useState('')
+  const [busyStage, setBusyStage] = useState(null) // 업로드·삭제 중인 단계
+  const [actionError, setActionError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   if (error) {
     return (
@@ -32,17 +33,41 @@ export default function ArtworkDetailPage({ feedbackSection }) {
   const stages = stagesWithPhotos(artwork)
   const completed = isCompleted(artwork)
 
-  async function handleSelectFile(stage, file) {
-    setUploadingStage(stage.key)
-    setUploadError('')
+  async function runStageAction(stage, action) {
+    if (busyStage) return
+    setBusyStage(stage.key)
+    setActionError('')
     try {
-      // 단계당 사진 1장으로 보여 주므로, 이미 있으면 교체
-      await uploadStagePhoto(artwork.id, stage.key, file, { replacesPhotoId: stage.photo?.id })
+      await action()
       reload()
     } catch (err) {
-      setUploadError(toErrorMessage(err))
+      setActionError(toErrorMessage(err))
     } finally {
-      setUploadingStage(null)
+      setBusyStage(null)
+    }
+  }
+
+  // 단계당 사진 1장으로 보여 주므로, 이미 있으면 교체
+  const handleSelectFile = (stage, file) =>
+    runStageAction(stage, () =>
+      uploadStagePhoto(artwork.id, stage.key, file, { replacesPhotoId: stage.photo?.id }),
+    )
+
+  function handleDeletePhoto(stage) {
+    if (!window.confirm(`${stage.photoLabel}을 삭제할까요?`)) return
+    runStageAction(stage, () => deletePhoto(artwork.id, stage.photo.id))
+  }
+
+  async function handleDeleteArtwork() {
+    if (!window.confirm('작품을 삭제할까요? 사진과 녹음도 모두 삭제되고 되돌릴 수 없어요.')) return
+    setDeleting(true)
+    setActionError('')
+    try {
+      await deleteArtwork(artwork.id)
+      navigate('/archive', { replace: true })
+    } catch (err) {
+      setActionError(toErrorMessage(err))
+      setDeleting(false)
     }
   }
 
@@ -74,18 +99,27 @@ export default function ArtworkDetailPage({ feedbackSection }) {
               artworkId={artwork.id}
               stage={stage}
               index={index}
-              uploading={uploadingStage === stage.key}
-              onSelectFile={(file) => !uploadingStage && handleSelectFile(stage, file)}
+              busy={busyStage === stage.key}
+              onSelectFile={(file) => handleSelectFile(stage, file)}
+              onDelete={() => handleDeletePhoto(stage)}
             />
           ))}
         </div>
-        {uploadError && <p className={styles.error}>{uploadError}</p>}
+        {actionError && <p className={styles.error}>{actionError}</p>}
 
         {feedbackSection?.(artwork.id)}
         <Button disabled={!completed} onClick={() => navigate('/archive')}>
           작품 완료하기
         </Button>
         {!completed && <p className={styles.hint}>완성 사진을 올리면 작품을 완료할 수 있어요.</p>}
+        <button
+          type="button"
+          className={styles.deleteArtwork}
+          onClick={handleDeleteArtwork}
+          disabled={deleting}
+        >
+          {deleting ? '삭제하는 중…' : '작품 삭제'}
+        </button>
       </main>
     </>
   )

@@ -9,6 +9,11 @@ export const getArtwork = (artworkId) => api(`/artworks/${artworkId}?include_url
 export const createArtwork = ({ title, description }) =>
   api('/artworks', { method: 'POST', body: { title, description: description || null } })
 
+export const deleteArtwork = (artworkId) => api(`/artworks/${artworkId}`, { method: 'DELETE' })
+
+export const deletePhoto = (artworkId, photoId) =>
+  api(`/artworks/${artworkId}/photos/${photoId}`, { method: 'DELETE' })
+
 export const getPhotoUrl = (artworkId, photoId) =>
   api(`/artworks/${artworkId}/photos/${photoId}/url`)
 

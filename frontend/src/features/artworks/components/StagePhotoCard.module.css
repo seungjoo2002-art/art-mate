@@ -1,14 +1,18 @@
 .card {
+  position: relative;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+.pick {
   display: flex;
   align-items: center;
   gap: var(--space-5);
   padding: var(--space-4);
-  border-radius: var(--radius-xl);
-  background: var(--color-surface);
   cursor: pointer;
 }
 
-.card[aria-busy='true'] {
+.card[aria-busy='true'] .pick {
   cursor: progress;
 }
 
@@ -23,6 +27,19 @@
 .card:focus-within {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+.delete {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(31, 31, 31, 0.6);
+  color: var(--color-text-on-dark);
 }
 
 .input {
