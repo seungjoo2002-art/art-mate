@@ -4,9 +4,12 @@
 > 선행 문서: [frontend-integration.md](frontend-integration.md) (인증·오류 형식), [v0.3](frontend-integration-v0.3.md) (반·membership_id), [v0.4](frontend-integration-v0.4.md) (작품·Storage 업로드·Signed URL)
 > API 문서: http://127.0.0.1:8000/docs (최종 기준은 OpenAPI)
 
+> **v0.5.1 변경 (2026-11-09)** — **§1 질문 콜·대기열(F-07)은 서비스 범위에서 제외**되어 API가 제거되었습니다 (`/help-requests`, `/help-queue` 호출 시 404). §1과 질문 콜 오류 코드는 기록용입니다.
+> **§2 피드백 녹음은 그대로 유지**되며 v0.6 STT·AI 요약의 입력이 됩니다. 작품 목록에 녹음 수(`recording_count`)가 추가되었습니다 → [frontend-integration-v0.5.1.md](frontend-integration-v0.5.1.md)
+
 v0.5는 **F-07 질문 콜·대기열**과 **F-11 피드백 음성 녹음 저장**입니다. STT·AI 요약은 v0.6에서 추가합니다.
 
-## 1. 질문 콜
+## 1. 질문 콜 — v0.5.1 제외 (API 제거됨, 기록용)
 
 ### 1.1 상태값
 

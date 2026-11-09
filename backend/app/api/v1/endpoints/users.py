@@ -39,7 +39,8 @@ async def get_me(user: CurrentUser, session: DbSession) -> MeRead:
     summary="내 프로필 생성 (회원가입 직후, 멱등)",
     description=(
         "처음 호출하면 201로 생성. 이미 있으면 200으로 기존 프로필을 그대로 반환한다 "
-        "(값은 바뀌지 않음). user_type은 STUDENT/INSTRUCTOR만 가능."
+        "(값은 바뀌지 않음). user_type은 STUDENT/INSTRUCTOR만 가능. "
+        "practical_type(실기 유형)은 선택이며 나중에 PATCH로 바꿀 수 있다."
     ),
     status_code=status.HTTP_201_CREATED,
     responses={200: {"model": MeRead, "description": "이미 존재 (기존 프로필 반환)"}}
@@ -56,8 +57,9 @@ async def create_me(
 
 @router.patch(
     "/me",
-    summary="내 프로필 수정 (display_name, avatar_path)",
-    description="user_type, is_active 등 다른 필드를 보내면 422.",
+    summary="내 프로필 수정 (display_name, avatar_path, practical_type)",
+    description="user_type, is_active 등 다른 필드를 보내면 422. "
+    "practical_type은 선택지 외 값이면 422, null이면 미선택으로 되돌린다.",
     responses=AUTH_ERRORS | error_responses(422),
 )
 async def update_me(

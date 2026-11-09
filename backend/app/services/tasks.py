@@ -27,8 +27,8 @@ from app.models.membership import AcademyMembership
 from app.models.task import LessonTopic, Task, TaskAssignment
 from app.repositories.classes import ClassRepository
 from app.repositories.tasks import LessonTopicRepository, TaskRepository
-from app.schemas.attendance import StudentRef
 from app.schemas.common import PaginationParams
+from app.schemas.students import StudentRef
 from app.schemas.tasks import (
     LessonTopicCreate,
     LessonTopicUpdate,

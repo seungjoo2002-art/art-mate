@@ -21,7 +21,6 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from app.main import create_app
-from app.services.help_events import RecordingHelpQueuePublisher
 from tests.auth_utils import TEST_SUPABASE_URL, TokenFactory, make_verifier
 from tests.conftest import make_settings, running_client
 from tests.fake_storage import FakeStorage
@@ -101,7 +100,6 @@ async def app(migrated_database: str, tokens: TokenFactory):  # type: ignore[no-
     # 외부 Storage 대신 메모리 구현 (lifespan은 storage를 다시 만들지 않는다)
     application.state.storage = FakeStorage()
     application.state.audio_storage = FakeStorage(bucket="feedback-audio")
-    application.state.help_publisher = RecordingHelpQueuePublisher()
     yield application
 
 

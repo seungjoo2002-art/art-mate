@@ -4,6 +4,9 @@
 - `/academies/{academy_id}/artworks`: 강사 이상이 담당 학생의 '학원 연결 작품'을 조회 (읽기 전용).
 
 사진 업로드는 2단계: `POST .../photos`(업로드 URL 발급) → Storage에 직접 PUT → `POST .../complete`.
+
+v0.5.1: 실기 유형(practical_type)·작업 목적(work_category) 분류와 필터, 작품 완료
+(`POST /artworks/{id}/complete`, `POST /artworks/{id}/reopen`), 목록의 recording_count.
 """
 
 import datetime as dt
@@ -22,7 +25,7 @@ from app.api.deps import (
 )
 from app.api.responses import AUTH_ERRORS, error_responses
 from app.core.security import CurrentUser
-from app.models.enums import UserType
+from app.models.enums import ArtworkWorkCategory, ArtworkWorkStatus, PracticalType, UserType
 from app.models.profile import Profile
 from app.schemas.artworks import (
     ArtworkCreate,
@@ -39,8 +42,8 @@ from app.schemas.artworks import (
     UploadTicket,
 )
 from app.schemas.common import Page, PaginationQuery
-from app.services.artworks import ArtworkService, artwork_read
-from app.services.exams import student_ref
+from app.schemas.students import student_ref
+from app.services.artworks import ArtworkFilters, ArtworkService
 from app.services.recordings import RecordingService
 
 router = APIRouter(prefix="/artworks", tags=["artworks"])
@@ -51,6 +54,20 @@ READ_ERRORS = AUTH_ERRORS | error_responses(404)
 WRITE_ERRORS = AUTH_ERRORS | error_responses(404, 409, 422)
 IncludeUrls = Annotated[
     bool, Query(description="true면 사진마다 짧은 만료의 Signed URL 포함 (Storage 호출)")
+]
+PracticalTypeFilter = Annotated[
+    list[PracticalType] | None,
+    Query(
+        description="실기 유형 필터. 여러 번 주면 OR "
+        "(`?practical_type=BASIC_DESIGN&practical_type=DRAWING`)"
+    ),
+]
+WorkCategoryFilter = Annotated[
+    list[ArtworkWorkCategory] | None,
+    Query(description="작업 목적 필터. 여러 번 주면 OR. practical_type과 함께 주면 AND"),
+]
+WorkStatusFilter = Annotated[
+    ArtworkWorkStatus | None, Query(description="IN_PROGRESS 또는 COMPLETED")
 ]
 
 
@@ -78,7 +95,17 @@ async def create_artwork(
     return await _service(session, settings, storage).create(owner, data)
 
 
-@router.get("", summary="내 작품 목록 (작업 날짜 최신순)", responses=READ_ERRORS)
+@router.get(
+    "",
+    summary="내 작품 목록 (작업 날짜 최신순)",
+    description=(
+        "필터는 모두 선택이며 서로 AND로 결합된다. 아카이브 필터 예: "
+        "'기초디자인' → `practical_type=BASIC_DESIGN`, '모의시험' → `work_category=MOCK_EXAM`, "
+        "'개인 연습' → `work_category=PERSONAL_PRACTICE`. "
+        "각 항목에 `recording_count`(ACTIVE 피드백 녹음 수)가 포함된다."
+    ),
+    responses=READ_ERRORS | error_responses(422),
+)
 async def list_artworks(
     owner: Student,
     session: DbSession,
@@ -88,14 +115,19 @@ async def list_artworks(
     academy_id: uuid.UUID | None = None,
     work_date_from: dt.date | None = None,
     work_date_to: dt.date | None = None,
+    practical_type: PracticalTypeFilter = None,
+    work_category: WorkCategoryFilter = None,
+    work_status: WorkStatusFilter = None,
 ) -> Page[ArtworkRead]:
-    items, total = await _service(session, settings, storage).list_mine(
-        owner,
-        pagination,
+    filters = ArtworkFilters(
         academy_id=academy_id,
         work_date_from=work_date_from,
         work_date_to=work_date_to,
+        practical_types=practical_type or (),
+        work_categories=work_category or (),
+        work_status=work_status,
     )
+    items, total = await _service(session, settings, storage).list_mine(owner, pagination, filters)
     return Page(items=items, total=total, limit=pagination.limit, offset=pagination.offset)
 
 
@@ -151,6 +183,46 @@ async def delete_artwork(
     await RecordingService(session, settings, audio_storage).cleanup_storage(
         owner, user.access_token
     )
+
+
+@router.post(
+    "/{artwork_id}/complete",
+    summary="작품 완료하기 (학생)",
+    description=(
+        "작업 상태를 COMPLETED로 바꾸고 completed_at을 기록한다. ACTIVE FINAL 사진이 없으면 409 "
+        "`FINAL_PHOTO_REQUIRED`. 이미 완료된 작품이면 변경 없이 200 (멱등, 완료 시각 유지). "
+        "완료 후에는 사진 업로드·교체·삭제·대표 변경이 409 `ARTWORK_COMPLETED`로 막히고, "
+        "제목·설명·분류 수정과 피드백 녹음은 가능하다. 진행 중이던 사진 업로드는 취소된다."
+    ),
+    responses=WRITE_ERRORS,
+)
+async def complete_artwork(
+    artwork_id: uuid.UUID,
+    owner: Student,
+    user: CurrentUser,
+    session: DbSession,
+    settings: AppSettings,
+    storage: OptionalStorage,
+) -> ArtworkDetail:
+    return await _service(session, settings, storage).complete(owner, artwork_id, user.access_token)
+
+
+@router.post(
+    "/{artwork_id}/reopen",
+    summary="작업 재개 (완료 취소, 학생)",
+    description="작업 상태를 IN_PROGRESS로 되돌리고 completed_at을 지운다. "
+    "이미 작업 중이면 200 (멱등).",
+    responses=WRITE_ERRORS,
+)
+async def reopen_artwork(
+    artwork_id: uuid.UUID,
+    owner: Student,
+    user: CurrentUser,
+    session: DbSession,
+    settings: AppSettings,
+    storage: OptionalStorage,
+) -> ArtworkDetail:
+    return await _service(session, settings, storage).reopen(owner, artwork_id, user.access_token)
 
 
 @router.get("/{artwork_id}/progress", summary="작품 진행 상태", responses=READ_ERRORS)
@@ -309,14 +381,19 @@ async def list_student_artworks(
     storage: OptionalStorage,
     pagination: PaginationQuery,
     student_membership_id: uuid.UUID | None = None,
+    practical_type: PracticalTypeFilter = None,
+    work_category: WorkCategoryFilter = None,
+    work_status: WorkStatusFilter = None,
 ) -> Page[StaffArtworkRead]:
-    rows, total = await _service(session, settings, storage).list_for_staff(
-        actor, pagination, student_membership_id=student_membership_id
+    filters = ArtworkFilters(
+        practical_types=practical_type or (),
+        work_categories=work_category or (),
+        work_status=work_status,
     )
-    items = [
-        StaffArtworkRead(**artwork_read(artwork, photos), student=student_ref(m, p))
-        for artwork, m, p, photos in rows
-    ]
+    rows, total = await _service(session, settings, storage).list_for_staff(
+        actor, pagination, filters, student_membership_id=student_membership_id
+    )
+    items = [StaffArtworkRead(**data, student=student_ref(m, p)) for data, m, p in rows]
     return Page(items=items, total=total, limit=pagination.limit, offset=pagination.offset)
 
 

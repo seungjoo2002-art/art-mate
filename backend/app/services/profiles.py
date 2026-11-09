@@ -24,7 +24,7 @@ class ProfileService:
         회원가입 직후 생성이 실패했거나 중복 요청이 와도 다시 호출하면 복구된다.
         """
         created = await self.profiles.insert_if_absent(
-            user.user_id, data.display_name, data.user_type
+            user.user_id, data.display_name, data.user_type, data.practical_type
         )
         await self.session.commit()
         profile = await self.profiles.get(user.user_id)

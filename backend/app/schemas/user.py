@@ -12,7 +12,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.enums import UserType
+from app.models.enums import PracticalType, UserType
 from app.schemas.common import APIModel
 
 DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
@@ -30,10 +30,17 @@ class ProfileCreate(BaseModel):
     user_type: Literal[UserType.STUDENT, UserType.INSTRUCTOR] = Field(
         description="STUDENT 또는 INSTRUCTOR (ADMIN 불가)"
     )
+    practical_type: PracticalType | None = Field(
+        default=None,
+        description="실기 유형 (선택). 선택지: GET /api/v1/meta/options 의 practical_types",
+    )
 
 
 class ProfileUpdate(BaseModel):
-    """본인 프로필 수정. user_type·is_active 등은 변경할 수 없다 (보내면 422)."""
+    """본인 프로필 수정. user_type·is_active 등은 변경할 수 없다 (보내면 422).
+
+    practical_type: 보내지 않으면 유지, null이면 미선택으로 되돌린다.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -42,6 +49,9 @@ class ProfileUpdate(BaseModel):
         default=None,
         max_length=512,
         description="Supabase Storage 경로 `avatars/<본인 user_id>/<파일명>`. null이면 삭제",
+    )
+    practical_type: PracticalType | None = Field(
+        default=None, description="실기 유형. null이면 미선택으로 변경"
     )
 
     @field_validator("avatar_path")
@@ -65,6 +75,7 @@ class ProfileRead(APIModel):
     display_name: str
     user_type: UserType
     avatar_path: str | None
+    practical_type: PracticalType | None = Field(description="실기 유형 (미선택이면 null)")
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -1,4 +1,4 @@
-"""오디오 실제 형식 검증과 예상 대기시간 계산 (DB·Storage 없이)."""
+"""오디오 실제 형식 검증 (DB·Storage 없이)."""
 
 import pytest
 
@@ -9,7 +9,6 @@ from app.services.audio import (
     inspect_audio,
     normalize_content_type,
 )
-from app.services.help_queue import estimate_wait
 from tests.fake_storage import audio_bytes, image_bytes
 
 ALLOWED = ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"]
@@ -105,33 +104,3 @@ def test_declared_audio_checks(kwargs: dict, code: str) -> None:  # type: ignore
             max_duration_seconds=600,
         )
     assert str(exc.value.code) == code
-
-
-def test_estimate_wait_uses_recent_average() -> None:
-    estimate = estimate_wait(
-        ahead=3, handlers=1, durations=[100, 200, 300], min_samples=3, default_seconds=180
-    )
-    assert estimate.source == "RECENT_AVERAGE" and not estimate.is_default
-    assert estimate.average_handle_seconds == 200 and estimate.sample_size == 3
-    assert estimate.estimated_wait_seconds == 600
-
-    two_teachers = estimate_wait(
-        ahead=3, handlers=2, durations=[100, 200, 300], min_samples=3, default_seconds=180
-    )
-    assert two_teachers.estimated_wait_seconds == 300
-
-
-def test_estimate_wait_falls_back_to_default() -> None:
-    estimate = estimate_wait(
-        ahead=2, handlers=0, durations=[50], min_samples=3, default_seconds=180
-    )
-    assert estimate.source == "DEFAULT" and estimate.is_default
-    assert estimate.active_handlers == 1  # 담당 강사가 없어도 1명으로 계산
-    assert estimate.sample_size == 0
-    assert estimate.estimated_wait_seconds == 360
-    assert (
-        estimate_wait(
-            ahead=0, handlers=1, durations=[], min_samples=3, default_seconds=180
-        ).estimated_wait_seconds
-        == 0
-    )

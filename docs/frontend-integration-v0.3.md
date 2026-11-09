@@ -3,6 +3,9 @@
 > 대상: 프론트엔드 개발자 B · 기준 버전: v0.3 · 선행 문서: [frontend-integration.md](frontend-integration.md) (v0.2 인증·학원 소속)
 > API 문서(개발 서버): http://127.0.0.1:8000/docs. 요청·응답 스키마의 최종 기준은 OpenAPI입니다.
 
+> **v0.5.1 변경 (2026-11-09)** — 기획 변경으로 **§6 출석, §8 개인 할 일, §9 오늘 할 일 통합, §10 강사 대시보드 API가 제거**되었습니다 (호출 시 404). 해당 절은 기록용입니다.
+> **반(§4)·일정(§5)·수업 주제·과제(§7) API는 그대로 유지**됩니다 (작품의 반·과제 연결과 강사 담당 범위 권한에 사용). 자세한 내용: [v0.5.1-planning-changes.md](v0.5.1-planning-changes.md)
+
 v0.3에서는 반·일정, 출석, 수업 주제·과제, 개인 할 일, 강사 대시보드를 제공합니다.
 인증 방식, 오류 형식, 페이지네이션은 v0.2와 같습니다 (`Authorization: Bearer <access_token>`, `{items, total, limit, offset}`).
 
@@ -226,7 +229,7 @@ GET /academies/{academy_id}/schedules?from=2026-11-09&to=2026-11-15
 | `MAKEUP` | `SCHEDULED` | "보강" 배지 (`student_membership_id`가 있으면 "개인 보강") |
 | `MAKEUP` | `CANCELLED` | 취소선 + "보강 취소" |
 
-## 6. 출석 API
+## 6. 출석 API — v0.5.1 제외 (API 제거됨)
 
 ### 6.1 학생
 
@@ -373,7 +376,7 @@ PUT /academies/{academy_id}/tasks/{task_id}/completion                { "complet
 
 완료 체크는 여러 번 눌러도 처음 완료 시각이 유지됩니다. 취소된 과제 → 409 `TASK_CANCELLED`, 배정되지 않은 과제 → 404.
 
-## 8. 개인 할 일 API (학생 전용, 본인만)
+## 8. 개인 할 일 API (학생 전용, 본인만) — v0.5.1 제외 (API 제거됨)
 
 ```http
 POST   /personal-todos                 { title, note?, due_date? }
@@ -390,7 +393,7 @@ DELETE /personal-todos/{todo_id}       204
 - 완료·미완료 전환은 `PATCH {"is_done": true}` / `{"is_done": false}`.
 - 학원과 무관한 개인 데이터라 `academy_id`가 없습니다. 다른 사용자의 ID로 요청하면 404, 강사·관리자 계정은 403.
 
-## 9. 오늘 할 일 통합 (학생 홈)
+## 9. 오늘 할 일 통합 (학생 홈) — v0.5.1 제외 (API 제거됨)
 
 ```http
 GET /users/me/today?date=2026-11-04&academy_id=…   (둘 다 선택, 기본 오늘·전체 학원)
@@ -421,7 +424,7 @@ GET /users/me/today?date=2026-11-04&academy_id=…   (둘 다 선택, 기본 오
 - 각 목록 최대 200건. 다음 주 마감 과제처럼 "오늘"이 아닌 항목은 `GET /tasks/me`로 보여주세요.
 - 학생으로 ACTIVE 소속된 ACTIVE 학원의 과제만 포함됩니다.
 
-## 10. 강사 대시보드
+## 10. 강사 대시보드 — v0.5.1 제외 (API 제거됨)
 
 ```http
 GET /academies/{academy_id}/dashboard?date=2026-11-04&scope=all|mine

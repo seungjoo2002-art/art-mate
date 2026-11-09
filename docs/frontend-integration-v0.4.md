@@ -4,6 +4,11 @@
 > 선행 문서: [frontend-integration.md](frontend-integration.md) (인증·오류 형식), [frontend-integration-v0.3.md](frontend-integration-v0.3.md) (ID·날짜 규칙, 권한)
 > API 문서: http://127.0.0.1:8000/docs (최종 기준은 OpenAPI)
 
+> **v0.5.1 변경 (2026-11-09)**
+> - **시험 타이머(§5, F-10)는 서비스 범위에서 제외**되어 API가 제거되었습니다. `/exam-templates`, `/exam-sessions` 호출은 404입니다. 아래 §5와 시험 관련 오류 코드는 기록용으로만 남겨 둡니다.
+> - 작품 응답에 실기 유형·작업 목적·완료 상태·`recording_count`가 추가되었습니다 → [frontend-integration-v0.5.1.md](frontend-integration-v0.5.1.md)
+> - §3 업로드 예시의 `body: JSON.stringify(...)`는 이중 직렬화 오류였습니다. `api()`가 `body` 객체를 직접 `JSON.stringify` 하므로 **객체를 그대로** 넘깁니다 (수정 완료).
+
 v0.4는 **F-06 단계별 작품 사진 업로드**와 **F-10 시험 타이머·단계 알림**입니다.
 인증(`Authorization: Bearer <access_token>`), 오류 형식(`error.code`), 페이지네이션(`{items, total, limit, offset}`)은 이전과 같습니다.
 
@@ -119,13 +124,14 @@ export async function uploadStagePhoto(artworkId, stage, file, { replacesPhotoId
   // 1) 업로드 요청
   const ticket = await api(`/artworks/${artworkId}/photos`, {
     method: 'POST',
-    body: JSON.stringify({
+    // api()가 body를 JSON.stringify 하므로 객체를 그대로 넘긴다 (여기서 문자열로 바꾸면 이중 직렬화)
+    body: {
       stage,                       // 교체(replacesPhotoId)면 생략 가능
       content_type: file.type,
       file_size: file.size,
       file_name: file.name,        // 확장자 검증용 (서버에 저장하지 않음)
       replaces_photo_id: replacesPhotoId ?? null,
-    }),
+    },
   })
 
   // 2) Storage 업로드 (로그인된 supabase 클라이언트 사용)
@@ -162,7 +168,9 @@ function ArtworkPhoto({ artworkId, photo }) {
 }
 ```
 
-## 5. 시험 타이머
+## 5. 시험 타이머 (v0.5.1 제외 — API 제거됨, 기록용)
+
+> 아래 내용은 v0.4 당시 설계 기록입니다. 현재 서버에는 이 API가 없습니다. DB 테이블(`exam_*`)은 보존 중이며 처리 계획은 [v0.5.1-planning-changes.md](v0.5.1-planning-changes.md)를 보세요.
 
 ### 5.1 구조
 
@@ -283,10 +291,7 @@ v0.4 서버는 **알림을 보내지 않고 목표 시각 데이터만 제공합
 | 작품 상세 (단계별 사진) | 학생 | `GET /artworks/{id}?include_urls=true`, 업로드 §3, `PATCH`(대표), `DELETE`(사진) |
 | 진행 상태 배지 | 학생 | 목록의 `progress` 또는 `GET /artworks/{id}/progress` |
 | 학생 작품 보기 | 강사 | `GET /academies/{id}/artworks?student_membership_id=…`, `GET /academies/{id}/artworks/{artwork_id}?include_urls=true` |
-| 시험 템플릿 관리 | 강사 | `…/exam-templates` CRUD, `PUT …/stage-targets` |
-| 시험 시작·종료 | 강사 | `POST /exam-sessions` (`start_now`), `POST …/start`, `POST …/end` |
-| 반 시험 현황판 | 강사 | `GET /exam-sessions/{id}` (30~60초마다 갱신) |
-| 시험 중 화면 | 학생 | `GET /exam-sessions/me` → `GET /exam-sessions/{id}/me`, `PUT …/me/stage` |
+| ~~시험 타이머 화면~~ | — | v0.5.1에서 제외 (API 없음) |
 
 ## 7. 오류 코드
 
@@ -303,15 +308,9 @@ v0.4 서버는 **알림을 보내지 않고 목표 시각 데이터만 제공합
 | 422 | `INVALID_ARTWORK_LINK` | 학원·반·과제 연결 불가 | 선택지 새로고침 |
 | 503 | `STORAGE_UNAVAILABLE` | Storage 일시 장애 | 잠시 후 재시도 (완료 처리는 그대로 다시 호출) |
 | 503 | `STORAGE_NOT_CONFIGURED` | 서버 Storage 설정 누락 | 백엔드 담당자 문의 |
-| 422 | `INVALID_STAGE_TARGETS` | 단계 누락·중복, 순서 역전, 총시간 초과 | 입력 폼에 표시 |
-| 409 | `TEMPLATE_ARCHIVED` | 보관된 템플릿 | 목록 새로고침 |
-| 409 | `EXAM_ALREADY_RUNNING` | 그 반에 진행 중 시험 있음 (`details.session_id`) | 기존 시험으로 이동 |
-| 409 | `EXAM_INVALID_STATE` | 이미 시작·취소된 시험 시작/취소, 시작 전 종료 | 상태 새로고침 |
-| 409 | `EXAM_NOT_RUNNING` | 종료·시간 만료 후 단계 변경 | 종료 화면으로 전환 |
 | 403 | `FORBIDDEN` | 비담당 반·학생, 역할 부족, 강사 계정의 작품 생성 | 버튼 숨김 |
 | 404 | `NOT_FOUND` | 남의 작품, 다른 학원, 참가하지 않은 시험 | "찾을 수 없음" |
 
 예외 처리 요령
 - 업로드 중 네트워크가 끊기면: Storage 업로드가 끝났는지 모르면 **완료 처리부터 호출**합니다. `UPLOAD_NOT_FOUND`면 업로드부터 다시, 성공이면 끝입니다.
 - 완료 처리에서 422가 나오면 그 사진은 서버에서 삭제됩니다. 같은 `photo_id`로 다시 시도하지 말고 새로 요청하세요.
-- 타이머는 `server_time`과 `status`를 우선합니다. 로컬 카운트다운이 0이 되면 API를 한 번 호출해 `ENDED`를 확인하세요.

@@ -112,13 +112,6 @@ class Settings(BaseSettings):
         default="2026-11-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
     )
 
-    # --- 질문 콜 (v0.5) ------------------------------------------------------
-    # 최근 완료 기록이 부족할 때 쓰는 질문 1건 기본 처리 시간 (초)
-    help_default_handle_seconds: int = Field(default=180, ge=10, le=3600)
-    help_eta_sample_size: int = Field(default=20, ge=1, le=200)
-    help_eta_min_samples: int = Field(default=3, ge=1, le=50)
-    help_eta_window_days: int = Field(default=30, ge=1, le=365)
-
     # --- HTTP --------------------------------------------------------------
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
