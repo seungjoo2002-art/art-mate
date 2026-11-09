@@ -100,6 +100,15 @@ class ErrorCode(StrEnum):
     RECOMMENDATION_INVALID_STATE = "RECOMMENDATION_INVALID_STATE"
     RECOMMENDATION_VERSION_CONFLICT = "RECOMMENDATION_VERSION_CONFLICT"
     CLASS_REQUIRED = "CLASS_REQUIRED"
+    # v0.8 참고작·커뮤니티
+    RATE_LIMITED = "RATE_LIMITED"
+    SHARING_CONSENT_REQUIRED = "SHARING_CONSENT_REQUIRED"
+    SHARING_SCOPE_INVALID = "SHARING_SCOPE_INVALID"
+    POST_ALREADY_EXISTS = "POST_ALREADY_EXISTS"
+    ALREADY_REPORTED = "ALREADY_REPORTED"
+    CANNOT_REPORT_OWN_CONTENT = "CANNOT_REPORT_OWN_CONTENT"
+    REFERENCE_REVIEW_EXISTS = "REFERENCE_REVIEW_EXISTS"
+    REPORT_ALREADY_HANDLED = "REPORT_ALREADY_HANDLED"
     # v0.5 피드백 녹음
     RECORDING_CONSENT_REQUIRED = "RECORDING_CONSENT_REQUIRED"
     INVALID_AUDIO = "INVALID_AUDIO"
@@ -186,6 +195,14 @@ class UnprocessableError(AppError):
     status_code = 422  # Unprocessable Content (3.12 HTTPStatus 이름이 버전마다 다름)
     code = ErrorCode.VALIDATION_ERROR
     message = "Request cannot be processed"
+
+
+class RateLimitedError(AppError):
+    """사용자별 요청 제한 초과 (스팸·남용 방지)."""
+
+    status_code = HTTPStatus.TOO_MANY_REQUESTS
+    code = ErrorCode.RATE_LIMITED
+    message = "Too many requests; try again later"
 
 
 class ServiceUnavailableError(AppError):
