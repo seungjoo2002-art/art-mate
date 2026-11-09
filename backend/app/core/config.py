@@ -164,6 +164,25 @@ class Settings(BaseSettings):
     # 한 번에 만드는 추천 과제 수 (약점 카테고리당 1개)
     growth_max_recommendations: int = Field(default=3, ge=1, le=10)
 
+    # --- 참고작·커뮤니티 (v0.8) ---------------------------------------------
+    # 공유용 파생 이미지 비공개 버킷 (원본 버킷과 분리). storage-setup.sql 과 같아야 한다
+    shared_bucket: str = Field(default="shared-artworks", pattern=r"^[a-z0-9][a-z0-9_-]{1,62}$")
+    # 파생 이미지 긴 변 최대 픽셀 (원본 해상도·EXIF를 공유하지 않는다)
+    shared_image_max_px: int = Field(default=1600, ge=320, le=4096)
+    shared_image_quality: int = Field(default=82, ge=50, le=95)
+    # 작품 공유 동의서 버전 (커뮤니티·참고작 공통)
+    sharing_consent_version: str = Field(
+        default="2026-11-share-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+    )
+    reference_per_weakness: int = Field(default=3, ge=1, le=10)
+    reference_max_results: int = Field(default=9, ge=1, le=30)
+    # 남용 방지 (사용자별, DB 기준이라 서버 여러 대에서도 동일)
+    community_posts_per_day: int = Field(default=10, ge=1, le=100)
+    community_comments_per_10min: int = Field(default=20, ge=1, le=200)
+    community_reports_per_day: int = Field(default=20, ge=1, le=200)
+    # 서로 다른 사용자의 미처리 신고가 이 수에 도달하면 자동 숨김 (관리자 검토 대기)
+    community_auto_hide_reports: int = Field(default=3, ge=2, le=100)
+
     # 작업 큐·Worker
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     # Worker가 작업을 잡고 있는 동안 주기적으로 연장. 만료되면 다른 Worker가 회수(서버 재시작 복구)

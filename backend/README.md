@@ -2,7 +2,8 @@
 
 미술 입시생을 위한 **AI 기반 미술 실기 학습·성장 관리 플랫폼** ART MATE의 백엔드입니다.
 
-> **현재 버전: v0.7** — **AI 개인 맞춤형 성장 코치**: 승인된 첨삭 기반 반복 약점 분석(규칙 통계)·기간별 추이, 성장 리포트(통계 + 선택적 AI 설명문), 맞춤 연습 과제(규칙/AI) → 강사 승인 후 기존 과제로 배포 / 개인 작품은 본인 채택. [설계](../docs/growth-coach-v0.7.md)
+> **현재 버전: v0.8** — **F-15 참고작 추천**(강사가 확인한 우수 사례 + 원작자 동의만, 반복 약점 기반 규칙 추천) · **작품 공유 동의**(목적별·범위·익명, 공유용 파생 이미지) · **커뮤니티**(게시물·좋아요·저장·댓글·신고·관리). [설계](../docs/reference-community-v0.8.md)
+> 이전(v0.7) — **AI 개인 맞춤형 성장 코치**: 승인된 첨삭 기반 반복 약점 분석(규칙 통계)·기간별 추이, 성장 리포트(통계 + 선택적 AI 설명문), 맞춤 연습 과제(규칙/AI) → 강사 승인 후 기존 과제로 배포 / 개인 작품은 본인 채택. [설계](../docs/growth-coach-v0.7.md)
 > 이전(v0.6) — **AI 첨삭 기록**: 녹음 전사(faster-whisper, 서버 내부) → Gemini 요약·약점 분류(별도 AI 전송 동의) → 담당 강사(개인 작품은 학생 본인) 검토·수정·승인 → 학생 아카이브. DB 작업 큐 + 별도 AI Worker. [설계·운영](../docs/ai-feedback-v0.6.md)
 > 이전(v0.5.1) — 기획 변경 반영: **프로필 실기 유형**, **작품 분류(실기 유형 × 작업 목적)·필터**, **작품 완료/작업 재개**, 작품 목록 **`recording_count`**, 선택지 API.
 > 출석·오늘 할 일·질문 콜·시험 타이머·강사 대시보드는 **서비스에서 제외**되어 API를 제거했습니다 (DB 테이블은 보존, [변경 정리](../docs/v0.5.1-planning-changes.md)).
@@ -18,7 +19,7 @@
 | 작품 분류·필터, 작품 완료, 녹음 수 | ✅ v0.5.1 |
 | STT·AI 피드백 요약·약점 분류·강사 검토·승인, AI 전송 동의 | ✅ v0.6 |
 | 성장 리포트·반복 약점·맞춤 과제·강사 승인·배포 | ✅ v0.7 |
-| AI 참고작 추천(F-15, 신규 정의·미구현)·커뮤니티 연동 | ⏳ v0.8 |
+| F-15 참고작 추천·작품 공유 동의·커뮤니티 | ✅ v0.8 |
 | AI 직접 작품 분석·실기 튜터 / 입시 합격 가능성 예측 | 이후 / 장기 |
 | 출석, 오늘 할 일, 질문 콜, 시험 타이머, 강사 대시보드 | ⛔ v0.5.1 제외 |
 
@@ -28,6 +29,8 @@
 | [docs/database-design.md](../docs/database-design.md) | 엔티티 설계, 학원별 데이터 격리, RLS 방향 |
 | [docs/development-guide.md](../docs/development-guide.md) | Git 협업 규칙, 새 API 추가 방법, 버전 체크리스트, 운영 절차(마이그레이션 적용·ADMIN 지정) |
 | [docs/v0.5.1-planning-changes.md](../docs/v0.5.1-planning-changes.md) | **기획 변경 정리**: 유지·제외·보류, DB 변경, 테이블 처리 계획, 로드맵, F-15 설계 메모 |
+| [docs/reference-community-v0.8.md](../docs/reference-community-v0.8.md) | v0.8 F-15 알고리즘·우수성 검증·공유 동의·원본 보호·커뮤니티·법적 검토 항목 |
+| [docs/frontend-integration-v0.8.md](../docs/frontend-integration-v0.8.md) | v0.8 참고작 카드·공유 동의·커뮤니티·관리 API, 오류 코드 |
 | [docs/growth-coach-v0.7.md](../docs/growth-coach-v0.7.md) | v0.7 반복 약점 알고리즘, 리포트·추천 생성, 과제 재사용, 동의 목적 분리, 비용 |
 | [docs/frontend-integration-v0.7.md](../docs/frontend-integration-v0.7.md) | v0.7 성장 대시보드·약점·리포트·추천 JSON, 강사 승인·배포, 오류 코드 |
 | [docs/ai-feedback-v0.6.md](../docs/ai-feedback-v0.6.md) | v0.6 AI 첨삭 구조: 작업 큐·Worker, faster-whisper, Gemini 모델·비용, 동의·개인정보, 서버 자원 |
@@ -180,6 +183,16 @@ v0.7 성장 코치 API (상세: docs/frontend-integration-v0.7.md)
 | `GET /api/v1/academies/{id}/growth/students[/{mid}/summary|/timeline|/weaknesses|/reports]` | 담당 학생 성장 현황·이력·약점·리포트 | 강사 이상 (담당 학생) |
 | `/api/v1/academies/{id}/growth/recommendations[/{rid}[/approve|/reject|/distribute|/history]]` | 추천 검토 대기·수정·승인·반려·기존 과제로 배포 | 강사 이상 (담당 학생) |
 
+v0.8 참고작·커뮤니티 API (상세: docs/frontend-integration-v0.8.md)
+
+| 경로 | 설명 | 권한 |
+| --- | --- | --- |
+| `/api/v1/artworks/{id}/sharing[/{purpose}|/history]` | 공유 동의·범위 변경·철회·이력 | 작품 소유 학생 |
+| `/api/v1/references/me[/refresh|/saved|/{id}[/save]]` | 참고작 추천·근거·저장 | STUDENT |
+| `/api/v1/academies/{id}/references/(reviews|candidates)` | 우수 사례 확인·해제·후보 | 강사 이상 (담당 학생) |
+| `/api/v1/community/posts[...]`, `/bookmarks`, `/comments/{id}` | 피드·게시물·좋아요·저장·댓글·신고 | 로그인 (게시는 STUDENT) |
+| `/api/v1/admin/community/...` | 신고 처리·숨김·이력 | 시스템 ADMIN |
+
 AI Worker: `uv sync --extra stt && uv run python -m app.worker` (또는 `docker build --target worker`). API 서버는 작업을 큐에 넣기만 합니다.
 
 v0.5.1에서 제거된 API (404): `/attendance/**`, `/personal-todos/**`, `/users/me/today`, `/academies/{id}/dashboard`, `/exam-templates/**`, `/exam-sessions/**`, `/help-requests/**`, `/help-queue/**`.
@@ -281,7 +294,7 @@ backend/
 │   └── utils/
 ├── alembic/                 # env.py(async), versions/0001 (v0.2), 0002 (v0.3 학원 운영), 0003 (v0.4 작품·시험),
 │                            # 0004 (v0.5 질문 콜·녹음), 0005 (v0.5.1 실기 유형·작품 분류·완료),
-│                            # 0006 (v0.6 AI 첨삭), 0007 (v0.7 성장 코치) = head
+│                            # 0006 (v0.6 AI 첨삭), 0007 (v0.7 성장 코치), 0008 (v0.8 참고작·커뮤니티) = head
 ├── scripts/verify_dev_environment.py  # 개발 DB·Storage 읽기 전용 점검
 ├── supabase/storage-setup.sql  # Supabase 전용: artworks·feedback-audio 버킷, storage.objects RLS 정책 (수동 적용)
 ├── tests/

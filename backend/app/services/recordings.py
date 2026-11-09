@@ -166,6 +166,8 @@ class RecordingService:
         except IntegrityError:
             # 동시에 동의 요청: 부분 유니크(uq_recording_consents_active) → 먼저 저장된 동의 사용
             await self.session.rollback()
+            # rollback으로 만료된 ORM 객체를 다시 읽는다 (지연 로드 시 MissingGreenlet 500 방지)
+            await self.session.refresh(user)
         return await self.consent_status(user)
 
     async def revoke_consent(self, user: Profile) -> None:

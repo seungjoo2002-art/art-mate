@@ -112,3 +112,52 @@ COMMIT;
 --   WHERE id IN ('artworks', 'feedback-audio');
 -- SELECT policyname, cmd FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'
 --   AND policyname LIKE 'artmate_%';  -- artworks 3개 + audio 3개
+
+-- =============================================================================
+-- v0.8 작품 공유: 공유용 파생 이미지 비공개 버킷 shared-artworks (원본 artworks 버킷과 분리)
+--   * 업로드·삭제: 파생 이미지 행(shared_artwork_images)의 소유 학생 (경로는 무작위, 사용자 ID 미포함)
+--   * 읽기(Signed URL): 소유자, 또는 현재 유효한 공유 동의의 범위 안에 있는 사용자
+--     (PLATFORM: 활성 프로필, ACADEMY: 그 학원 ACTIVE 멤버). 커뮤니티 동의만 있으면 게시물 ACTIVE일 때만.
+--   * 선행 조건: Alembic 0008 (artmate_private.can_access_shared_image)
+--   * 원본 사진의 Signed URL은 공유 화면에 쓰지 않는다. 백엔드는 이 버킷의 짧은 Signed URL만 발급한다.
+-- =============================================================================
+
+BEGIN;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('shared-artworks', 'shared-artworks', false, 5242880, ARRAY['image/jpeg'])
+ON CONFLICT (id) DO UPDATE
+SET public = false,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+GRANT EXECUTE ON FUNCTION artmate_private.can_access_shared_image(uuid, text, text) TO authenticated;
+
+DROP POLICY IF EXISTS "artmate_shared_select" ON storage.objects;
+CREATE POLICY "artmate_shared_select" ON storage.objects
+    FOR SELECT TO authenticated
+    USING (
+        bucket_id = 'shared-artworks'
+        AND artmate_private.can_access_shared_image(auth.uid(), name, 'read')
+    );
+
+DROP POLICY IF EXISTS "artmate_shared_insert" ON storage.objects;
+CREATE POLICY "artmate_shared_insert" ON storage.objects
+    FOR INSERT TO authenticated
+    WITH CHECK (
+        bucket_id = 'shared-artworks'
+        AND artmate_private.can_access_shared_image(auth.uid(), name, 'write')
+    );
+
+DROP POLICY IF EXISTS "artmate_shared_delete" ON storage.objects;
+CREATE POLICY "artmate_shared_delete" ON storage.objects
+    FOR DELETE TO authenticated
+    USING (
+        bucket_id = 'shared-artworks'
+        AND artmate_private.can_access_shared_image(auth.uid(), name, 'write')
+    );
+
+COMMIT;
+
+-- 확인용: 정책 9개 (artworks 3 + audio 3 + shared 3)
+-- SELECT policyname FROM pg_policies WHERE schemaname = 'storage' AND policyname LIKE 'artmate_%';

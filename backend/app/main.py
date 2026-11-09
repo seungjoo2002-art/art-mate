@@ -73,6 +73,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.storage = build_storage(settings)
     # 피드백 녹음 (v0.5): 별도 비공개 오디오 버킷
     app.state.audio_storage = build_storage(settings, settings.recording_bucket)
+    # 공유용 파생 이미지 (v0.8): 원본과 분리된 비공개 버킷
+    app.state.shared_storage = build_storage(settings, settings.shared_bucket)
 
     register_exception_handlers(app)
 

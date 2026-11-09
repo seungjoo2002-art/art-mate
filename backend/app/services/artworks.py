@@ -70,6 +70,7 @@ from app.models.enums import (
     PhotoStatus,
     PracticalType,
     RecordingStatus,
+    SharingPurpose,
 )
 from app.models.membership import AcademyMembership
 from app.models.profile import Profile
@@ -93,6 +94,7 @@ from app.schemas.common import PaginationParams
 from app.services.access import AccessService, managed_student_ids
 from app.services.ai_cleanup import purge_for_recordings
 from app.services.images import check_declared_file, inspect_image, storage_extension
+from app.services.sharing import withdraw_artwork_sharing
 
 logger = logging.getLogger(__name__)
 
@@ -542,6 +544,10 @@ class ArtworkService:
             ).scalars()
         )
         await purge_for_recordings(self.session, recording_ids)
+        # v0.8: 공유 동의 철회(ARTWORK_DELETED), 게시물·참고작 추천 정리, 파생 이미지 삭제 대기
+        await withdraw_artwork_sharing(
+            self.session, artwork.id, list(SharingPurpose), "ARTWORK_DELETED"
+        )
         # v0.5: 작품의 피드백 녹음도 같은 트랜잭션에서 삭제 처리 (파일 정리는 RecordingService)
         await self.session.execute(
             update(FeedbackRecording)

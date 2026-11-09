@@ -24,6 +24,18 @@ from app.models.ai_feedback import (
 )
 from app.models.artwork import Artwork, ArtworkPhoto
 from app.models.attendance import AttendanceAuditLog, AttendanceRecord
+from app.models.community import (
+    ArtworkSharingConsent,
+    CommunityBookmark,
+    CommunityComment,
+    CommunityLike,
+    CommunityModerationLog,
+    CommunityPost,
+    CommunityReport,
+    ReferenceArtworkReview,
+    ReferenceRecommendation,
+    SharedArtworkImage,
+)
 from app.models.exam import (
     ExamParticipant,
     ExamSession,
@@ -48,11 +60,18 @@ __all__ = [
     "AiProcessingJob",
     "Artwork",
     "ArtworkPhoto",
+    "ArtworkSharingConsent",
     "AttendanceAuditLog",
     "AttendanceRecord",
     "Base",
     "ClassMembership",
     "ClassSchedule",
+    "CommunityBookmark",
+    "CommunityComment",
+    "CommunityLike",
+    "CommunityModerationLog",
+    "CommunityPost",
+    "CommunityReport",
     "ExamParticipant",
     "ExamSession",
     "ExamSessionStage",
@@ -73,7 +92,10 @@ __all__ = [
     "PracticeRecommendationHistory",
     "Profile",
     "RecordingConsent",
+    "ReferenceArtworkReview",
+    "ReferenceRecommendation",
     "ScheduleException",
+    "SharedArtworkImage",
     "Task",
     "TaskAssignment",
 ]

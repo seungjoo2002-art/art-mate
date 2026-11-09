@@ -36,7 +36,10 @@ APP_TABLES = (
     "help_requests, help_queue_events, feedback_recordings, recording_consents, "
     "ai_processing_consents, ai_processing_jobs, feedback_transcripts, feedback_summaries, "
     "feedback_items, feedback_categories, feedback_review_history, "
-    "growth_reports, practice_recommendations, practice_recommendation_history"
+    "growth_reports, practice_recommendations, practice_recommendation_history, "
+    "artwork_sharing_consents, shared_artwork_images, reference_artwork_reviews, "
+    "reference_recommendations, community_posts, community_comments, community_likes, "
+    "community_bookmarks, community_reports, community_moderation_logs"
 )
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -110,6 +113,7 @@ async def app(migrated_database: str, tokens: TokenFactory):  # type: ignore[no-
     # 외부 Storage 대신 메모리 구현 (lifespan은 storage를 다시 만들지 않는다)
     application.state.storage = FakeStorage()
     application.state.audio_storage = FakeStorage(bucket="feedback-audio")
+    application.state.shared_storage = FakeStorage(bucket="shared-artworks")
     yield application
 
 

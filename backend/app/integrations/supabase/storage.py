@@ -57,6 +57,10 @@ class StorageClient(Protocol):
 
     async def delete(self, paths: list[str], *, access_token: str) -> None: ...
 
+    async def upload(self, path: str, data: bytes, *, content_type: str, access_token: str) -> None:
+        """서버가 만든 파일 업로드 (v0.8 공유용 파생 이미지). 사용자 토큰 + Storage RLS."""
+        ...
+
 
 class SupabaseStorage:
     def __init__(
@@ -88,11 +92,10 @@ class SupabaseStorage:
         return f"{self.api_url}/{relative.lstrip('/')}"
 
     async def _request(self, method: str, url: str, access_token: str, **kwargs) -> httpx.Response:  # type: ignore[no-untyped-def]
+        headers = self._headers(access_token) | kwargs.pop("headers", {})
         try:
             async with self._client() as client:
-                response = await client.request(
-                    method, url, headers=self._headers(access_token), **kwargs
-                )
+                response = await client.request(method, url, headers=headers, **kwargs)
         except httpx.HTTPError as exc:
             logger.warning("storage request failed", extra={"error_type": type(exc).__name__})
             raise StorageError("Storage request failed") from None
@@ -152,6 +155,15 @@ class SupabaseStorage:
             if item.get("signedURL") and not item.get("error"):
                 result[item["path"]] = self._absolute(item["signedURL"])
         return result
+
+    async def upload(self, path: str, data: bytes, *, content_type: str, access_token: str) -> None:
+        await self._request(
+            "POST",
+            self._object_url("object", path),
+            access_token,
+            content=data,
+            headers={"Content-Type": content_type, "x-upsert": "false"},
+        )
 
     async def delete(self, paths: list[str], *, access_token: str) -> None:
         if paths:

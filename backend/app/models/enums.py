@@ -542,3 +542,100 @@ class Confidence(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
+
+
+# --------------------------------------------------------------------------- v0.8 참고작·커뮤니티
+
+
+class SharingPurpose(StrEnum):
+    """작품 공유 동의의 목적 (따로 동의·철회)."""
+
+    COMMUNITY = "COMMUNITY"  # 커뮤니티 게시
+    REFERENCE = "REFERENCE"  # F-15 참고작 추천에 활용
+
+
+class SharingScope(StrEnum):
+    ACADEMY = "ACADEMY"  # 작품이 연결된 학원의 ACTIVE 멤버에게만
+    PLATFORM = "PLATFORM"  # 로그인한 ART MATE 사용자 전체
+
+
+class AuthorDisplay(StrEnum):
+    NAME = "NAME"  # 표시 이름 공개
+    ANONYMOUS = "ANONYMOUS"  # '익명 학생'
+
+
+class SharedImageStatus(StrEnum):
+    PENDING = "PENDING"  # 파생 이미지 업로드 중
+    ACTIVE = "ACTIVE"
+    DELETED = "DELETED"  # 공유 철회 (Storage 정리는 storage_cleanup_pending)
+
+
+class ReferenceReviewStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    REVOKED = "REVOKED"
+
+
+class ReferenceSetStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    SUPERSEDED = "SUPERSEDED"  # 새로고침으로 대체
+
+
+class ReferenceResultStatus(StrEnum):
+    """응답 전용: 참고작 추천 결과 상태."""
+
+    READY = "READY"
+    NO_VERIFIED_REFERENCES = "NO_VERIFIED_REFERENCES"  # 검증된 우수 사례가 없음
+    NO_REPEATED_WEAKNESS = "NO_REPEATED_WEAKNESS"  # 추천 기준이 될 반복 약점이 없음
+    NOT_GENERATED = "NOT_GENERATED"  # 아직 새로고침하지 않음
+
+
+class ReferenceReason(StrEnum):
+    """응답 전용: 추천 근거 코드."""
+
+    VERIFIED_EXEMPLAR = "VERIFIED_EXEMPLAR"  # 강사가 이 약점의 우수 사례로 확인
+    MATCHES_WEAKNESS = "MATCHES_WEAKNESS"  # 학생의 반복 약점과 일치
+    SAME_PRACTICAL_TYPE = "SAME_PRACTICAL_TYPE"
+    SAME_WORK_CATEGORY = "SAME_WORK_CATEGORY"
+
+
+class PostStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    HIDDEN = "HIDDEN"  # 관리자·자동 숨김 (작성자에게만 보임)
+    DELETED = "DELETED"  # 작성자 삭제 또는 공유 철회
+
+
+class CommentStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    HIDDEN = "HIDDEN"
+    DELETED = "DELETED"
+
+
+class ReportTarget(StrEnum):
+    POST = "POST"
+    COMMENT = "COMMENT"
+
+
+class ReportReason(StrEnum):
+    SPAM = "SPAM"
+    ABUSE = "ABUSE"  # 욕설·괴롭힘
+    INAPPROPRIATE = "INAPPROPRIATE"
+    COPYRIGHT = "COPYRIGHT"  # 타인 작품 도용
+    PRIVACY = "PRIVACY"  # 개인정보 노출
+    OTHER = "OTHER"
+
+
+class CommunityReportStatus(StrEnum):
+    OPEN = "OPEN"
+    RESOLVED = "RESOLVED"  # 조치함 (숨김 등)
+    DISMISSED = "DISMISSED"  # 문제 없음
+
+
+class ModerationAction(StrEnum):
+    HIDE_POST = "HIDE_POST"
+    UNHIDE_POST = "UNHIDE_POST"
+    HIDE_COMMENT = "HIDE_COMMENT"
+    UNHIDE_COMMENT = "UNHIDE_COMMENT"
+    AUTO_HIDE_POST = "AUTO_HIDE_POST"  # 신고 누적 자동 숨김
+    AUTO_HIDE_COMMENT = "AUTO_HIDE_COMMENT"
+    RESOLVE_REPORT = "RESOLVE_REPORT"
+    DISMISS_REPORT = "DISMISS_REPORT"
