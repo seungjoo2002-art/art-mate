@@ -349,3 +349,29 @@ async def test_recording_access_control(
         f"{other.base}/artworks/{academy_art}/recordings", headers=other.owner.headers
     )
     assert cross.status_code == 404
+
+
+async def test_consent_insert_race_returns_status(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """동의 확인과 INSERT 사이에 다른 요청이 끼어든 경우: 유니크 위반 후 기존 동의로 201.
+
+    rollback 뒤 만료된 프로필 객체를 다시 읽지 않으면 500 (CI에서 발견).
+    """
+    from app.services.recordings import RecordingService
+
+    student = await actors.signup("STUDENT")
+    assert (await _consent(client, student)).status_code == 201
+    original = RecordingService._active_consent
+    calls = {"n": 0}
+
+    async def racing(self, user):  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return None  # 아직 없는 것처럼 → INSERT가 부분 유니크 위반
+        return await original(self, user)
+
+    monkeypatch.setattr(RecordingService, "_active_consent", racing)
+    again = await _consent(client, student, granted_by="GUARDIAN")
+    assert again.status_code == 201, again.text
+    assert again.json()["is_valid"] is True

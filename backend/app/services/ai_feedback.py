@@ -256,6 +256,7 @@ class AiFeedbackService:
             await self.session.commit()
         except IntegrityError:
             await self.session.rollback()  # 동시 동의: 먼저 저장된 동의 사용
+            await self.session.refresh(user)  # 만료된 ORM 객체 재조회 (MissingGreenlet 방지)
         return await self.ai_consent_status(user, purpose)
 
     async def revoke_ai_consent(

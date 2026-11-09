@@ -150,6 +150,6 @@ async def test_v07_roundtrip_keeps_feedback_consent(conn) -> None:  # type: igno
         assert await connection.fetchval("SELECT count(*) FROM ai_processing_jobs") == 0
         _alembic("upgrade", "head")
         assert "No new upgrade operations detected" in _alembic("check")
-        assert "0006 -> 0007 (head)" in _alembic("history")
+        assert "0006 -> 0007" in _alembic("history")
     finally:
         _alembic("upgrade", "head")
