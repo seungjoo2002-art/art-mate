@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 
 from app.models.enums import (
+    AiConsentPurpose,
     AiJobStatus,
     AiJobType,
     AiProvider,
@@ -26,6 +27,11 @@ from app.schemas.students import StudentRef
 
 
 class AiConsentCreate(InputModel):
+    purpose: AiConsentPurpose = Field(
+        default=AiConsentPurpose.FEEDBACK_SUMMARY,
+        description="FEEDBACK_SUMMARY(첨삭 요약, v0.6) / "
+        "GROWTH_COACHING(성장 분석·맞춤 과제, v0.7)",
+    )
     policy_version: str = Field(
         min_length=1,
         max_length=20,
@@ -42,6 +48,7 @@ class AiConsentCreate(InputModel):
 class AiConsentRead(BaseModel):
     id: uuid.UUID
     provider: AiProvider
+    purpose: AiConsentPurpose
     policy_version: str
     granted_by: ConsentGrantor
     granted_at: dt.datetime
@@ -50,6 +57,7 @@ class AiConsentRead(BaseModel):
 
 class AiConsentStatus(BaseModel):
     provider: AiProvider
+    purpose: AiConsentPurpose
     required_version: str
     is_valid: bool = Field(description="현재 버전에 유효한 동의가 있음 → AI 요약 요청 가능")
     consent: AiConsentRead | None

@@ -37,6 +37,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
 from app.models.enums import (
+    AiConsentPurpose,
     AiJobStatus,
     AiJobType,
     AiProvider,
@@ -55,10 +56,12 @@ class AiProcessingConsent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "ai_processing_consents"
     __table_args__ = (
+        # v0.7: 목적별 유효 동의 1개 (0007에서 purpose 추가)
         Index(
             "uq_ai_processing_consents_active",
             "user_id",
             "provider",
+            "purpose",
             unique=True,
             postgresql_where=text("revoked_at IS NULL"),
         ),
@@ -67,6 +70,11 @@ class AiProcessingConsent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"))
     provider: Mapped[AiProvider] = mapped_column(enum_column(AiProvider, "provider"))
+    purpose: Mapped[AiConsentPurpose] = mapped_column(
+        enum_column(AiConsentPurpose, "purpose"),
+        server_default=AiConsentPurpose.FEEDBACK_SUMMARY.value,
+        default=AiConsentPurpose.FEEDBACK_SUMMARY,
+    )
     policy_version: Mapped[str] = mapped_column(String(20))
     granted_by: Mapped[ConsentGrantor] = mapped_column(enum_column(ConsentGrantor, "granted_by"))
     granted_at: Mapped[datetime]
@@ -97,6 +105,19 @@ class AiProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             postgresql_where=text("status = 'RUNNING'"),
         ),
         Index("ix_ai_processing_jobs_recording", "recording_id", "job_type", "created_at"),
+        # v0.7: 녹음이 없는 작업(성장 리포트·추천)의 중복 방지
+        Index(
+            "uq_ai_processing_jobs_active_dedupe",
+            "job_type",
+            "dedupe_key",
+            unique=True,
+            postgresql_where=text("status IN ('QUEUED', 'RUNNING') AND dedupe_key IS NOT NULL"),
+        ),
+        CheckConstraint(
+            "job_type NOT IN ('TRANSCRIBE', 'SUMMARIZE')"
+            " OR (recording_id IS NOT NULL AND artwork_id IS NOT NULL)",
+            name="recording_job_has_recording",
+        ),
         CheckConstraint("attempts >= 0 AND attempts <= max_attempts", name="attempts_range"),
         CheckConstraint(
             "status <> 'RUNNING' OR (lease_expires_at IS NOT NULL AND locked_by IS NOT NULL)",
@@ -108,11 +129,20 @@ class AiProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[AiJobStatus] = mapped_column(
         enum_column(AiJobStatus, "status"), default=AiJobStatus.QUEUED
     )
-    recording_id: Mapped[uuid.UUID] = mapped_column(
+    # TRANSCRIBE/SUMMARIZE는 필수, v0.7 성장 작업은 NULL
+    recording_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("feedback_recordings.id", ondelete="CASCADE")
     )
-    artwork_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artworks.id", ondelete="CASCADE"))
-    # 녹음 소유 학생 (동의 확인 대상)
+    artwork_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artworks.id", ondelete="CASCADE")
+    )
+    # v0.7 GROWTH_REPORT 작업의 대상 리포트
+    report_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("growth_reports.id", ondelete="CASCADE")
+    )
+    # v0.7 중복 방지 키 (녹음이 없는 작업)
+    dedupe_key: Mapped[str | None] = mapped_column(String(100))
+    # 녹음·분석 대상 학생 (동의 확인 대상)
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"))
     requested_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("profiles.id", ondelete="SET NULL")

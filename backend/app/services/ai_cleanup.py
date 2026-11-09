@@ -10,17 +10,49 @@
 
 import uuid
 
-from sqlalchemy import delete, func, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.models.ai_feedback import AiProcessingJob, FeedbackSummary, FeedbackTranscript
 from app.models.enums import (
     ACTIVE_JOB_STATUSES,
+    AiConsentPurpose,
     AiJobStatus,
     AiJobType,
+    NarrativeStatus,
     TranscriptionStatus,
 )
+from app.models.growth import GrowthReport
 from app.models.recording import FeedbackRecording
+
+# 동의 목적별로 취소할 작업 종류
+PURPOSE_JOB_TYPES: dict[AiConsentPurpose, tuple[AiJobType, ...]] = {
+    AiConsentPurpose.FEEDBACK_SUMMARY: (AiJobType.SUMMARIZE,),
+    AiConsentPurpose.GROWTH_COACHING: (AiJobType.GROWTH_REPORT, AiJobType.PRACTICE_RECOMMEND),
+}
+
+
+def consent_version(settings: Settings, purpose: AiConsentPurpose) -> str:
+    if purpose == AiConsentPurpose.GROWTH_COACHING:
+        return settings.ai_growth_consent_version
+    return settings.ai_consent_version
+
+
+async def skip_pending_narratives(session: AsyncSession, owner_id: uuid.UUID) -> None:
+    """성장 분석 동의 철회: 생성 대기 중인 리포트 설명문을 건너뜀 처리."""
+    await session.execute(
+        update(GrowthReport)
+        .where(
+            GrowthReport.owner_id == owner_id,
+            GrowthReport.narrative_status == NarrativeStatus.PENDING,
+        )
+        .values(
+            narrative_status=NarrativeStatus.SKIPPED,
+            narrative_error_code="AI_CONSENT_REVOKED",
+            updated_at=func.now(),
+        )
+    )
 
 
 def _cancel_values(code: str) -> dict:  # type: ignore[type-arg]
@@ -48,6 +80,27 @@ async def purge_for_recordings(session: AsyncSession, recording_ids: list[uuid.U
         )
         .values(**_cancel_values("RECORDING_DELETED"))
     )
+    # v0.7: 이 녹음의 첨삭을 근거로 쓴 성장 리포트의 AI 설명문을 지운다 (통계 숫자는 유지).
+    # 근거 문장은 ID로만 저장하므로 첨삭이 삭제되면 조회 시 자동으로 빠진다.
+    summary_ids = [
+        str(i)
+        for i in (
+            await session.execute(
+                select(FeedbackSummary.id).where(FeedbackSummary.recording_id.in_(recording_ids))
+            )
+        ).scalars()
+    ]
+    if summary_ids:
+        await session.execute(
+            update(GrowthReport)
+            .where(GrowthReport.source_feedback_ids.overlap(summary_ids))
+            .values(
+                narrative=None,
+                narrative_status=NarrativeStatus.INVALIDATED,
+                narrative_error_code="SOURCE_FEEDBACK_DELETED",
+                updated_at=func.now(),
+            )
+        )
     await session.execute(
         delete(FeedbackSummary).where(FeedbackSummary.recording_id.in_(recording_ids))
     )

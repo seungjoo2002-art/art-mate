@@ -150,6 +150,20 @@ class Settings(BaseSettings):
         default="2026-11-ai-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
     )
 
+    # --- 성장 코치 (v0.7) ----------------------------------------------------
+    # 성장 리포트 설명문·AI 연습 과제 (Gemini). 통계·규칙 기반 추천은 이 설정과 무관하게 동작
+    growth_ai_enabled: bool = False
+    # 성장 분석 목적의 외부 AI 전송 동의서 버전 (첨삭 요약 동의와 별개)
+    ai_growth_consent_version: str = Field(
+        default="2026-11-growth-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+    )
+    # 분석 대상(승인된 첨삭이 있는) 작품이 이보다 적으면 INSUFFICIENT_DATA
+    growth_min_artworks: int = Field(default=3, ge=1, le=50)
+    # '최근 N개 작품' 비교 구간 크기
+    growth_recent_window: int = Field(default=5, ge=2, le=50)
+    # 한 번에 만드는 추천 과제 수 (약점 카테고리당 1개)
+    growth_max_recommendations: int = Field(default=3, ge=1, le=10)
+
     # 작업 큐·Worker
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     # Worker가 작업을 잡고 있는 동안 주기적으로 연장. 만료되면 다른 Worker가 회수(서버 재시작 복구)

@@ -76,9 +76,9 @@ REQUIRED_POLICIES = tuple(
 )
 # 이 브랜치가 아는 최신 리비전. 0005(v0.5.1)는 승인 전까지 개발 DB에 적용하지 않는다.
 FRONTEND_TARGET_REVISION = "0004"
-LATEST_REVISION = "0006"
-# 승인 후 적용될 리비전들 (0005 v0.5.1, 0006 v0.6)
-KNOWN_REVISIONS = ("0004", "0005", "0006")
+LATEST_REVISION = "0007"
+# 승인 후 적용될 리비전들 (0005 v0.5.1, 0006 v0.6, 0007 v0.7)
+KNOWN_REVISIONS = ("0004", "0005", "0006", "0007")
 # 0006(v0.6 AI 첨삭)이 적용됐을 때만 필수
 V06_TABLES = (
     "ai_processing_consents",
@@ -89,6 +89,8 @@ V06_TABLES = (
     "feedback_categories",
     "feedback_review_history",
 )
+# 0007(v0.7 성장 코치)이 적용됐을 때만 필수
+V07_TABLES = ("growth_reports", "practice_recommendations", "practice_recommendation_history")
 
 
 @dataclass
@@ -156,10 +158,14 @@ async def check_database(settings: Settings, report: Report) -> None:
                     " JOIN pg_namespace n ON n.oid = c.relnamespace"
                     " WHERE n.nspname = 'public' AND c.relkind = 'r'"
                     " AND relname = ANY(:names)",
-                    names=list(REQUIRED_TABLES + EXCLUDED_FEATURE_TABLES + V06_TABLES),
+                    names=list(REQUIRED_TABLES + EXCLUDED_FEATURE_TABLES + V06_TABLES + V07_TABLES),
                 )
             }
-            required = REQUIRED_TABLES + (V06_TABLES if revision == "0006" else ())
+            required = (
+                REQUIRED_TABLES
+                + (V06_TABLES if revision in ("0006", "0007") else ())
+                + (V07_TABLES if revision == "0007" else ())
+            )
             missing = [t for t in required if t not in present]
             report.add("tables.required", not missing, f"누락: {missing}" if missing else "")
             no_rls = [t for t in required if t in present and not present[t]]

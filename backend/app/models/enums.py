@@ -314,6 +314,9 @@ WORK_STATUS_LABELS: dict[ArtworkWorkStatus, str] = {
 class AiJobType(StrEnum):
     TRANSCRIBE = "TRANSCRIBE"  # faster-whisper STT (서버 내부 처리)
     SUMMARIZE = "SUMMARIZE"  # Gemini 첨삭 요약·분류 (외부 전송)
+    # v0.7 성장 코치 (Gemini, 외부 전송 · GROWTH_COACHING 동의 필요)
+    GROWTH_REPORT = "GROWTH_REPORT"  # 성장 리포트 설명문
+    PRACTICE_RECOMMEND = "PRACTICE_RECOMMEND"  # AI 맞춤 연습 과제
 
 
 class AiJobStatus(StrEnum):
@@ -329,6 +332,13 @@ ACTIVE_JOB_STATUSES: frozenset[AiJobStatus] = frozenset({AiJobStatus.QUEUED, AiJ
 
 class AiProvider(StrEnum):
     GOOGLE_GEMINI = "GOOGLE_GEMINI"
+
+
+class AiConsentPurpose(StrEnum):
+    """외부 AI 전송 동의의 목적 (목적별로 따로 동의·철회한다)."""
+
+    FEEDBACK_SUMMARY = "FEEDBACK_SUMMARY"  # v0.6: 첨삭 전사문 요약
+    GROWTH_COACHING = "GROWTH_COACHING"  # v0.7: 누적 첨삭 기반 성장 리포트 설명·맞춤 과제
 
 
 class FeedbackStatus(StrEnum):
@@ -414,3 +424,121 @@ class ReviewAction(StrEnum):
     REJECTED = "REJECTED"
     REOPENED = "REOPENED"  # 승인 취소 → 다시 검토
     SUPERSEDED = "SUPERSEDED"  # 재생성으로 대체
+
+
+# 녹음 단위 작업 (recording_id 필수)
+RECORDING_JOB_TYPES: frozenset[AiJobType] = frozenset({AiJobType.TRANSCRIBE, AiJobType.SUMMARIZE})
+
+
+# --------------------------------------------------------------------------- v0.7 성장 코치
+
+
+class GrowthScope(StrEnum):
+    """분석 대상 작품 범위."""
+
+    ALL = "ALL"  # 학생 본인의 모든 작품 (학생만)
+    PERSONAL = "PERSONAL"  # 학원 미연결 개인 작품 (학생만, 추천은 본인 채택)
+    ACADEMY = "ACADEMY"  # 특정 학원에 연결된 작품 (학생 본인·담당 강사, 추천은 강사 승인)
+
+
+class ReportPeriod(StrEnum):
+    WEEK = "WEEK"  # 오늘 포함 최근 7일 (Asia/Seoul)
+    MONTH = "MONTH"  # 오늘 포함 최근 30일
+    ALL = "ALL"  # 전체 기간
+    CUSTOM = "CUSTOM"  # from~to 지정
+
+
+class ReportStatus(StrEnum):
+    READY = "READY"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"  # 분석에 필요한 승인 첨삭 작품이 부족
+
+
+class NarrativeStatus(StrEnum):
+    """리포트의 AI 설명문 상태 (통계와 별개)."""
+
+    NOT_REQUESTED = "NOT_REQUESTED"
+    PENDING = "PENDING"
+    READY = "READY"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"  # 동의 없음·기능 꺼짐·데이터 부족
+    INVALIDATED = "INVALIDATED"  # 근거 첨삭이 삭제되어 설명문을 지움
+
+
+class RecommendationSource(StrEnum):
+    RULE = "RULE"  # 규칙 기반 (외부 호출 없음)
+    AI = "AI"  # Gemini
+
+
+class RecommendationStatus(StrEnum):
+    """연습 과제 추천 상태.
+
+    강사 검토(학원 작품): DRAFT → IN_REVIEW → APPROVED → DISTRIBUTED(tasks로 배포)
+    본인 채택(개인 작품): DRAFT → IN_REVIEW → ADOPTED → COMPLETED
+    공통: REJECTED(반려), SUPERSEDED(새 추천으로 대체)
+    """
+
+    DRAFT = "DRAFT"
+    IN_REVIEW = "IN_REVIEW"
+    APPROVED = "APPROVED"
+    DISTRIBUTED = "DISTRIBUTED"
+    ADOPTED = "ADOPTED"
+    COMPLETED = "COMPLETED"
+    REJECTED = "REJECTED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+OPEN_RECOMMENDATION_STATUSES: frozenset[RecommendationStatus] = frozenset(
+    {RecommendationStatus.DRAFT, RecommendationStatus.IN_REVIEW}
+)
+# 같은 데이터로 다시 만들지 않는 상태 (중복 생성 방지 대상)
+LIVE_RECOMMENDATION_STATUSES: frozenset[RecommendationStatus] = frozenset(
+    {
+        RecommendationStatus.DRAFT,
+        RecommendationStatus.IN_REVIEW,
+        RecommendationStatus.APPROVED,
+        RecommendationStatus.DISTRIBUTED,
+        RecommendationStatus.ADOPTED,
+        RecommendationStatus.COMPLETED,
+    }
+)
+
+
+class Difficulty(StrEnum):
+    EASY = "EASY"
+    NORMAL = "NORMAL"
+    HARD = "HARD"
+
+
+DIFFICULTY_LABELS: dict[Difficulty, str] = {
+    Difficulty.EASY: "쉬움",
+    Difficulty.NORMAL: "보통",
+    Difficulty.HARD: "어려움",
+}
+
+
+class RecommendationAction(StrEnum):
+    CREATED = "CREATED"
+    EDITED = "EDITED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    DISTRIBUTED = "DISTRIBUTED"
+    ADOPTED = "ADOPTED"
+    COMPLETED = "COMPLETED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+class TrendDirection(StrEnum):
+    """응답 전용: 최근 구간과 이전 구간의 작품 단위 지적 비율 비교."""
+
+    MORE_FREQUENT = "MORE_FREQUENT"
+    LESS_FREQUENT = "LESS_FREQUENT"
+    SIMILAR = "SIMILAR"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+
+
+class Confidence(StrEnum):
+    """응답 전용: 분석에 쓴 작품 수 기준의 신뢰도 표시."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"

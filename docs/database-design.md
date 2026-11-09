@@ -1,6 +1,8 @@
 # ART MATE 데이터베이스 설계
 
-> 상태: **v0.6 AI 첨삭 반영** (리비전 `0006`: §3.20 AI 전송 동의·작업 큐·전사·첨삭·항목·카테고리·검토 이력).
+> 상태: **v0.7 성장 코치 반영** (리비전 `0007`: §3.21 성장 리포트·맞춤 연습 과제·추천 이력, AI 동의 목적 분리).
+>
+> 이전: **v0.6 AI 첨삭 반영** (리비전 `0006`: §3.20 AI 전송 동의·작업 큐·전사·첨삭·항목·카테고리·검토 이력).
 >
 > 이전: **v0.5.1 기획 변경 반영** (리비전 `0005`: §3.1 `profiles.practical_type`, §3.9 작품 분류·완료 상태). 출석(§3.6 `attendance_*`)·개인 할 일(`personal_todos`)·시험 타이머(§3.10)·질문 콜(§3.10a)은 **서비스에서 제외되어 API가 없고 테이블만 보존** 중입니다 (§3.19, [v0.5.1-planning-changes.md](v0.5.1-planning-changes.md)).
 >
@@ -520,6 +522,21 @@ Storage 객체 메타데이터를 한 곳에서 관리 → 권한 확인·보존
 - 녹음은 소프트 삭제이므로 서비스가 파생 데이터를 직접 삭제·작업 취소한다(`app/services/ai_cleanup.py`). 물리 삭제 시에는 FK CASCADE.
 - 모든 테이블 RLS 활성화(정책 없음). 학원 격리는 작품의 `(academy_id, student_membership_id)`와 `managed_student_ids`로 서비스에서 판단(같은 정보를 중복 저장하지 않음).
 
+### 3.21 v0.7 성장 코치 ✅ v0.7 (리비전 `0007`)
+
+> 설명: [growth-coach-v0.7.md](growth-coach-v0.7.md). 약점 분석은 승인된 첨삭(`feedback_categories`, `feedback_items`)에서 매번 계산하며 별도 스냅샷 테이블을 두지 않는다 (리포트 생성 시점 통계만 `metrics`에 저장).
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `growth_reports` | owner_id → profiles CASCADE, scope(ALL/PERSONAL/ACADEMY)·academy_id(CHECK: ACADEMY ⇔ NOT NULL), period_type·period_start?·period_end, status(READY/INSUFFICIENT_DATA), **metrics(jsonb, 규칙 통계, 근거는 ID만)**, source_feedback_ids(varchar[], **GIN**), data_fingerprint, dedupe_key(**유니크** (owner_id, dedupe_key)), analysis_version, narrative_status·**narrative(jsonb, AI 설명문, 통계와 분리)**·narrative_error_code, model_name·prompt_version·tokens, generated_by |
+| `practice_recommendations` | owner·scope(PERSONAL/ACADEMY, CHECK ALL 불가)·academy_id·student_membership_id(복합 FK → academy_memberships), review_mode(SELF/INSTRUCTOR), source(RULE/AI), status(DRAFT/IN_REVIEW/APPROVED/DISTRIBUTED/ADOPTED/COMPLETED/REJECTED/SUPERSEDED), version, batch_key, weakness_category, practical_type, 현재 값(title·description·method_steps·estimated_minutes(5~480)·difficulty·reason), **origin_output(원본)**, evidence_item_ids/feedback_ids/artwork_ids, analysis_snapshot, report_id, approved_by·approved_at, rejected_reason, **task_id(복합 FK (academy_id, task_id) → tasks, SET NULL)**, completed_at. **부분 유니크** (owner_id, batch_key, weakness_category) WHERE status NOT IN (REJECTED, SUPERSEDED) |
+| `practice_recommendation_history` | recommendation CASCADE, actor·actor_mode, action(CREATED/EDITED/APPROVED/REJECTED/DISTRIBUTED/ADOPTED/COMPLETED/SUPERSEDED), from/to_status, version, changes(before/after), note. append-only |
+
+0007의 기존 테이블 변경
+- `ai_processing_consents.purpose` (`FEEDBACK_SUMMARY` 기본 / `GROWTH_COACHING`), 유효 동의 유니크를 (user_id, provider, purpose)로.
+- `ai_processing_jobs`: job_type에 `GROWTH_REPORT`·`PRACTICE_RECOMMEND` 추가, recording_id·artwork_id NULL 허용(녹음 작업은 CHECK `recording_job_has_recording`으로 여전히 필수), `report_id`(→ growth_reports CASCADE), `dedupe_key`(부분 유니크 (job_type, dedupe_key) WHERE 진행 중).
+- 학원 추천의 배포는 새 과제 테이블 없이 v0.3 `tasks`/`task_assignments`를 사용한다.
+
 ## 4. 학원별 데이터 격리
 
 ### 4.1 원칙
@@ -610,5 +627,5 @@ Supabase는 `public` 스키마를 Data API(PostgREST)로 노출하며 anon key�
 2. `uv run alembic revision --autogenerate -m "..."` → **생성된 파일 직접 검토** (RLS 활성화, cross-schema FK, 부분 인덱스 등은 수동 추가)
 3. 개발 DB에서 `upgrade head` → `downgrade -1` → `upgrade head` 로 왕복 확인
 4. PR 리뷰 후 merge. 운영 적용은 사람이 명시적으로 (`ALLOW_PRODUCTION_MIGRATIONS=true`)
-5. 리비전 순서 (2026-11-09 기준 head = `0006`): `0001` v0.2 → `0002` v0.3 → `0003` v0.4 → `0004` v0.5 → `0005` v0.5.1 → `0006` v0.6. **v0.7 리비전은 `down_revision = "0006"`, rev-id `0007`**으로 만듭니다. 제외 테이블 물리 삭제 리비전은 승인 후 그 시점의 head 다음 번호로 별도로 만듭니다.
+5. 리비전 순서 (2026-11-09 기준 head = `0007`): `0001` v0.2 → `0002` v0.3 → `0003` v0.4 → `0004` v0.5 → `0005` v0.5.1 → `0006` v0.6 → `0007` v0.7. **v0.8 리비전은 `down_revision = "0007"`, rev-id `0008`**으로 만듭니다. 제외 테이블 물리 삭제 리비전은 승인 후 그 시점의 head 다음 번호로 별도로 만듭니다.
 6. 두 개발자가 동시에 리비전을 만들면 head가 2개가 됩니다 → 나중에 merge하는 쪽이 `down_revision`을 최신 head로 수정(또는 `alembic merge`) (→ development-guide.md)
