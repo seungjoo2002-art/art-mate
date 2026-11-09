@@ -163,6 +163,43 @@ class SupabaseStorage:
             )
 
 
+class AudioFetcher(Protocol):
+    """Worker가 Signed URL로 음성 파일을 내려받는다 (사용자 토큰·service_role 없이)."""
+
+    async def fetch(self, url: str, *, max_bytes: int) -> bytes: ...
+
+
+class HttpSignedUrlFetcher:
+    def __init__(
+        self, *, timeout: float, transport: httpx.AsyncBaseTransport | None = None
+    ) -> None:
+        self._timeout = timeout
+        self._transport = transport
+
+    async def fetch(self, url: str, *, max_bytes: int) -> bytes:
+        try:
+            async with (
+                httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as client,
+                client.stream("GET", url) as response,
+            ):
+                if response.status_code in (400, 404):
+                    raise StorageObjectNotFound("Object not found or URL expired")
+                if response.status_code >= 400:
+                    raise StorageError(f"Storage responded with {response.status_code}")
+                chunks: list[bytes] = []
+                size = 0
+                async for chunk in response.aiter_bytes():
+                    size += len(chunk)
+                    if size > max_bytes:
+                        raise StorageObjectTooLarge("Object exceeds the size limit")
+                    chunks.append(chunk)
+                return b"".join(chunks)
+        except httpx.HTTPError as exc:
+            # URL에는 서명 토큰이 있으므로 로그에 남기지 않는다
+            logger.warning("signed url download failed", extra={"error_type": type(exc).__name__})
+            raise StorageError("Storage request failed") from None
+
+
 def build_storage(settings: Settings, bucket: str | None = None) -> StorageClient | None:
     """버킷 하나당 클라이언트 하나. 기본은 작품 사진 버킷 (`STORAGE_BUCKET`)."""
     if not settings.storage_configured:

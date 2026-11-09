@@ -99,3 +99,7 @@ def configure_logging(settings: Settings) -> None:
     logging.getLogger("sqlalchemy.engine").setLevel(
         logging.INFO if settings.debug else logging.WARNING
     )
+    # v0.6: HTTP 클라이언트는 요청 URL 전체를 INFO로 남긴다 → Storage Signed URL(토큰 포함)이 로그에
+    # 남지 않도록 항상 WARNING 이상만. faster-whisper·HuggingFace도 처리 정보만 WARNING 이상으로.
+    for name in ("httpx", "httpx2", "httpcore", "huggingface_hub", "faster_whisper"):
+        logging.getLogger(name).setLevel(logging.WARNING)

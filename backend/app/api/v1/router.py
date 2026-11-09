@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     academies,
     admin,
+    ai_feedback,
     artworks,
     classes,
     health,
@@ -27,6 +28,12 @@ from app.api.v1.endpoints import (
 api_v1_router = APIRouter()
 api_v1_router.include_router(academies.router)
 api_v1_router.include_router(admin.router)
+api_v1_router.include_router(ai_feedback.consents)
+api_v1_router.include_router(ai_feedback.owner_processing)
+api_v1_router.include_router(ai_feedback.staff_processing)
+api_v1_router.include_router(ai_feedback.owner_feedback)
+api_v1_router.include_router(ai_feedback.archive)
+api_v1_router.include_router(ai_feedback.staff_feedback)
 api_v1_router.include_router(artworks.router)
 api_v1_router.include_router(artworks.staff_router)
 api_v1_router.include_router(classes.router)

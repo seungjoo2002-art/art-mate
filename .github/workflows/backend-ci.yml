@@ -71,3 +71,9 @@ jobs:
             artmate-api:ci
           for i in $(seq 1 20); do curl -fsS localhost:8000/health && exit 0; sleep 1; done
           docker logs api; exit 1
+      - name: Build AI worker image (faster-whisper, 모델은 포함하지 않음)
+        run: docker build --target worker -t artmate-worker:ci .
+      - name: Worker image imports
+        run: |
+          docker run --rm --entrypoint python artmate-worker:ci -c \
+            "import faster_whisper, av, app.worker.runner; print(faster_whisper.__version__, av.__version__)"

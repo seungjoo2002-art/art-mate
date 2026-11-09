@@ -306,3 +306,111 @@ WORK_STATUS_LABELS: dict[ArtworkWorkStatus, str] = {
     ArtworkWorkStatus.IN_PROGRESS: "작업 중",
     ArtworkWorkStatus.COMPLETED: "작품 완료",
 }
+
+
+# --------------------------------------------------------------------------- v0.6 AI 첨삭
+
+
+class AiJobType(StrEnum):
+    TRANSCRIBE = "TRANSCRIBE"  # faster-whisper STT (서버 내부 처리)
+    SUMMARIZE = "SUMMARIZE"  # Gemini 첨삭 요약·분류 (외부 전송)
+
+
+class AiJobStatus(StrEnum):
+    QUEUED = "QUEUED"  # 대기 (run_after 이후 실행)
+    RUNNING = "RUNNING"  # Worker가 처리 중 (lease 만료 시 다른 Worker가 회수)
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"  # 재시도 소진 또는 재시도 불가 오류 → 사용자가 재시도 요청 가능
+    CANCELLED = "CANCELLED"  # 동의 철회·녹음 삭제 등으로 취소
+
+
+ACTIVE_JOB_STATUSES: frozenset[AiJobStatus] = frozenset({AiJobStatus.QUEUED, AiJobStatus.RUNNING})
+
+
+class AiProvider(StrEnum):
+    GOOGLE_GEMINI = "GOOGLE_GEMINI"
+
+
+class FeedbackStatus(StrEnum):
+    """첨삭(feedback_summaries) 검토 상태.
+
+    DRAFT(AI 초안) → IN_REVIEW(검토·수정 중) → APPROVED(확정).
+    REJECTED: 검토자가 초안을 쓰지 않기로 함 (재생성 가능). SUPERSEDED: 재생성으로 대체됨.
+    """
+
+    DRAFT = "DRAFT"
+    IN_REVIEW = "IN_REVIEW"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+# 녹음당 하나만 존재할 수 있는 '현재' 첨삭 상태
+CURRENT_FEEDBACK_STATUSES: frozenset[FeedbackStatus] = frozenset(
+    {FeedbackStatus.DRAFT, FeedbackStatus.IN_REVIEW, FeedbackStatus.APPROVED}
+)
+
+
+class ReviewMode(StrEnum):
+    """누가 확정하는가. 학원 연결 작품 = 담당 강사, 개인 작품 = 학생 본인."""
+
+    INSTRUCTOR = "INSTRUCTOR"
+    SELF = "SELF"
+
+
+class FeedbackItemKind(StrEnum):
+    STRENGTH = "STRENGTH"  # 잘한 점
+    WEAKNESS = "WEAKNESS"  # 부족한 점
+    FIX = "FIX"  # 구체적인 수정 방법
+    NEXT_TIP = "NEXT_TIP"  # 다음 작품에서 주의할 점
+
+
+class FeedbackItemOrigin(StrEnum):
+    AI = "AI"  # AI 초안 그대로
+    EDITED = "EDITED"  # AI 항목을 사람이 수정
+    ADDED = "ADDED"  # 사람이 새로 추가
+
+
+class WeaknessCategory(StrEnum):
+    """약점 카테고리. v0.7 반복 약점 분석·v0.8 참고작 추천의 기준 키 (값 변경 금지, 추가만)."""
+
+    COMPOSITION = "COMPOSITION"
+    FORM = "FORM"
+    PROPORTION = "PROPORTION"
+    PERSPECTIVE = "PERSPECTIVE"
+    VALUE = "VALUE"
+    COLOR = "COLOR"
+    TEXTURE = "TEXTURE"
+    RENDERING = "RENDERING"
+    FINISH = "FINISH"
+    OTHER = "OTHER"
+
+
+WEAKNESS_CATEGORY_LABELS: dict[WeaknessCategory, str] = {
+    WeaknessCategory.COMPOSITION: "구도",
+    WeaknessCategory.FORM: "형태",
+    WeaknessCategory.PROPORTION: "비례",
+    WeaknessCategory.PERSPECTIVE: "투시",
+    WeaknessCategory.VALUE: "명암",
+    WeaknessCategory.COLOR: "색채",
+    WeaknessCategory.TEXTURE: "질감",
+    WeaknessCategory.RENDERING: "묘사",
+    WeaknessCategory.FINISH: "완성도",
+    WeaknessCategory.OTHER: "기타",
+}
+
+FEEDBACK_ITEM_KIND_LABELS: dict[FeedbackItemKind, str] = {
+    FeedbackItemKind.STRENGTH: "잘한 점",
+    FeedbackItemKind.WEAKNESS: "부족한 점",
+    FeedbackItemKind.FIX: "수정 방법",
+    FeedbackItemKind.NEXT_TIP: "다음 작품 주의점",
+}
+
+
+class ReviewAction(StrEnum):
+    CREATED = "CREATED"  # AI 초안 생성
+    EDITED = "EDITED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    REOPENED = "REOPENED"  # 승인 취소 → 다시 검토
+    SUPERSEDED = "SUPERSEDED"  # 재생성으로 대체

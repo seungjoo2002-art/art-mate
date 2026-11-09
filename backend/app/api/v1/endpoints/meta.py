@@ -9,7 +9,9 @@ from fastapi import APIRouter, Response
 from pydantic import BaseModel, Field
 
 from app.models.enums import (
+    FEEDBACK_ITEM_KIND_LABELS,
     PRACTICAL_TYPE_LABELS,
+    WEAKNESS_CATEGORY_LABELS,
     WORK_CATEGORY_LABELS,
     WORK_STATUS_LABELS,
 )
@@ -28,6 +30,8 @@ class Options(BaseModel):
     practical_types: list[Option] = Field(description="실기 유형 (프로필·작품 공통)")
     work_categories: list[Option] = Field(description="작품 작업 목적")
     work_statuses: list[Option] = Field(description="작품 작업 상태")
+    weakness_categories: list[Option] = Field(description="첨삭 약점 카테고리 (v0.6)")
+    feedback_item_kinds: list[Option] = Field(description="첨삭 항목 종류 (v0.6)")
 
 
 def _options(labels: dict) -> list[Option]:  # type: ignore[type-arg]
@@ -45,4 +49,6 @@ async def get_options(response: Response) -> Options:
         practical_types=_options(PRACTICAL_TYPE_LABELS),
         work_categories=_options(WORK_CATEGORY_LABELS),
         work_statuses=_options(WORK_STATUS_LABELS),
+        weakness_categories=_options(WEAKNESS_CATEGORY_LABELS),
+        feedback_item_kinds=_options(FEEDBACK_ITEM_KIND_LABELS),
     )
