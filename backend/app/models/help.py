@@ -1,5 +1,9 @@
 """질문 콜·대기열 (v0.5, F-07).
 
+[v0.5.1 서비스 제외] 기획 변경으로 API·서비스는 제거했다. 테이블은 데이터 보존과 Alembic 모델 일치
+(`alembic check`)를 위해 남겨 두며, 물리 삭제는 별도 승인 후 새 리비전으로 진행한다
+(docs/v0.5.1-planning-changes.md).
+
 - help_requests: 학생의 질문 요청 1건. 반 단위 대기열이며 요청 순서(queue_seq)대로 처리한다.
   같은 학생은 같은 반에 활성(WAITING/CALLED/IN_PROGRESS) 요청을 1개만 가질 수 있다 (부분 유니크).
 - help_queue_events: 상태 전이 기록 (append-only). 감사·평균 처리시간 분석·향후 SSE 재동기화용.

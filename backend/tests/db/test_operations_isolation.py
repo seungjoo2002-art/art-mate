@@ -1,4 +1,7 @@
-"""학원 간 데이터 격리 (v0.3 리소스 전체) + DB 복합 FK의 교차 학원 연결 차단."""
+"""학원 간 데이터 격리 (v0.3 리소스) + DB 복합 FK의 교차 학원 연결 차단.
+
+v0.5.1: 출석·대시보드 API는 제거됐다. 출석 테이블은 보존 중이므로 DB 레벨 FK 검사는 유지한다.
+"""
 
 import uuid
 
@@ -46,15 +49,13 @@ async def _seed(client: httpx.AsyncClient, w: World) -> dict[str, str]:
     task = await client.post(
         f"{w.base}/tasks", json={"class_id": w.class_id, "title": "과제"}, headers=w.teacher.headers
     )
-    record = await client.post(f"{w.base}/attendance/check-in", headers=w.students[0].headers)
-    for response in (schedule, exception, topic, task, record):
+    for response in (schedule, exception, topic, task):
         assert response.status_code == 201, response.text
     return {
         "schedule": schedule.json()["id"],
         "exception": exception.json()["id"],
         "topic": topic.json()["id"],
         "task": task.json()["id"],
-        "record": record.json()["id"],
     }
 
 
@@ -71,10 +72,8 @@ async def test_cross_academy_access_is_blocked(
         ("GET", f"{a.base}/classes"),
         ("GET", a.class_base),
         ("GET", f"{a.base}/schedules"),
-        ("GET", f"{a.base}/attendance"),
         ("GET", f"{a.base}/tasks"),
-        ("GET", f"{a.base}/dashboard"),
-        ("PATCH", f"{a.base}/attendance/records/{ids['record']}"),
+        ("GET", f"{a.base}/artworks"),
         ("DELETE", f"{a.base}/tasks/{ids['task']}"),
     ]:
         response = await client.request(method, path, headers=outsider, json={"status": "ABSENT"})
@@ -90,8 +89,6 @@ async def test_cross_academy_access_is_blocked(
         ("PATCH", f"{b.class_base}/lesson-topics/{ids['topic']}", {"title": "x"}),
         ("GET", f"{b.base}/tasks/{ids['task']}", None),
         ("PATCH", f"{b.base}/tasks/{ids['task']}", {"title": "x"}),
-        ("PATCH", f"{b.base}/attendance/records/{ids['record']}", {"status": "ABSENT"}),
-        ("GET", f"{b.base}/attendance/records/{ids['record']}/history", None),
     ]:
         response = await client.request(method, path, headers=b.owner.headers, json=body)
         assert response.status_code == 404, (method, path, response.status_code)
@@ -111,16 +108,6 @@ async def test_cross_academy_access_is_blocked(
         headers=b.owner.headers,
     )
     assert cross_member.status_code == 422
-    cross_attendance = await client.post(
-        f"{b.base}/attendance/records",
-        json={
-            "student_membership_id": a.students[0].membership_id,
-            "attendance_date": "2026-11-03",
-            "status": "ABSENT",
-        },
-        headers=b.owner.headers,
-    )
-    assert cross_attendance.status_code == 404
     cross_task = await client.post(
         f"{b.base}/tasks",
         json={
@@ -140,8 +127,6 @@ async def test_cross_academy_access_is_blocked(
     # 각 학원 데이터 수는 자기 것만
     a_tasks = await client.get(f"{a.base}/tasks", headers=a.owner.headers)
     assert a_tasks.json()["total"] == 1
-    a_attendance = await client.get(f"{a.base}/attendance/records", headers=a.owner.headers)
-    assert {r["academy_id"] for r in a_attendance.json()["items"]} == {a.academy_id}
 
 
 async def test_database_rejects_cross_academy_links(

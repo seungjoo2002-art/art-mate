@@ -1,21 +1,37 @@
 # ART MATE API (backend)
 
-미대입시·예중·예고 입시학원을 위한 **AI 기반 실기교육·학생관리 플랫폼** ART MATE의 백엔드입니다.
+미술 입시생을 위한 **AI 기반 미술 실기 학습·성장 관리 플랫폼** ART MATE의 백엔드입니다.
 
-> **현재 버전: v0.5** — v0.4 + **질문 콜·대기열(폴링)**, **피드백 음성 녹음 저장·녹음 동의**.
-> 이전(v0.4): v0.3 + **단계별 작품 사진 업로드(Supabase Storage 비공개 버킷, Signed URL)**, **시험 타이머·단계 목표 알림 데이터**.
-> 이전: v0.2(Supabase Auth JWT 인증, 사용자 프로필, 학원 등록·심사·가입·소속) + **학원 운영: 반·반 배정·담당 강사, 정규 수업·휴강·보강 일정, 출석·수정 이력, 수업 주제·과제 배포, 학생 개인 할 일, 오늘 할 일 통합, 강사 수업 현황 대시보드**.
-> 작품 업로드, 질문 콜, 녹음, AI 피드백, 커뮤니티는 이후 버전에서 구현합니다.
+> **현재 버전: v0.5.1** — 기획 변경 반영: **프로필 실기 유형**, **작품 분류(실기 유형 × 작업 목적)·필터**, **작품 완료/작업 재개**, 작품 목록 **`recording_count`**, 선택지 API.
+> 출석·오늘 할 일·질문 콜·시험 타이머·강사 대시보드는 **서비스에서 제외**되어 API를 제거했습니다 (DB 테이블은 보존, [변경 정리](../docs/v0.5.1-planning-changes.md)).
+
+**구현 현황**
+
+| 기능 | 상태 |
+| --- | --- |
+| Supabase Auth 인증, 프로필(실기 유형 포함) | ✅ v0.2 / v0.5.1 |
+| 학원 등록·심사·가입·멤버, 반·담당 강사·과제·수업 주제·일정 | ✅ v0.2~v0.3 (유지) |
+| 작품 생성·단계별 사진 업로드(비공개 Storage, Signed URL) | ✅ v0.4 |
+| 피드백 음성 녹음 저장·녹음 동의 | ✅ v0.5 |
+| 작품 분류·필터, 작품 완료, 녹음 수 | ✅ v0.5.1 |
+| STT·AI 피드백 요약·강사 확인 | ⏳ v0.6 |
+| 성장 리포트·반복 약점·맞춤 과제 | ⏳ v0.7 |
+| AI 참고작 추천(F-15, 신규 정의·미구현)·커뮤니티 연동 | ⏳ v0.8 |
+| AI 직접 작품 분석·실기 튜터 / 입시 합격 가능성 예측 | 이후 / 장기 |
+| 출석, 오늘 할 일, 질문 콜, 시험 타이머, 강사 대시보드 | ⛔ v0.5.1 제외 |
 
 | 문서 | 내용 |
 | --- | --- |
 | [docs/architecture.md](../docs/architecture.md) | 레이어 구조, 요청 흐름, 인증·AI 연동 구조 |
 | [docs/database-design.md](../docs/database-design.md) | 엔티티 설계, 학원별 데이터 격리, RLS 방향 |
 | [docs/development-guide.md](../docs/development-guide.md) | Git 협업 규칙, 새 API 추가 방법, 버전 체크리스트, 운영 절차(마이그레이션 적용·ADMIN 지정) |
+| [docs/v0.5.1-planning-changes.md](../docs/v0.5.1-planning-changes.md) | **기획 변경 정리**: 유지·제외·보류, DB 변경, 테이블 처리 계획, 로드맵, F-15 설계 메모 |
+| [docs/supabase-dev-verification.md](../docs/supabase-dev-verification.md) | Supabase 개발 DB·Storage 적용 검증 절차 (읽기 전용 스크립트 + 수동 확인) |
 | [docs/frontend-integration.md](../docs/frontend-integration.md) | 프론트엔드 인증 연동, API 예시, 오류 코드 |
-| [docs/frontend-integration-v0.5.md](../docs/frontend-integration-v0.5.md) | v0.5 질문 콜 상태·폴링·예상 대기시간, 녹음 업로드·MediaRecorder·동의 UI |
-| [docs/frontend-integration-v0.4.md](../docs/frontend-integration-v0.4.md) | v0.4 작품 사진 업로드 절차·Signed URL, 시험 타이머 응답·알림 처리 |
-| [docs/frontend-integration-v0.3.md](../docs/frontend-integration-v0.3.md) | v0.3 학원 운영 API: 출석·일정·과제·개인 할 일·대시보드, 권한, 날짜·시간 규칙 |
+| [docs/frontend-integration-v0.5.1.md](../docs/frontend-integration-v0.5.1.md) | v0.5.1 실기 유형·선택지 API, 작품 분류 필터, 작품 완료, recording_count |
+| [docs/frontend-integration-v0.5.md](../docs/frontend-integration-v0.5.md) | v0.5 녹음 업로드·MediaRecorder·동의 UI (질문 콜 절은 제외됨) |
+| [docs/frontend-integration-v0.4.md](../docs/frontend-integration-v0.4.md) | v0.4 작품 사진 업로드 절차·Signed URL (시험 타이머 절은 제외됨) |
+| [docs/frontend-integration-v0.3.md](../docs/frontend-integration-v0.3.md) | v0.3 반·일정·과제 API, 권한, 날짜·시간 규칙 (출석·할 일·대시보드 절은 제외됨) |
 | [docs/privacy-and-data-policy.md](../docs/privacy-and-data-policy.md) | 개인정보 최소 수집, 미성년자·탈퇴 후속 과제 |
 
 ## 기술 스택
@@ -56,7 +72,8 @@ cp .env.example .env # 값 채우기 (아래 참고)
 | `DOCS_ENABLED` | | 비우면 development/test에서만 API 문서 공개 |
 | `SUPABASE_URL` | 인증 사용 시 필수 | `https://<ref>.supabase.co`. JWT 발급자·JWKS 공개키 주소를 여기서 만듭니다. 비우면 보호 API 전부 401 (fail-closed) |
 | `AUTH_JWT_AUDIENCE`, `AUTH_JWT_LEEWAY_SECONDS`, `AUTH_JWKS_CACHE_SECONDS` | | 기본값 `authenticated`, 10초, 600초 |
-| `SUPABASE_ANON_KEY` | | 백엔드는 사용하지 않음 (프론트용). **service_role 키는 사용하지 않습니다** |
+| `SUPABASE_ANON_KEY` | 사진·녹음 사용 시 필수 | 공개 anon(publishable) 키. v0.4부터 Storage API 호출의 `apikey`로 사용 (권한은 사용자 토큰으로 판단). 비우면 업로드·Signed URL API가 503 `STORAGE_NOT_CONFIGURED`. **service_role 키는 사용하지 않습니다** |
+| `STORAGE_BUCKET`, `RECORDING_BUCKET` | | 기본 `artworks`, `feedback-audio` (storage-setup.sql과 같아야 함) |
 | `LOG_LEVEL`, `LOG_FORMAT` | | 로그 수준, `json`/`text` |
 
 잘못된 값이 있으면 서버가 기동하지 않고, 어떤 변수가 왜 잘못됐는지 **비밀값을 제외하고** 출력합니다.
@@ -87,7 +104,7 @@ v0.2 인증 API (모두 `Authorization: Bearer <Supabase access token>` 필요, 
 
 | 경로 | 설명 | 권한 |
 | --- | --- | --- |
-| `GET / POST / PATCH /api/v1/users/me` | 내 프로필 조회 / 생성(멱등) / 수정 | 로그인 |
+| `GET / POST / PATCH /api/v1/users/me` | 내 프로필 조회 / 생성(멱등) / 수정 (`practical_type` 포함, v0.5.1) | 로그인 |
 | `GET /api/v1/users/me/join-requests` | 내 가입 요청 | 프로필 |
 | `POST /api/v1/academies` | 학원 등록 신청 | INSTRUCTOR |
 | `GET /api/v1/academies[?q=&mine=true]` | 학원 찾기 / 내 학원 | 프로필 |
@@ -100,7 +117,7 @@ v0.2 인증 API (모두 `Authorization: Bearer <Supabase access token>` 필요, 
 | `PATCH /api/v1/academies/{id}/join-requests/{request_id}` | 승인·거절 | OWNER/MANAGER |
 | `GET /api/v1/admin/academies`, `PATCH /api/v1/admin/academies/{id}` | 학원 등록 심사 | 시스템 ADMIN |
 
-v0.3 학원 운영 API (경로 접두사 `/api/v1/academies/{id}`, 상세: docs/frontend-integration-v0.3.md)
+v0.3 반·일정·과제 API (경로 접두사 `/api/v1/academies/{id}`, 상세: docs/frontend-integration-v0.3.md) — v0.5.1 유지
 
 | 경로 | 설명 | 권한 |
 | --- | --- | --- |
@@ -108,37 +125,24 @@ v0.3 학원 운영 API (경로 접두사 `/api/v1/academies/{id}`, 상세: docs/
 | `/classes/{class_id}/members` | 학생 배정·담당 강사 지정·해제 | OWNER/MANAGER, 담당 강사(학생만) |
 | `/classes/{class_id}/schedules`, `/schedule-exceptions` | 정규 수업, 휴강·1회 변경·보강 | OWNER/MANAGER, 담당 강사 |
 | `GET /schedules?from&to` | 날짜 범위 일정 (학생별·강사별·반별) | 멤버 |
-| `/attendance/check-in`, `/attendance/me[/today]` | 출석하기, 내 출석 | STUDENT |
-| `/attendance`, `/attendance/records[/{id}[/history]]` | 출석 현황·기록·수정·이력 | 강사 이상 (담당 학생) |
 | `/classes/{class_id}/lesson-topics` | 수업 주제·다음 수업 공지 | 조회 반 멤버, 쓰기 담당 강사 |
 | `/tasks`, `/tasks/{task_id}` | 과제 배포·수정·취소·완료 현황 | 강사 이상 (담당 반) |
 | `/tasks/me`, `PUT /tasks/{task_id}/completion` | 받은 과제, 완료 체크 | STUDENT |
-| `GET /dashboard` | 강사 수업 현황 대시보드 | 강사 이상 |
-| `/api/v1/personal-todos[/{id}]` | 개인 할 일 (본인만) | STUDENT 사용자 |
-| `GET /api/v1/users/me/today` | 오늘 할 일 통합 (학원 과제 + 개인 할 일 + 주제) | STUDENT 사용자 |
 
-v0.4 작품·시험 API (상세: docs/frontend-integration-v0.4.md)
+v0.4~v0.5.1 작품·녹음 API (상세: docs/frontend-integration-v0.4.md, v0.5.md, v0.5.1.md)
 
 | 경로 | 설명 | 권한 |
 | --- | --- | --- |
-| `/api/v1/artworks[/{id}]`, `/progress` | 내 작품 생성·조회·수정·삭제, 진행 상태 | STUDENT 사용자 (학원 미소속 가능) |
+| `GET /api/v1/meta/options` | 실기 유형·작업 목적·작업 상태 선택지 (v0.5.1) | 공개 |
+| `/api/v1/artworks[/{id}]`, `/progress` | 내 작품 생성·조회·수정·삭제, 진행 상태. 목록 필터 `practical_type`·`work_category`·`work_status`, 항목별 `recording_count` (v0.5.1) | STUDENT 사용자 (학원 미소속 가능) |
+| `POST /api/v1/artworks/{id}/complete`, `/reopen` | 작품 완료하기(FINAL 사진 필요) / 작업 재개 (v0.5.1) | 작품 소유자 |
 | `/api/v1/artworks/{id}/photos[...]` | 업로드 요청·완료, 대표 지정, 삭제·교체, Signed URL | 작품 소유자 |
 | `/api/v1/academies/{id}/artworks[...]` | 담당 학생의 학원 연결 작품 조회 | 강사 이상 (담당 학생) |
-| `/api/v1/academies/{id}/exam-templates[...]` | 시험 템플릿·단계별 목표 시각 | 강사 이상 (수정: 만든 사람·관리자) |
-| `/api/v1/academies/{id}/exam-sessions[...]` | 반 시험 생성·시작·종료·현황 | 담당 강사·관리자 |
-| `/api/v1/academies/{id}/exam-sessions/me`, `/{sid}/me[/stage]` | 내 시험 타이머, 작업 단계 변경 | STUDENT |
-
-v0.5 질문 콜·녹음 API (상세: docs/frontend-integration-v0.5.md)
-
-| 경로 | 설명 | 권한 |
-| --- | --- | --- |
-| `POST /api/v1/academies/{id}/help-requests`, `/me[/{rid}[/cancel]]` | 질문 요청·내 상태(순번·예상 대기)·취소 | 반 학생 |
-| `/api/v1/academies/{id}/classes/{cid}/help-queue[/call-next]` | 반 대기열, 다음 학생 호출 | 담당 강사·관리자 |
-| `POST /api/v1/academies/{id}/help-requests/{rid}/{action}` | call·start·complete·skip·requeue·cancel | 담당 강사·관리자 |
-| `GET /api/v1/academies/{id}/classes/{cid}/help-queue/estimate` | 예상 대기시간 | 반 학생·강사 |
 | `/api/v1/recording-consents[/me]` | 녹음 동의·철회 | STUDENT 사용자 |
 | `/api/v1/artworks/{id}/recordings[...]` | 녹음 업로드 요청·완료·목록·재생 URL·삭제 | 작품 소유자 |
 | `/api/v1/academies/{id}/artworks/{aid}/recordings[...]` | 담당 학생 녹음 조회·재생 | 강사 이상 (담당 학생) |
+
+v0.5.1에서 제거된 API (404): `/attendance/**`, `/personal-todos/**`, `/users/me/today`, `/academies/{id}/dashboard`, `/exam-templates/**`, `/exam-sessions/**`, `/help-requests/**`, `/help-queue/**`.
 
 ## API 문서
 
@@ -160,7 +164,7 @@ uv run ruff format .             # 포맷 적용 (CI는 --check)
 - 테스트는 `backend/.env`를 **읽지 않으며** 운영 DB에 접근하지 않습니다.
 - DB 연결 실패 테스트는 접속이 거부되는 로컬 주소(`127.0.0.1:1`)로 실제 asyncpg 연결을 시도해 검증합니다.
 - 인증 테스트는 테스트용 EC 키로 Supabase 형식 JWT를 직접 만들어 검증합니다 (실제 Supabase 미접속).
-- DB 기반 테스트(`tests/db/`: 프로필·학원·가입 요청·권한·동시성·마이그레이션)는 **로컬 테스트 DB**가 필요합니다.
+- DB 기반 테스트(`tests/db/`: 프로필·학원·가입 요청·권한·작품·녹음·동시성·마이그레이션)는 **로컬 테스트 DB**가 필요합니다.
   `TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/artmate_test uv run pytest`
   - 로컬(localhost) DB만 허용되고 Supabase 호스트이면 테스트가 중단됩니다. 시작할 때 스키마를 초기화하므로 개발 데이터가 있는 DB를 지정하지 마세요.
   - GitHub Actions CI에서는 Postgres 서비스 컨테이너로 자동 실행됩니다.
@@ -178,6 +182,14 @@ uv run alembic upgrade head --sql                              # 적용될 SQL�
 - 생성된 리비전 파일은 **반드시 직접 검토**한 뒤 커밋합니다.
 - 서버 기동·Docker 이미지에서 마이그레이션을 자동 실행하지 않습니다.
   `APP_ENV=production` 대상은 `ALLOW_PRODUCTION_MIGRATIONS=true`를 명시해야만 실행됩니다.
+
+### 개발 DB·Storage 점검 (읽기 전용)
+
+```bash
+uv run python -m scripts.verify_dev_environment   # 리비전·테이블·RLS·버킷·정책·환경변수 (값은 출력 안 함)
+```
+
+절차와 수동 확인 항목: [docs/supabase-dev-verification.md](../docs/supabase-dev-verification.md)
 
 ## Docker
 
@@ -210,21 +222,23 @@ backend/
 │   │   ├── responses.py     # OpenAPI 공통 에러 응답
 │   │   └── v1/
 │   │       ├── router.py    # v1 도메인 라우터 등록
-│   │       └── endpoints/   # health, users, academies, admin, classes, schedules, attendance,
-│   │                        # lesson_topics, tasks, personal_todos, dashboard
+│   │       └── endpoints/   # health, meta, users, academies, admin, classes, schedules,
+│   │                        # lesson_topics, tasks, artworks, recordings
 │   ├── db/
 │   │   ├── base.py          # Declarative Base, naming convention, UUID/timestamp mixin
 │   │   └── session.py       # Database(engine, session_factory, ping), Supabase pooler 대응
-│   ├── models/              # profile, academy, membership, academy_class, attendance, task,
-│   │                        # personal_todo, enums
-│   ├── schemas/             # common, fields, user, academy, classes, attendance, tasks,
-│   │                        # personal_todo, dashboard, health
-│   ├── repositories/        # profiles, academies, memberships, classes, attendance, tasks
+│   ├── models/              # profile, academy, membership, academy_class, task, artwork, recording,
+│   │                        # enums (+ attendance, personal_todo, exam, help: 서비스 제외·테이블 보존)
+│   ├── schemas/             # common, fields, user, academy, classes, tasks, students, artworks,
+│   │                        # recordings, health
+│   ├── repositories/        # profiles, academies, memberships, classes, tasks, pagination
 │   ├── services/            # access(담당 반·학생 권한), academies, memberships, classes,
-│   │                        # schedules, attendance, tasks, personal_todos, dashboard
+│   │                        # schedules, tasks, artworks, recordings, images, audio
 │   ├── integrations/        # supabase/, ai/ 외부 연동
 │   └── utils/
-├── alembic/                 # env.py(async), versions/0001 (v0.2), 0002 (v0.3 학원 운영), 0003 (v0.4 작품·시험), 0004 (v0.5 질문 콜·녹음)
+├── alembic/                 # env.py(async), versions/0001 (v0.2), 0002 (v0.3 학원 운영), 0003 (v0.4 작품·시험),
+│                            # 0004 (v0.5 질문 콜·녹음), 0005 (v0.5.1 실기 유형·작품 분류·완료) = head
+├── scripts/verify_dev_environment.py  # 개발 DB·Storage 읽기 전용 점검
 ├── supabase/storage-setup.sql  # Supabase 전용: artworks·feedback-audio 버킷, storage.objects RLS 정책 (수동 적용)
 ├── tests/
 ├── .env.example

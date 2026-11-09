@@ -202,6 +202,14 @@ uv run alembic check                         # 4) 모델과 일치 확인 → "N
 3. 확인: Storage → `artworks`, `feedback-audio` 버킷이 **Private**, Policies에 `artmate_artworks_*` 3개 + `artmate_audio_*` 3개
 4. Settings → API → Exposed schemas에 `artmate_private`를 **추가하지 않습니다**
 5. 백엔드 환경변수 `SUPABASE_URL`, `SUPABASE_ANON_KEY`(공개 키) 설정. service_role 키는 넣지 않습니다
+6. 적용 결과 확인: `uv run python -m scripts.verify_dev_environment` (읽기 전용, [supabase-dev-verification.md](supabase-dev-verification.md))
+
+### 8.1b 리비전 순서와 v0.5.1 적용 규칙
+
+- 현재 head: `0005` (v0.5.1). 다음 리비전(v0.6 AI 피드백)은 `--rev-id 0006`, `down_revision = "0005"`.
+- 개발 DB에는 프론트엔드 담당자가 `0002~0004`와 storage-setup.sql을 적용합니다. 백엔드 담당자는 같은 작업을 반복하지 않고 검증 스크립트로 확인만 합니다.
+- `0005`는 팀 승인 후 한 사람만 개발 DB에 적용합니다. 운영 DB 적용은 별도 배포 절차로만 합니다.
+- v0.5.1에서 제외한 기능(출석·오늘 할 일·질문 콜·시험 타이머)의 테이블은 보존 중입니다. 물리 삭제는 데이터 확인·승인 후 별도 리비전으로 진행합니다 ([v0.5.1-planning-changes.md §5](v0.5.1-planning-changes.md)).
 
 ### 8.2 시스템 관리자(ADMIN) 지정
 

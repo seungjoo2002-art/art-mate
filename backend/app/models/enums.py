@@ -100,6 +100,10 @@ class OccurrenceStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+# v0.5.1: 출석·시험 타이머·질문 콜은 서비스에서 제외됐다. 아래 해당 enum은 보존 중인 테이블의
+# CHECK 제약·ORM 모델과 맞추기 위해서만 남겨 둔다 (API에서 사용하지 않음).
+
+
 class AttendanceStatus(StrEnum):
     PRESENT = "PRESENT"
     LATE = "LATE"
@@ -185,7 +189,7 @@ class ExamWorkStage(StrEnum):
 EXAM_WORK_STAGE_ORDER: tuple[ExamWorkStage, ...] = tuple(ExamWorkStage)
 
 
-# --------------------------------------------------------------------------- v0.5 질문 콜·녹음
+# ----------------------------------------------------------------- v0.5 질문 콜(제외)·녹음
 
 
 class HelpRequestStatus(StrEnum):
@@ -242,3 +246,63 @@ class ConsentType(StrEnum):
 class ConsentGrantor(StrEnum):
     SELF = "SELF"  # 본인 동의
     GUARDIAN = "GUARDIAN"  # 법정대리인 동의 (만 14세 미만)
+
+
+# --------------------------------------------------------------------------- v0.5.1 기획 변경
+
+
+class PracticalType(StrEnum):
+    """실기 유형 (profiles.practical_type, artworks.practical_type).
+
+    값 추가: 여기에 멤버와 라벨을 추가하고 CHECK 제약을 바꾸는 마이그레이션을 만든다
+    (varchar + CHECK 저장이라 테이블 재작성 없이 제약만 교체된다).
+    이미 저장된 값은 삭제·변경하지 않는다.
+    """
+
+    BASIC_DESIGN = "BASIC_DESIGN"
+    THINKING_SHIFT = "THINKING_SHIFT"
+    IDEA_EXPRESSION = "IDEA_EXPRESSION"
+    DRAWING = "DRAWING"
+    WATERCOLOR = "WATERCOLOR"
+    OTHER = "OTHER"
+
+
+PRACTICAL_TYPE_LABELS: dict[PracticalType, str] = {
+    PracticalType.BASIC_DESIGN: "기초디자인",
+    PracticalType.THINKING_SHIFT: "사고의 전환",
+    PracticalType.IDEA_EXPRESSION: "발상과 표현",
+    PracticalType.DRAWING: "소묘",
+    PracticalType.WATERCOLOR: "수채화",
+    PracticalType.OTHER: "기타",
+}
+
+
+class ArtworkWorkCategory(StrEnum):
+    """작업 목적 (artworks.work_category). 실기 유형과 독립 — 기초디자인 + 모의시험 조합 가능."""
+
+    MOCK_EXAM = "MOCK_EXAM"
+    PERSONAL_PRACTICE = "PERSONAL_PRACTICE"
+    CLASS_WORK = "CLASS_WORK"
+
+
+WORK_CATEGORY_LABELS: dict[ArtworkWorkCategory, str] = {
+    ArtworkWorkCategory.MOCK_EXAM: "모의시험",
+    ArtworkWorkCategory.PERSONAL_PRACTICE: "개인 연습",
+    ArtworkWorkCategory.CLASS_WORK: "수업 작품",
+}
+
+
+class ArtworkWorkStatus(StrEnum):
+    """작품 작업 상태 (artworks.work_status).
+
+    사진 단계(progress)와 별개로 학생이 직접 완료 처리한다.
+    """
+
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+
+
+WORK_STATUS_LABELS: dict[ArtworkWorkStatus, str] = {
+    ArtworkWorkStatus.IN_PROGRESS: "작업 중",
+    ArtworkWorkStatus.COMPLETED: "작품 완료",
+}

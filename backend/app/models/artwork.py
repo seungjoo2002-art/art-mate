@@ -8,6 +8,9 @@
 - 학원 연결 FK는 ON DELETE NO ACTION: 학원·소속 행을 물리 삭제하려면 작품(과 Storage 파일)을 먼저
   처리해야 한다 (파일이 고아가 되지 않도록). 계정 삭제는 owner_id CASCADE.
 - 사진 파일은 Supabase Storage(비공개 버킷)에만 있고 DB에는 경로·메타데이터만 저장한다.
+- v0.5.1 분류·완료: practical_type(실기 유형)과 work_category(작업 목적)는 독립 속성이다.
+  work_status(IN_PROGRESS/COMPLETED)는 학생이 직접 바꾸는 작업 상태로, 사진 단계(progress)와 다르다.
+  COMPLETED ⇔ completed_at IS NOT NULL (CHECK). 완료에는 FINAL 사진이 필요하다 (서비스 검증).
 """
 
 import uuid
@@ -28,7 +31,13 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
-from app.models.enums import ArtworkStage, PhotoStatus
+from app.models.enums import (
+    ArtworkStage,
+    ArtworkWorkCategory,
+    ArtworkWorkStatus,
+    PhotoStatus,
+    PracticalType,
+)
 
 
 class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -54,6 +63,10 @@ class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             name="links_require_academy",
         ),
         CheckConstraint("length(btrim(title)) > 0", name="title_not_blank"),
+        CheckConstraint(
+            "(work_status = 'COMPLETED') = (completed_at IS NOT NULL)",
+            name="completed_has_time",
+        ),
         Index("ix_artworks_owner_work_date", "owner_id", "work_date"),
         Index("ix_artworks_academy_student", "academy_id", "student_membership_id", "work_date"),
     )
@@ -69,6 +82,20 @@ class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     work_date: Mapped[date]
     # 삭제 시각 (soft delete). 사진은 DELETED 처리 후 Storage에서 정리한다.
     deleted_at: Mapped[datetime | None]
+    # v0.5.1 분류 (NULL = 미분류, 기존 작품 호환)
+    practical_type: Mapped[PracticalType | None] = mapped_column(
+        enum_column(PracticalType, "practical_type")
+    )
+    work_category: Mapped[ArtworkWorkCategory | None] = mapped_column(
+        enum_column(ArtworkWorkCategory, "work_category")
+    )
+    # v0.5.1 작업 상태. 기존 작품은 IN_PROGRESS
+    work_status: Mapped[ArtworkWorkStatus] = mapped_column(
+        enum_column(ArtworkWorkStatus, "work_status"),
+        server_default=ArtworkWorkStatus.IN_PROGRESS.value,
+        default=ArtworkWorkStatus.IN_PROGRESS,
+    )
+    completed_at: Mapped[datetime | None]
 
 
 class ArtworkPhoto(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, CheckConstraint, String, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, enum_column
-from app.models.enums import UserType
+from app.models.enums import PracticalType, UserType
 
 
 class Profile(TimestampMixin, Base):
@@ -24,3 +24,7 @@ class Profile(TimestampMixin, Base):
     user_type: Mapped[UserType] = mapped_column(enum_column(UserType, "user_type"), index=True)
     avatar_path: Mapped[str | None] = mapped_column(String(512))
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
+    # 실기 유형 (v0.5.1). 기존 회원은 NULL. AI 맞춤 피드백·참고작 추천(F-15)에 사용 예정
+    practical_type: Mapped[PracticalType | None] = mapped_column(
+        enum_column(PracticalType, "practical_type")
+    )
