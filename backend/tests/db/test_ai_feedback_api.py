@@ -732,3 +732,35 @@ async def test_ai_consent_validation(client: httpx.AsyncClient, actors) -> None:
     assert (
         await client.delete(f"{API}/ai-processing-consents/me", headers=student.headers)
     ).status_code == 404
+
+
+async def test_duplicate_insert_race_returns_existing_job(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, audio: FakeStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """진행 중 작업 확인과 INSERT 사이에 다른 요청이 끼어든 경우.
+
+    부분 유니크 위반 → 기존 작업 반환.
+
+    rollback 후 만료된 ORM 객체를 다시 읽지 않아야 한다 (CI에서 발견된 MissingGreenlet 500).
+    """
+    from app.services.ai_feedback import AiFeedbackService
+
+    student = await actors.signup("STUDENT")
+    artwork_id, recording_id = await _recording(client, audio, student)
+    base = _base(artwork_id, recording_id)
+    first = await client.post(f"{base}/transcription", headers=student.headers)
+    assert first.status_code == 202
+
+    original = AiFeedbackService._active_job
+    calls = {"n": 0}
+
+    async def racing(self, recording_id, job_type):  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        if calls["n"] == 1:  # 첫 확인에서는 아직 없는 것처럼 → INSERT가 유니크 위반
+            return None
+        return await original(self, recording_id, job_type)
+
+    monkeypatch.setattr(AiFeedbackService, "_active_job", racing)
+    second = await client.post(f"{base}/transcription", headers=student.headers)
+    assert second.status_code == 200, second.text
+    assert second.json()["id"] == first.json()["id"]

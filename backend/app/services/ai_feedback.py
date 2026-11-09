@@ -338,6 +338,7 @@ class AiFeedbackService:
         retry: bool = False,
     ) -> tuple[JobRead, bool]:
         """(작업, 새로 만들었는지). 진행 중 작업이 있으면 그것을 돌려준다 (중복 방지·멱등)."""
+        recording_id = recording.id
         if not self.settings.stt_enabled:
             raise SttNotConfiguredError()
         if self.audio_storage is None:
@@ -402,7 +403,8 @@ class AiFeedbackService:
         except IntegrityError:
             # 동시 요청: 부분 유니크(uq_ai_processing_jobs_active) → 먼저 만든 작업 반환
             await self.session.rollback()
-            existing = await self._active_job(recording.id, AiJobType.TRANSCRIBE)
+            # rollback으로 ORM 객체가 만료되므로 미리 꺼낸 ID를 쓴다 (지연 로드 금지)
+            existing = await self._active_job(recording_id, AiJobType.TRANSCRIBE)
             if existing is None:
                 raise
             return job_read(existing), False
@@ -439,6 +441,7 @@ class AiFeedbackService:
     ) -> tuple[JobRead, bool]:
         if not self.settings.ai_summary_enabled:
             raise AiNotConfiguredError()
+        recording_id = recording.id
         active = await self._active_job(recording.id, AiJobType.SUMMARIZE)
         if active is not None:
             return job_read(active), False
@@ -483,7 +486,8 @@ class AiFeedbackService:
             await self.session.commit()
         except IntegrityError:
             await self.session.rollback()
-            existing = await self._active_job(recording.id, AiJobType.SUMMARIZE)
+            # rollback으로 ORM 객체가 만료되므로 미리 꺼낸 ID를 쓴다 (지연 로드 금지)
+            existing = await self._active_job(recording_id, AiJobType.SUMMARIZE)
             if existing is None:
                 raise
             return job_read(existing), False
