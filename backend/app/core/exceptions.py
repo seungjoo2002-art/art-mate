@@ -82,6 +82,18 @@ class ErrorCode(StrEnum):
     # v0.5.1 작품 완료
     ARTWORK_COMPLETED = "ARTWORK_COMPLETED"
     FINAL_PHOTO_REQUIRED = "FINAL_PHOTO_REQUIRED"
+    # v0.6 AI 첨삭
+    STT_NOT_CONFIGURED = "STT_NOT_CONFIGURED"
+    AI_NOT_CONFIGURED = "AI_NOT_CONFIGURED"
+    AI_CONSENT_REQUIRED = "AI_CONSENT_REQUIRED"
+    RECORDING_TOO_LONG = "RECORDING_TOO_LONG"
+    TRANSCRIPT_NOT_READY = "TRANSCRIPT_NOT_READY"
+    TRANSCRIPTION_ALREADY_DONE = "TRANSCRIPTION_ALREADY_DONE"
+    JOB_NOT_RETRYABLE = "JOB_NOT_RETRYABLE"
+    FEEDBACK_ALREADY_APPROVED = "FEEDBACK_ALREADY_APPROVED"
+    FEEDBACK_INVALID_STATE = "FEEDBACK_INVALID_STATE"
+    FEEDBACK_VERSION_CONFLICT = "FEEDBACK_VERSION_CONFLICT"
+    FEEDBACK_NOT_APPROVED = "FEEDBACK_NOT_APPROVED"
     # v0.5 피드백 녹음
     RECORDING_CONSENT_REQUIRED = "RECORDING_CONSENT_REQUIRED"
     INVALID_AUDIO = "INVALID_AUDIO"
@@ -194,6 +206,16 @@ class StorageNotConfiguredError(ServiceUnavailableError):
 class StorageUnavailableError(ServiceUnavailableError):
     code = ErrorCode.STORAGE_UNAVAILABLE
     message = "File storage is temporarily unavailable"
+
+
+class SttNotConfiguredError(ServiceUnavailableError):
+    code = ErrorCode.STT_NOT_CONFIGURED
+    message = "Speech-to-text processing is not enabled"
+
+
+class AiNotConfiguredError(ServiceUnavailableError):
+    code = ErrorCode.AI_NOT_CONFIGURED
+    message = "AI feedback summary is not enabled"
 
 
 class DatabaseUnavailableError(ServiceUnavailableError):

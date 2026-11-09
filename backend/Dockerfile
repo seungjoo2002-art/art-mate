@@ -17,7 +17,38 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # ---------------------------------------------------------------------------
-# Runtime stage
+# AI Worker (v0.6): STT(faster-whisper) 의존성 포함. `docker build --target worker .`
+# API 이미지(기본 runtime 단계)에는 faster-whisper를 넣지 않는다.
+# ---------------------------------------------------------------------------
+FROM builder AS worker-builder
+RUN uv sync --frozen --no-dev --no-install-project --extra stt
+
+FROM python:3.12-slim AS worker
+
+# 모델 다운로드 위치: Render Disk 등 영구 볼륨을 /models에 연결하면 재시작 때 재다운로드하지 않는다
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    APP_ENV=production \
+    ENV_FILE= \
+    STT_MODEL_DIR=/models \
+    HF_HOME=/models/.hf
+
+RUN groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /models && chown app:app /models
+
+WORKDIR /app
+COPY --from=worker-builder /opt/venv /opt/venv
+COPY --chown=app:app app ./app
+
+USER app
+
+# HTTP 포트 없음 (Render Background Worker). SIGTERM → 현재 작업 마무리 후 종료
+CMD ["python", "-m", "app.worker"]
+
+# ---------------------------------------------------------------------------
+# Runtime stage (API, 기본 빌드 대상 — 마지막 단계여야 한다)
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim AS runtime
 

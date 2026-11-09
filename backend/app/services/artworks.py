@@ -91,6 +91,7 @@ from app.schemas.artworks import (
 )
 from app.schemas.common import PaginationParams
 from app.services.access import AccessService, managed_student_ids
+from app.services.ai_cleanup import purge_for_recordings
 from app.services.images import check_declared_file, inspect_image, storage_extension
 
 logger = logging.getLogger(__name__)
@@ -532,6 +533,15 @@ class ArtworkService:
                 updated_at=func.now(),
             )
         )
+        # v0.6: 작품 녹음의 전사·첨삭 삭제, 진행 중 AI 작업 취소
+        recording_ids = list(
+            (
+                await self.session.execute(
+                    select(FeedbackRecording.id).where(FeedbackRecording.artwork_id == artwork.id)
+                )
+            ).scalars()
+        )
+        await purge_for_recordings(self.session, recording_ids)
         # v0.5: 작품의 피드백 녹음도 같은 트랜잭션에서 삭제 처리 (파일 정리는 RecordingService)
         await self.session.execute(
             update(FeedbackRecording)

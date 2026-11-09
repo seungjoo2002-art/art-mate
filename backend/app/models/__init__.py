@@ -13,6 +13,15 @@ from app.models.academy_class import (
     ClassSchedule,
     ScheduleException,
 )
+from app.models.ai_feedback import (
+    AiProcessingConsent,
+    AiProcessingJob,
+    FeedbackCategory,
+    FeedbackItem,
+    FeedbackReviewHistory,
+    FeedbackSummary,
+    FeedbackTranscript,
+)
 from app.models.artwork import Artwork, ArtworkPhoto
 from app.models.attendance import AttendanceAuditLog, AttendanceRecord
 from app.models.exam import (
@@ -34,6 +43,8 @@ __all__ = [
     "AcademyClass",
     "AcademyJoinRequest",
     "AcademyMembership",
+    "AiProcessingConsent",
+    "AiProcessingJob",
     "Artwork",
     "ArtworkPhoto",
     "AttendanceAuditLog",
@@ -46,7 +57,12 @@ __all__ = [
     "ExamSessionStage",
     "ExamStageTarget",
     "ExamTemplate",
+    "FeedbackCategory",
+    "FeedbackItem",
     "FeedbackRecording",
+    "FeedbackReviewHistory",
+    "FeedbackSummary",
+    "FeedbackTranscript",
     "HelpQueueEvent",
     "HelpRequest",
     "LessonTopic",

@@ -49,10 +49,10 @@ async def _columns(conn: asyncpg.Connection) -> set[tuple[str, str]]:
     return {(r["table_name"], r["column_name"]) for r in rows}
 
 
-async def test_0005_is_head_and_follows_0004(migrated_database: str) -> None:
-    assert "0005 (head)" in _alembic("heads")
+async def test_0005_follows_0004(migrated_database: str) -> None:
     history = _alembic("history")
-    assert "0004 -> 0005 (head)" in history
+    assert "0004 -> 0005" in history
+    assert "0005 -> 0006" in history  # v0.6가 0005 다음에 연결됨
 
 
 async def test_0005_upgrade_with_existing_data_and_roundtrip(migrated_database: str) -> None:

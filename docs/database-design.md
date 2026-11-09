@@ -1,6 +1,8 @@
 # ART MATE 데이터베이스 설계
 
-> 상태: **v0.5.1 기획 변경 반영** (리비전 `0005`: §3.1 `profiles.practical_type`, §3.9 작품 분류·완료 상태). 출석(§3.6 `attendance_*`)·개인 할 일(`personal_todos`)·시험 타이머(§3.10)·질문 콜(§3.10a)은 **서비스에서 제외되어 API가 없고 테이블만 보존** 중입니다 (§3.19, [v0.5.1-planning-changes.md](v0.5.1-planning-changes.md)).
+> 상태: **v0.6 AI 첨삭 반영** (리비전 `0006`: §3.20 AI 전송 동의·작업 큐·전사·첨삭·항목·카테고리·검토 이력).
+>
+> 이전: **v0.5.1 기획 변경 반영** (리비전 `0005`: §3.1 `profiles.practical_type`, §3.9 작품 분류·완료 상태). 출석(§3.6 `attendance_*`)·개인 할 일(`personal_todos`)·시험 타이머(§3.10)·질문 콜(§3.10a)은 **서비스에서 제외되어 API가 없고 테이블만 보존** 중입니다 (§3.19, [v0.5.1-planning-changes.md](v0.5.1-planning-changes.md)).
 >
 > 이전 상태: **v0.5 구현 반영** (§3.10a 질문 콜, §3.10b 피드백 녹음·동의, 리비전 `0004`). v0.4: §3.9 작품·사진, §3.10 시험 타이머 (`0003`). §3.1~3.3a(`profiles`, `academies`, `academy_memberships`, `academy_join_requests`)는 리비전 `0001`, §3.6(반·일정·출석·주제·과제·개인 할 일 10개 테이블)은 리비전 `0002`로 구현했습니다. 나머지 엔티티는 설계안이며, 구현할 때 이 문서를 함께 수정합니다.
 
@@ -499,6 +501,25 @@ Storage 객체 메타데이터를 한 곳에서 관리 → 권한 확인·보존
 - 주의: 제외 테이블의 NO ACTION FK(`*_by → academy_memberships`, `help_requests.artwork_id → artworks`)는 보존 기간 동안 해당 멤버십·작품 행의 **물리 삭제**를 막을 수 있습니다. 현재 API는 소프트 삭제만 하므로 영향이 없습니다.
 - 2026-11-09 개발 DB 읽기 전용 점검: 10개 테이블 모두 0행.
 
+### 3.20 v0.6 AI 첨삭 기록 ✅ v0.6 (리비전 `0006`)
+
+> 이전 설계안 §3.11 `feedbacks`, §3.16 `ai_analyses`를 아래 7개 테이블로 구현했습니다 (AI 원본과 확정본 분리 원칙은 그대로). 운영 설명: [ai-feedback-v0.6.md](ai-feedback-v0.6.md)
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `ai_processing_consents` | user_id → profiles CASCADE, provider(`GOOGLE_GEMINI`), policy_version, granted_by(SELF/GUARDIAN), granted_at, revoked_at. **부분 유니크** (user_id, provider) WHERE revoked_at IS NULL. 녹음 동의와 별개, 이력 보존 |
+| `ai_processing_jobs` | job_type(TRANSCRIBE/SUMMARIZE), status(QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED), recording_id·artwork_id·owner_id CASCADE, requested_by SET NULL, attempts/max_attempts(CHECK), run_after, locked_by, lease_expires_at(CHECK: RUNNING이면 필수), last_error_code/message, source_url(음성 Signed URL, 내부 전용·완료 시 삭제), params(jsonb), api_call_count·input_tokens·output_tokens. **부분 유니크** (recording_id, job_type) WHERE status IN (QUEUED, RUNNING) → 중복 작업 방지. 큐 인덱스 `run_after WHERE QUEUED`, lease 인덱스 `lease_expires_at WHERE RUNNING` |
+| `feedback_transcripts` | recording·artwork·owner CASCADE, job_id SET NULL, language, duration_ms, text, segments(jsonb `[{index,start_ms,end_ms,text}]`), segment_count, engine, model_name, processing_ms. 불변, 재전사 시 새 행 |
+| `feedback_summaries` | recording·artwork·owner·transcript CASCADE, job_id SET NULL, status(DRAFT/IN_REVIEW/APPROVED/REJECTED/SUPERSEDED), review_mode(INSTRUCTOR/SELF), version(낙관적 잠금), summary(현재 값), **ai_output(jsonb, AI 원본·불변)**, model_name, prompt_version, input/output_tokens, dropped_item_count, approved_by(profiles SET NULL), approved_at(CHECK: APPROVED ⇔ NOT NULL), approver_membership_id(SET NULL), rejected_reason. **부분 유니크** recording_id WHERE status IN (DRAFT, IN_REVIEW, APPROVED) |
+| `feedback_items` | summary CASCADE, kind(STRENGTH/WEAKNESS/FIX/NEXT_TIP), position, content(CHECK 공백 불가), category(약점 카테고리, 선택), evidence_segment_ids(int[] — transcript segments.index), origin(AI/EDITED/ADDED). 인덱스 `category WHERE NOT NULL` |
+| `feedback_categories` | summary CASCADE, category, origin. **유니크** (summary_id, category). v0.7 반복 약점 집계 단위 |
+| `feedback_review_history` | summary CASCADE, actor_id(SET NULL, NULL=시스템), actor_mode, action(CREATED/EDITED/APPROVED/REJECTED/REOPENED/SUPERSEDED), from/to_status, version, changes(jsonb before/after), note. append-only |
+
+- 약점 카테고리 코드(값 변경 금지, 추가만): `COMPOSITION` 구도 · `FORM` 형태 · `PROPORTION` 비례 · `PERSPECTIVE` 투시 · `VALUE` 명암 · `COLOR` 색채 · `TEXTURE` 질감 · `RENDERING` 묘사 · `FINISH` 완성도 · `OTHER` 기타.
+- 기존 `feedback_recordings.transcription_status`(0004에서 준비)를 Worker가 갱신: NOT_REQUESTED → PENDING → PROCESSING → COMPLETED/FAILED.
+- 녹음은 소프트 삭제이므로 서비스가 파생 데이터를 직접 삭제·작업 취소한다(`app/services/ai_cleanup.py`). 물리 삭제 시에는 FK CASCADE.
+- 모든 테이블 RLS 활성화(정책 없음). 학원 격리는 작품의 `(academy_id, student_membership_id)`와 `managed_student_ids`로 서비스에서 판단(같은 정보를 중복 저장하지 않음).
+
 ## 4. 학원별 데이터 격리
 
 ### 4.1 원칙
@@ -589,5 +610,5 @@ Supabase는 `public` 스키마를 Data API(PostgREST)로 노출하며 anon key�
 2. `uv run alembic revision --autogenerate -m "..."` → **생성된 파일 직접 검토** (RLS 활성화, cross-schema FK, 부분 인덱스 등은 수동 추가)
 3. 개발 DB에서 `upgrade head` → `downgrade -1` → `upgrade head` 로 왕복 확인
 4. PR 리뷰 후 merge. 운영 적용은 사람이 명시적으로 (`ALLOW_PRODUCTION_MIGRATIONS=true`)
-5. 리비전 순서 (2026-11-09 기준 head = `0005`): `0001` v0.2 → `0002` v0.3 → `0003` v0.4 → `0004` v0.5 → `0005` v0.5.1. **v0.6 AI 피드백 리비전은 `down_revision = "0005"`, rev-id `0006`**으로 만듭니다. 제외 테이블 물리 삭제 리비전은 승인 후 그 시점의 head 다음 번호로 별도로 만듭니다.
+5. 리비전 순서 (2026-11-09 기준 head = `0006`): `0001` v0.2 → `0002` v0.3 → `0003` v0.4 → `0004` v0.5 → `0005` v0.5.1 → `0006` v0.6. **v0.7 리비전은 `down_revision = "0006"`, rev-id `0007`**으로 만듭니다. 제외 테이블 물리 삭제 리비전은 승인 후 그 시점의 head 다음 번호로 별도로 만듭니다.
 6. 두 개발자가 동시에 리비전을 만들면 head가 2개가 됩니다 → 나중에 merge하는 쪽이 `down_revision`을 최신 head로 수정(또는 `alembic merge`) (→ development-guide.md)

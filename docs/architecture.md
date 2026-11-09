@@ -1,6 +1,6 @@
 # ART MATE 백엔드 아키텍처
 
-> 대상 버전: v0.5.1 (기획 변경 반영) · 변경 시 이 문서를 함께 갱신합니다.
+> 대상 버전: v0.6 (AI 첨삭 기록·요약·승인) · 변경 시 이 문서를 함께 갱신합니다.
 >
 > **서비스 방향 (2026-11 기획 변경)**: ART MATE는 학원 운영 관리 도구에서 **AI 기반 미술 실기 학습·성장 관리 플랫폼**으로 바뀌었습니다.
 > 핵심 데이터 흐름은 `작품 사진 + 강사 첨삭 음성 → (v0.6) STT·AI 요약 → 작품별 학습 이력 → (v0.7~) 성장 리포트·맞춤 과제·참고작 추천`입니다.
@@ -206,7 +206,7 @@ async def list_members(academy_id: UUID, _: AcademyStaff, session: DbSession, ..
 | 버전 | 범위 | 상태 |
 | --- | --- | --- |
 | v0.5.1 | 기획 변경 반영, 프론트 API 보완 (실기 유형, 작품 분류·완료, recording_count) | 이 버전 |
-| v0.6 | STT · AI 피드백 요약·분류 · 강사 확인 | 예정 |
+| v0.6 | STT(faster-whisper) · Gemini 요약·분류 · 강사(개인 작품은 본인) 검토·승인 | ✅ [ai-feedback-v0.6.md](ai-feedback-v0.6.md) |
 | v0.7 | 개인 성장 리포트 · 반복 약점 분석 · 맞춤 과제 추천 | 예정 |
 | v0.8 | AI 기반 참고작 추천(**F-15, 신규 정의·미구현**) · 커뮤니티 연동 검토 | 예정 |
 | 이후 | AI 직접 작품 분석 · 실기 튜터 (강사 기록 없이 사진만으로 피드백) | 검토 |
@@ -214,7 +214,9 @@ async def list_members(academy_id: UUID, _: AcademyStaff, session: DbSession, ..
 
 AI 단계가 사용할 메타데이터(실기 유형, 작업 목적, 완료 상태·시각, 단계 사진, 녹음)는 v0.5.1에서 작품에 모두 붙어 있습니다. F-15 설계 메모는 [v0.5.1-planning-changes.md §8](v0.5.1-planning-changes.md#8-f-15-참고작-추천-설계-메모-미구현)에 있습니다.
 
-### 6.2 처리 흐름 (v0.6 예정)
+### 6.2 처리 흐름 (v0.6 구현)
+
+> v0.6 구현: API는 `ai_processing_jobs` 큐에 등록만 하고 별도 Worker(`python -m app.worker`)가 STT·Gemini를 처리합니다. 아래 초기 설계의 `ai_analyses`/`feedbacks`는 `feedback_summaries`(AI 원본 `ai_output` + 확정 값)·`feedback_items`·`feedback_categories`·`feedback_review_history`로 구현했습니다. 상세: [ai-feedback-v0.6.md](ai-feedback-v0.6.md)
 
 ```text
 강사 음성 녹음 ──▶ Storage(audio) ──▶ [작업] STT ──▶ transcript
