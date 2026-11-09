@@ -21,6 +21,7 @@ from app.api.deps import (
     AudioStorage,
     DbSession,
     OptionalStorage,
+    SharedStorage,
     require_user_types,
 )
 from app.api.responses import AUTH_ERRORS, error_responses
@@ -45,6 +46,7 @@ from app.schemas.common import Page, PaginationQuery
 from app.schemas.students import student_ref
 from app.services.artworks import ArtworkFilters, ArtworkService
 from app.services.recordings import RecordingService
+from app.services.sharing import SharingService
 
 router = APIRouter(prefix="/artworks", tags=["artworks"])
 staff_router = APIRouter(prefix="/academies/{academy_id}/artworks", tags=["artworks"])
@@ -177,10 +179,15 @@ async def delete_artwork(
     settings: AppSettings,
     storage: OptionalStorage,
     audio_storage: AudioStorage,
+    shared_storage: SharedStorage,
 ) -> None:
     await _service(session, settings, storage).delete(owner, artwork_id, user.access_token)
     # 작품에 연결된 녹음 파일 정리 (실패하면 다음 요청에서 재시도)
     await RecordingService(session, settings, audio_storage).cleanup_storage(
+        owner, user.access_token
+    )
+    # v0.8: 공유용 파생 이미지 정리
+    await SharingService(session, settings, shared_storage=shared_storage).cleanup_storage(
         owner, user.access_token
     )
 

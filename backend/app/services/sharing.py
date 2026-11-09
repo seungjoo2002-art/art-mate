@@ -339,7 +339,8 @@ class SharingService:
             owner_id=owner.id,
             source_photo_id=photo.id,
             status=SharedImageStatus.PENDING,
-            storage_path=f"{owner.id}/{artwork.id}/{image_id}.jpg",
+            # 경로에 사용자·작품 ID를 넣지 않는다 (익명 공개 시 URL로 작성자를 알 수 없도록)
+            storage_path=f"{uuid.uuid4().hex}/{image_id.hex}.jpg",
         )
         self.session.add(image)
         try:

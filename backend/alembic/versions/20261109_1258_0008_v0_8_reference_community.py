@@ -61,9 +61,7 @@ AS $$
         JOIN public.artworks a ON a.id = i.artwork_id
         WHERE i.storage_path = p_object_name
           AND (
-            (p_mode = 'write'
-              AND i.owner_id = p_user_id
-              AND split_part(p_object_name, '/', 1) = p_user_id::text)
+            (p_mode = 'write' AND i.owner_id = p_user_id)
             OR
             (p_mode = 'read' AND i.status = 'ACTIVE' AND a.deleted_at IS NULL AND (
               i.owner_id = p_user_id

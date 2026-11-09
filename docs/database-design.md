@@ -1,6 +1,8 @@
 # ART MATE 데이터베이스 설계
 
-> 상태: **v0.7 성장 코치 반영** (리비전 `0007`: §3.21 성장 리포트·맞춤 연습 과제·추천 이력, AI 동의 목적 분리).
+> 상태: **v0.8 참고작·커뮤니티 반영** (리비전 `0008`: §3.22 공유 동의·파생 이미지·우수 사례·참고작 추천·커뮤니티).
+>
+> 이전: **v0.7 성장 코치 반영** (리비전 `0007`: §3.21 성장 리포트·맞춤 연습 과제·추천 이력, AI 동의 목적 분리).
 >
 > 이전: **v0.6 AI 첨삭 반영** (리비전 `0006`: §3.20 AI 전송 동의·작업 큐·전사·첨삭·항목·카테고리·검토 이력).
 >
@@ -537,6 +539,25 @@ Storage 객체 메타데이터를 한 곳에서 관리 → 권한 확인·보존
 - `ai_processing_jobs`: job_type에 `GROWTH_REPORT`·`PRACTICE_RECOMMEND` 추가, recording_id·artwork_id NULL 허용(녹음 작업은 CHECK `recording_job_has_recording`으로 여전히 필수), `report_id`(→ growth_reports CASCADE), `dedupe_key`(부분 유니크 (job_type, dedupe_key) WHERE 진행 중).
 - 학원 추천의 배포는 새 과제 테이블 없이 v0.3 `tasks`/`task_assignments`를 사용한다.
 
+### 3.22 v0.8 작품 공유·참고작·커뮤니티 ✅ v0.8 (리비전 `0008`)
+
+> 설명: [reference-community-v0.8.md](reference-community-v0.8.md)
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `artwork_sharing_consents` | artwork·owner CASCADE, purpose(COMMUNITY/REFERENCE), scope(ACADEMY/PLATFORM)·academy_id(CHECK), author_display(NAME/ANONYMOUS), policy_version, granted_by, granted_at, revoked_at·revoked_reason. **부분 유니크** (artwork_id, purpose) WHERE revoked_at IS NULL |
+| `shared_artwork_images` | 공유용 파생 이미지 (버킷 shared-artworks, 경로 무작위). status PENDING/ACTIVE/DELETED, width·height·size, storage_cleanup_pending. **부분 유니크** artwork_id WHERE PENDING/ACTIVE |
+| `reference_artwork_reviews` | 강사 우수 사례 확인: artwork·owner·academy, category, note(참고 포인트), reviewer, status ACTIVE/REVOKED. **부분 유니크** (artwork_id, category) WHERE ACTIVE |
+| `reference_recommendations` | 학생별 추천 스냅샷: set_id, status ACTIVE/SUPERSEDED, weakness_category·rank, reference_artwork_id, review_id(CASCADE), score, reasons·inputs(jsonb), data_fingerprint, saved_at. 유니크 (owner_id, set_id, reference_artwork_id) |
+| `community_posts` | artwork·author·image, title·body, practical_type·work_category, status ACTIVE/HIDDEN/DELETED, like_count·comment_count(CHECK ≥ 0), hidden_reason. **부분 유니크** artwork_id WHERE status <> DELETED |
+| `community_comments` | post·author, body(1~1000, CHECK), status ACTIVE/HIDDEN/DELETED |
+| `community_likes`, `community_bookmarks` | 유니크 (post_id, user_id) |
+| `community_reports` | target_type POST/COMMENT(CHECK), post·comment·reporter, reason, detail, status OPEN/RESOLVED/DISMISSED, handled_by·at. **부분 유니크** (reporter_id, post_id)·(reporter_id, comment_id) |
+| `community_moderation_logs` | actor(NULL=시스템), action, post·comment·report, note. append-only |
+
+- Storage 권한 함수 `artmate_private.can_access_shared_image(uid, path, mode)` (SECURITY DEFINER, PUBLIC 실행 회수). 버킷·정책은 storage-setup.sql.
+- 공개 판단은 항상 현재 유효한 동의를 조인한다. 기존 테이블 변경 없음.
+
 ## 4. 학원별 데이터 격리
 
 ### 4.1 원칙
@@ -627,5 +648,5 @@ Supabase는 `public` 스키마를 Data API(PostgREST)로 노출하며 anon key�
 2. `uv run alembic revision --autogenerate -m "..."` → **생성된 파일 직접 검토** (RLS 활성화, cross-schema FK, 부분 인덱스 등은 수동 추가)
 3. 개발 DB에서 `upgrade head` → `downgrade -1` → `upgrade head` 로 왕복 확인
 4. PR 리뷰 후 merge. 운영 적용은 사람이 명시적으로 (`ALLOW_PRODUCTION_MIGRATIONS=true`)
-5. 리비전 순서 (2026-11-09 기준 head = `0007`): `0001` v0.2 → `0002` v0.3 → `0003` v0.4 → `0004` v0.5 → `0005` v0.5.1 → `0006` v0.6 → `0007` v0.7. **v0.8 리비전은 `down_revision = "0007"`, rev-id `0008`**으로 만듭니다. 제외 테이블 물리 삭제 리비전은 승인 후 그 시점의 head 다음 번호로 별도로 만듭니다.
+5. 리비전 순서 (2026-11-09 기준 head = `0008`): `0001` v0.2 → `0002` v0.3 → `0003` v0.4 → `0004` v0.5 → `0005` v0.5.1 → `0006` v0.6 → `0007` v0.7 → `0008` v0.8. 다음 리비전은 `down_revision = "0008"`, rev-id `0009`. 제외 테이블 물리 삭제 리비전은 승인 후 그 시점의 head 다음 번호로 별도로 만듭니다.
 6. 두 개발자가 동시에 리비전을 만들면 head가 2개가 됩니다 → 나중에 merge하는 쪽이 `down_revision`을 최신 head로 수정(또는 `alembic merge`) (→ development-guide.md)

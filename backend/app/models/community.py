@@ -132,7 +132,7 @@ class SharedArtworkImage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[SharedImageStatus] = mapped_column(
         enum_column(SharedImageStatus, "status"), default=SharedImageStatus.PENDING
     )
-    # "{owner_id}/{artwork_id}/{image_id}.jpg" (서버 생성)
+    # "{random}/{image_id}.jpg" (서버 생성, 사용자·작품 ID 미포함 → URL로 작성자 식별 불가)
     storage_path: Mapped[str] = mapped_column(String(512), unique=True)
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)

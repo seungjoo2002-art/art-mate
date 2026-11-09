@@ -76,9 +76,9 @@ REQUIRED_POLICIES = tuple(
 )
 # 이 브랜치가 아는 최신 리비전. 0005(v0.5.1)는 승인 전까지 개발 DB에 적용하지 않는다.
 FRONTEND_TARGET_REVISION = "0004"
-LATEST_REVISION = "0007"
+LATEST_REVISION = "0008"
 # 승인 후 적용될 리비전들 (0005 v0.5.1, 0006 v0.6, 0007 v0.7)
-KNOWN_REVISIONS = ("0004", "0005", "0006", "0007")
+KNOWN_REVISIONS = ("0004", "0005", "0006", "0007", "0008")
 # 0006(v0.6 AI 첨삭)이 적용됐을 때만 필수
 V06_TABLES = (
     "ai_processing_consents",
