@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
     ai_feedback,
     artworks,
     classes,
+    growth,
     health,
     lesson_topics,
     meta,
@@ -37,6 +38,8 @@ api_v1_router.include_router(ai_feedback.staff_feedback)
 api_v1_router.include_router(artworks.router)
 api_v1_router.include_router(artworks.staff_router)
 api_v1_router.include_router(classes.router)
+api_v1_router.include_router(growth.me)
+api_v1_router.include_router(growth.staff)
 api_v1_router.include_router(health.router)
 api_v1_router.include_router(lesson_topics.router)
 api_v1_router.include_router(meta.router)

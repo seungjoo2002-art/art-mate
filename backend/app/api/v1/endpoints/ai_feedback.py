@@ -28,7 +28,7 @@ from app.api.deps import (
 )
 from app.api.responses import AUTH_ERRORS, error_responses
 from app.core.security import CurrentUser
-from app.models.enums import FeedbackStatus, UserType
+from app.models.enums import AiConsentPurpose, FeedbackStatus, UserType
 from app.models.profile import Profile
 from app.schemas.ai_feedback import (
     AiConsentCreate,
@@ -84,11 +84,20 @@ def _queued(job_and_created: tuple[JobRead, bool], response: Response) -> JobRea
 # ============================================================================ consent
 
 
-@consents.get("/me", summary="내 AI 전송 동의 상태 (학생)", responses=AUTH_ERRORS)
+Purpose = Annotated[
+    AiConsentPurpose,
+    Query(description="FEEDBACK_SUMMARY(기본, 첨삭 요약) / GROWTH_COACHING(성장 분석·맞춤 과제)"),
+]
+
+
+@consents.get("/me", summary="내 AI 전송 동의 상태 (학생, 목적별)", responses=AUTH_ERRORS)
 async def my_ai_consent(
-    owner: Student, session: DbSession, settings: AppSettings
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+    purpose: Purpose = AiConsentPurpose.FEEDBACK_SUMMARY,
 ) -> AiConsentStatus:
-    return await _svc(session, settings).ai_consent_status(owner)
+    return await _svc(session, settings).ai_consent_status(owner, purpose)
 
 
 @consents.post(
@@ -115,8 +124,13 @@ async def grant_ai_consent(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=READ,
 )
-async def revoke_ai_consent(owner: Student, session: DbSession, settings: AppSettings) -> None:
-    await _svc(session, settings).revoke_ai_consent(owner)
+async def revoke_ai_consent(
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+    purpose: Purpose = AiConsentPurpose.FEEDBACK_SUMMARY,
+) -> None:
+    await _svc(session, settings).revoke_ai_consent(owner, purpose)
 
 
 # ============================================================================ owner processing

@@ -188,6 +188,6 @@ async def test_v06_roundtrip_keeps_existing_data(seeded) -> None:  # type: ignor
         assert kept == 1
         _alembic("upgrade", "head")
         assert "No new upgrade operations detected" in _alembic("check")
-        assert "0005 -> 0006 (head)" in _alembic("history")
+        assert "0005 -> 0006" in _alembic("history")
     finally:
         _alembic("upgrade", "head")

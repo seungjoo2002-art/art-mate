@@ -57,6 +57,7 @@ from app.models.artwork import Artwork
 from app.models.enums import (
     ACTIVE_JOB_STATUSES,
     CURRENT_FEEDBACK_STATUSES,
+    AiConsentPurpose,
     AiJobStatus,
     AiJobType,
     AiProvider,
@@ -98,7 +99,12 @@ from app.schemas.ai_feedback import (
 from app.schemas.common import PaginationParams
 from app.schemas.students import student_ref
 from app.services.access import managed_student_ids
-from app.services.ai_cleanup import cancel_jobs_for_owner
+from app.services.ai_cleanup import (
+    PURPOSE_JOB_TYPES,
+    cancel_jobs_for_owner,
+    consent_version,
+    skip_pending_narratives,
+)
 from app.services.artworks import ArtworkService
 
 KIND_ORDER = (
@@ -171,29 +177,41 @@ class AiFeedbackService:
 
     # ================================================================ AI 전송 동의
 
-    async def _active_ai_consent(self, user_id: uuid.UUID) -> AiProcessingConsent | None:
+    def required_version(self, purpose: AiConsentPurpose) -> str:
+        return consent_version(self.settings, purpose)
+
+    async def _active_ai_consent(
+        self, user_id: uuid.UUID, purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY
+    ) -> AiProcessingConsent | None:
         stmt = select(AiProcessingConsent).where(
             AiProcessingConsent.user_id == user_id,
             AiProcessingConsent.provider == AiProvider.GOOGLE_GEMINI,
+            AiProcessingConsent.purpose == purpose,
             AiProcessingConsent.revoked_at.is_(None),
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
-    async def has_valid_ai_consent(self, user_id: uuid.UUID) -> bool:
-        consent = await self._active_ai_consent(user_id)
-        return consent is not None and consent.policy_version == self.settings.ai_consent_version
+    async def has_valid_ai_consent(
+        self, user_id: uuid.UUID, purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY
+    ) -> bool:
+        consent = await self._active_ai_consent(user_id, purpose)
+        return consent is not None and consent.policy_version == self.required_version(purpose)
 
-    async def ai_consent_status(self, user: Profile) -> AiConsentStatus:
-        consent = await self._active_ai_consent(user.id)
-        required = self.settings.ai_consent_version
+    async def ai_consent_status(
+        self, user: Profile, purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY
+    ) -> AiConsentStatus:
+        consent = await self._active_ai_consent(user.id, purpose)
+        required = self.required_version(purpose)
         return AiConsentStatus(
             provider=AiProvider.GOOGLE_GEMINI,
+            purpose=purpose,
             required_version=required,
             is_valid=consent is not None and consent.policy_version == required,
             consent=(
                 AiConsentRead(
                     id=consent.id,
                     provider=consent.provider,
+                    purpose=consent.purpose,
                     policy_version=consent.policy_version,
                     granted_by=consent.granted_by,
                     granted_at=consent.granted_at,
@@ -205,18 +223,20 @@ class AiFeedbackService:
         )
 
     async def grant_ai_consent(self, user: Profile, data: AiConsentCreate) -> AiConsentStatus:
-        if data.policy_version != self.settings.ai_consent_version:
+        purpose = data.purpose
+        required = self.required_version(purpose)
+        if data.policy_version != required:
             raise UnprocessableError(
                 "Please agree to the current AI processing consent version",
-                details={"required_version": self.settings.ai_consent_version},
+                details={"required_version": required, "purpose": purpose.value},
             )
-        current = await self._active_ai_consent(user.id)
+        current = await self._active_ai_consent(user.id, purpose)
         if (
             current is not None
             and current.policy_version == data.policy_version
             and current.granted_by == data.granted_by
         ):
-            return await self.ai_consent_status(user)
+            return await self.ai_consent_status(user, purpose)
         now = clock.utc_now()
         if current is not None:
             current.revoked_at = now  # 이전 버전 동의는 철회 처리 (이력 보존)
@@ -226,6 +246,7 @@ class AiFeedbackService:
                 id=uuid.uuid4(),
                 user_id=user.id,
                 provider=AiProvider.GOOGLE_GEMINI,
+                purpose=purpose,
                 policy_version=data.policy_version,
                 granted_by=ConsentGrantor(data.granted_by),
                 granted_at=now,
@@ -235,17 +256,20 @@ class AiFeedbackService:
             await self.session.commit()
         except IntegrityError:
             await self.session.rollback()  # 동시 동의: 먼저 저장된 동의 사용
-        return await self.ai_consent_status(user)
+        return await self.ai_consent_status(user, purpose)
 
-    async def revoke_ai_consent(self, user: Profile) -> None:
-        """철회: 새 요약 요청이 막히고, 대기·실행 중 요약 작업은 취소된다."""
-        consent = await self._active_ai_consent(user.id)
+    async def revoke_ai_consent(
+        self, user: Profile, purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY
+    ) -> None:
+        """철회: 그 목적의 새 AI 요청이 막히고, 대기·실행 중 작업은 취소된다."""
+        consent = await self._active_ai_consent(user.id, purpose)
         if consent is None:
             raise NotFoundError("No active AI processing consent")
         consent.revoked_at = clock.utc_now()
-        await cancel_jobs_for_owner(
-            self.session, user.id, AiJobType.SUMMARIZE, "AI_CONSENT_REVOKED"
-        )
+        for job_type in PURPOSE_JOB_TYPES[purpose]:
+            await cancel_jobs_for_owner(self.session, user.id, job_type, "AI_CONSENT_REVOKED")
+        if purpose == AiConsentPurpose.GROWTH_COACHING:
+            await skip_pending_narratives(self.session, user.id)
         await self.session.commit()
 
     # ================================================================ 대상 조회·권한

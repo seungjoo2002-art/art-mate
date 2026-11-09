@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import timezone as clock
 from app.core.config import Settings
+from app.core.exceptions import ConflictError
 from app.db.session import Database
 from app.integrations.ai.gemini import LlmError, SummaryLlm
 from app.integrations.ai.stt import SpeechToText, SttError
@@ -52,6 +53,7 @@ from app.models.ai_feedback import (
 from app.models.artwork import Artwork
 from app.models.enums import (
     ACTIVE_JOB_STATUSES,
+    AiConsentPurpose,
     AiJobStatus,
     AiJobType,
     AiProvider,
@@ -59,12 +61,18 @@ from app.models.enums import (
     FeedbackItemKind,
     FeedbackItemOrigin,
     FeedbackStatus,
+    GrowthScope,
+    NarrativeStatus,
+    RecommendationSource,
     RecordingStatus,
     ReviewAction,
     ReviewMode,
     TranscriptionStatus,
 )
+from app.models.growth import GrowthReport
 from app.models.recording import FeedbackRecording, RecordingConsent
+from app.schemas.growth import Evidence
+from app.services.ai_cleanup import consent_version
 from app.services.ai_summary import (
     KIND_FIELDS,
     PROMPT_VERSION,
@@ -73,6 +81,20 @@ from app.services.ai_summary import (
     InvalidAiOutput,
     build_prompt,
     parse_output,
+)
+from app.services.growth import GrowthService, Scope
+from app.services.growth_ai import (
+    NARRATIVE_PROMPT_VERSION,
+    NARRATIVE_SCHEMA,
+    NARRATIVE_SYSTEM,
+    RECOMMEND_PROMPT_VERSION,
+    RECOMMEND_SCHEMA,
+    RECOMMEND_SYSTEM,
+    InvalidGrowthOutput,
+    build_narrative_prompt,
+    build_recommend_prompt,
+    parse_narrative,
+    parse_recommendations,
 )
 
 logger = logging.getLogger("app.worker")
@@ -149,6 +171,7 @@ class JobRunner:
                     # 마지막 시도 중 Worker가 죽음 → 더 시도하지 않는다
                     self._finish(job, AiJobStatus.FAILED, now, "WORKER_LOST", "Worker stopped")
                     await self._set_recording_status(session, job, failed=True)
+                    await self._on_terminal(session, job, cancelled=False)
                     await session.commit()
                     logger.warning("job abandoned", extra={"job_id": str(job.id)})
                     continue
@@ -236,6 +259,25 @@ class JobRunner:
             job.source_url = None
             job.source_url_expires_at = None
 
+    async def _on_terminal(
+        self, session: AsyncSession, job: AiProcessingJob, *, cancelled: bool
+    ) -> None:
+        """작업이 실패·취소로 끝났을 때 연결된 성장 리포트의 설명문 상태를 맞춘다."""
+        if job.job_type != AiJobType.GROWTH_REPORT or job.report_id is None:
+            return
+        await session.execute(
+            update(GrowthReport)
+            .where(
+                GrowthReport.id == job.report_id,
+                GrowthReport.narrative_status == NarrativeStatus.PENDING,
+            )
+            .values(
+                narrative_status=NarrativeStatus.SKIPPED if cancelled else NarrativeStatus.FAILED,
+                narrative_error_code=job.last_error_code,
+                updated_at=func.now(),
+            )
+        )
+
     async def _set_recording_status(
         self,
         session: AsyncSession,
@@ -304,6 +346,7 @@ class JobRunner:
             else:
                 self._finish(job, AiJobStatus.FAILED, now, failure.code, str(failure))
                 await self._set_recording_status(session, job, failed=True)
+                await self._on_terminal(session, job, cancelled=False)
             await session.commit()
         logger.warning(
             "job failed",
@@ -320,6 +363,7 @@ class JobRunner:
             ):
                 self._finish(job, AiJobStatus.CANCELLED, clock.utc_now(), code, None)
                 await self._set_recording_status(session, job, failed=True)
+                await self._on_terminal(session, job, cancelled=True)
             await session.commit()
         logger.info("job cancelled", extra={"job_id": str(job_id), "code": code})
 
@@ -328,9 +372,13 @@ class JobRunner:
             job = await session.get(AiProcessingJob, job_id)
             assert job is not None
             job_type = job.job_type
-        handler: Callable[[uuid.UUID], Awaitable[None]] = (
-            self._transcribe if job_type == AiJobType.TRANSCRIBE else self._summarize
-        )
+        handlers: dict[AiJobType, Callable[[uuid.UUID], Awaitable[None]]] = {
+            AiJobType.TRANSCRIBE: self._transcribe,
+            AiJobType.SUMMARIZE: self._summarize,
+            AiJobType.GROWTH_REPORT: self._growth_report,
+            AiJobType.PRACTICE_RECOMMEND: self._practice_recommend,
+        }
+        handler = handlers[job_type]
         try:
             await handler(job_id)
         except JobCancelled as cancelled:
@@ -372,17 +420,23 @@ class JobRunner:
         if found is None:
             raise JobCancelled("RECORDING_CONSENT_REVOKED")
 
-    async def _check_ai_consent(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
+    async def _check_ai_consent(
+        self,
+        session: AsyncSession,
+        owner_id: uuid.UUID,
+        purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY,
+    ) -> None:
         version = (
             await session.execute(
                 select(AiProcessingConsent.policy_version).where(
                     AiProcessingConsent.user_id == owner_id,
                     AiProcessingConsent.provider == AiProvider.GOOGLE_GEMINI,
+                    AiProcessingConsent.purpose == purpose,
                     AiProcessingConsent.revoked_at.is_(None),
                 )
             )
         ).scalar_one_or_none()
-        if version != self.settings.ai_consent_version:
+        if version != consent_version(self.settings, purpose):
             raise JobCancelled("AI_CONSENT_REVOKED")
 
     # ------------------------------------------------------------------ TRANSCRIBE
@@ -682,6 +736,185 @@ class JobRunner:
                     note=f"{response.model_name} / {PROMPT_VERSION}",
                 )
             )
+            self._finish(job, AiJobStatus.SUCCEEDED, clock.utc_now())
+            job.last_error_code = None
+            job.last_error_message = None
+            await session.commit()
+
+    # ------------------------------------------------------------------ v0.7 성장 코치
+
+    async def _call_llm(
+        self, job_id: uuid.UUID, system: str, prompt: str, schema: dict[str, Any]
+    ) -> Any:
+        assert self.llm is not None
+        usage = _Usage()
+        try:
+            response = await self.llm.generate(system=system, prompt=prompt, schema=schema)
+            usage.calls += 1
+            usage.input_tokens += response.input_tokens
+            usage.output_tokens += response.output_tokens
+        except LlmError as exc:
+            if exc.called:
+                usage.calls += 1
+                usage.input_tokens += exc.input_tokens
+                usage.output_tokens += exc.output_tokens
+            await self._record_usage(job_id, usage)
+            raise JobFailure(exc.code, str(exc), retryable=exc.retryable) from None
+        await self._record_usage(job_id, usage)
+        return response
+
+    @staticmethod
+    def _evidence_entries(evidence: list[Evidence]) -> list[dict[str, Any]]:
+        """프롬프트에 넣는 근거: 카테고리·종류·문장만 (작품 제목·이름·ID 미포함)."""
+        return [
+            {
+                "item_id": str(e.item_id),
+                "feedback_id": str(e.feedback_id),
+                "artwork_id": str(e.artwork_id),
+                "category": e.category.value if e.category else None,
+                "kind": e.kind.value,
+                "content": e.content,
+            }
+            for e in evidence
+        ]
+
+    async def _growth_report(self, job_id: uuid.UUID) -> None:
+        async with self._session() as session:
+            job = await session.get(AiProcessingJob, job_id)
+            assert job is not None
+            report = await session.get(GrowthReport, job.report_id) if job.report_id else None
+            if report is None:
+                raise JobCancelled("REPORT_DELETED")
+            await self._check_ai_consent(session, job.owner_id, AiConsentPurpose.GROWTH_COACHING)
+            if self.llm is None:
+                raise JobFailure("AI_NOT_CONFIGURED", "AI is not enabled", retryable=False)
+            scope = Scope(report.owner_id, report.scope, report.academy_id)
+            metrics = report.metrics
+            ids: list[str] = []
+            for w in metrics["weaknesses"][:5]:
+                ids += [e["item_id"] for e in w["evidence"]]
+            for st in metrics["strengths"][:3]:
+                ids += [e["item_id"] for e in st["evidence"]]
+            resolved = await GrowthService(session, self.settings).resolve_evidence(scope, ids)
+            ordered = list(dict.fromkeys(i for i in ids if i in resolved))[:15]
+            evidence = self._evidence_entries([resolved[i] for i in ordered])
+
+        response = await self._call_llm(
+            job_id, NARRATIVE_SYSTEM, build_narrative_prompt(metrics, evidence), NARRATIVE_SCHEMA
+        )
+        try:
+            output = parse_narrative(response.text, len(evidence))
+        except InvalidGrowthOutput:
+            raise JobFailure(
+                "LLM_INVALID_OUTPUT", "AI response did not pass validation", retryable=True
+            ) from None
+
+        async with self._session() as session:
+            job = await self._locked_own_job(session, job_id)
+            await self._check_ai_consent(session, job.owner_id, AiConsentPurpose.GROWTH_COACHING)
+            report = await session.get(GrowthReport, job.report_id, with_for_update=True)
+            if report is None:
+                raise JobCancelled("REPORT_DELETED")
+            report.narrative = {
+                "overview": output.overview,
+                "strengths_comment": output.strengths_comment,
+                "improvement_comment": output.improvement_comment,
+                "next_goals": [
+                    {
+                        "goal": g.goal,
+                        "evidence_item_ids": [evidence[i - 1]["item_id"] for i in g.evidence],
+                    }
+                    for g in output.next_goals
+                ],
+            }
+            report.narrative_status = NarrativeStatus.READY
+            report.narrative_error_code = None
+            report.model_name = response.model_name
+            report.prompt_version = NARRATIVE_PROMPT_VERSION
+            report.input_tokens = response.input_tokens
+            report.output_tokens = response.output_tokens
+            self._finish(job, AiJobStatus.SUCCEEDED, clock.utc_now())
+            job.last_error_code = None
+            job.last_error_message = None
+            await session.commit()
+
+    async def _practice_recommend(self, job_id: uuid.UUID) -> None:
+        async with self._session() as session:
+            job = await session.get(AiProcessingJob, job_id)
+            assert job is not None
+            await self._check_ai_consent(session, job.owner_id, AiConsentPurpose.GROWTH_COACHING)
+            if self.llm is None:
+                raise JobFailure("AI_NOT_CONFIGURED", "AI is not enabled", retryable=False)
+            params = job.params
+            scope = Scope(
+                job.owner_id,
+                GrowthScope(params["scope"]),
+                uuid.UUID(params["academy_id"]) if params.get("academy_id") else None,
+                uuid.UUID(params["student_membership_id"])
+                if params.get("student_membership_id")
+                else None,
+            )
+            service = GrowthService(session, self.settings)
+            _, metrics, _ = await service.recommendation_basis(scope)
+            try:
+                categories = service._check_recommendable(metrics)
+            except ConflictError:
+                raise JobFailure(
+                    "INSUFFICIENT_DATA", "Not enough approved feedback", retryable=False
+                ) from None
+            by_category = {w["category"]: w for w in metrics["weaknesses"]}
+            ids = [e["item_id"] for c in categories for e in by_category[c]["evidence"]]
+            resolved = await service.resolve_evidence(scope, ids)
+            evidence = self._evidence_entries([resolved[i] for i in ids if i in resolved])
+            practical = service._main_practical_type(metrics)
+
+        response = await self._call_llm(
+            job_id,
+            RECOMMEND_SYSTEM,
+            build_recommend_prompt(metrics, evidence, categories, practical),
+            RECOMMEND_SCHEMA,
+        )
+        try:
+            recommendations, dropped = parse_recommendations(response.text, evidence, categories)
+        except InvalidGrowthOutput:
+            raise JobFailure(
+                "LLM_INVALID_OUTPUT", "AI response did not pass validation", retryable=True
+            ) from None
+
+        async with self._session() as session:
+            job = await self._locked_own_job(session, job_id)
+            await self._check_ai_consent(session, job.owner_id, AiConsentPurpose.GROWTH_COACHING)
+            service = GrowthService(session, self.settings)
+            batch_key = params["batch_key"]
+            if not await service._batch(scope, batch_key):
+                await service.supersede_open(scope, batch_key, job.requested_by)
+                for rec in recommendations:
+                    stat = by_category[rec.category.value]
+                    refs = [evidence[i - 1] for i in rec.evidence]
+                    service._new_recommendation(
+                        scope,
+                        RecommendationSource.AI,
+                        batch_key,
+                        rec.category,
+                        practical,
+                        title=rec.title,
+                        description=rec.description,
+                        steps=list(rec.steps),
+                        minutes=rec.estimated_minutes,
+                        difficulty=rec.difficulty,
+                        reason=rec.reason,
+                        origin={
+                            **rec.model_dump(mode="json"),
+                            "evidence_item_ids": [r["item_id"] for r in refs],
+                            "dropped_recommendation_count": dropped,
+                        },
+                        evidence=refs,
+                        metrics=metrics,
+                        stat=stat,
+                        actor_id=job.requested_by,
+                        model_name=response.model_name,
+                        prompt_version=RECOMMEND_PROMPT_VERSION,
+                    )
             self._finish(job, AiJobStatus.SUCCEEDED, clock.utc_now())
             job.last_error_code = None
             job.last_error_message = None

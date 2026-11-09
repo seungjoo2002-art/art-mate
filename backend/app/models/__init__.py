@@ -31,6 +31,7 @@ from app.models.exam import (
     ExamStageTarget,
     ExamTemplate,
 )
+from app.models.growth import GrowthReport, PracticeRecommendation, PracticeRecommendationHistory
 from app.models.help import HelpQueueEvent, HelpRequest
 from app.models.membership import AcademyJoinRequest, AcademyMembership
 from app.models.personal_todo import PersonalTodo
@@ -63,10 +64,13 @@ __all__ = [
     "FeedbackReviewHistory",
     "FeedbackSummary",
     "FeedbackTranscript",
+    "GrowthReport",
     "HelpQueueEvent",
     "HelpRequest",
     "LessonTopic",
     "PersonalTodo",
+    "PracticeRecommendation",
+    "PracticeRecommendationHistory",
     "Profile",
     "RecordingConsent",
     "ScheduleException",

@@ -35,7 +35,8 @@ APP_TABLES = (
     "exam_sessions, exam_session_stages, exam_participants, "
     "help_requests, help_queue_events, feedback_recordings, recording_consents, "
     "ai_processing_consents, ai_processing_jobs, feedback_transcripts, feedback_summaries, "
-    "feedback_items, feedback_categories, feedback_review_history"
+    "feedback_items, feedback_categories, feedback_review_history, "
+    "growth_reports, practice_recommendations, practice_recommendation_history"
 )
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -102,6 +103,7 @@ async def app(migrated_database: str, tokens: TokenFactory):  # type: ignore[no-
             # v0.6: 큐 등록 API를 켠다 (실제 처리는 테스트가 가짜 STT·LLM으로 Worker를 직접 실행)
             stt_enabled=True,
             ai_summary_enabled=True,
+            growth_ai_enabled=True,
         )
     )
     application.state.token_verifier = make_verifier(tokens)
