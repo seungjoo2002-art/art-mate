@@ -12,6 +12,12 @@
   철회·녹음 삭제로 취소됐으면 결과를 버린다.
 
 개인정보: 로그에는 작업 ID·종류·오류 코드·소요 시간만 남긴다 (음성·전사·요약 내용·URL 금지).
+
+실행 방식 (v0.9.1)
+- 상시 실행: `run_forever` (기존, 서버에 Worker를 띄울 때).
+- 일괄 실행: `run_batch` — GitHub Actions처럼 주기적으로 잠깐 켜지는 환경용. 처리할 작업 수·시간을
+  제한하고 큐가 비면 바로 끝난다. `job_types`로 이 Worker가 처리할 수 있는 종류만 가져간다
+  (예: Gemini 키가 없으면 요약 작업은 큐에 그대로 두어 실패로 만들지 않는다).
 """
 
 from __future__ import annotations
@@ -140,6 +146,7 @@ class JobRunner:
         llm: SummaryLlm | None,
         fetcher: AudioFetcher,
         worker_id: str | None = None,
+        job_types: frozenset[AiJobType] | None = None,
     ) -> None:
         self.database = database
         self.settings = settings
@@ -147,6 +154,8 @@ class JobRunner:
         self.llm = llm
         self.fetcher = fetcher
         self.worker_id = worker_id or f"worker-{uuid.uuid4().hex[:12]}"
+        # None = 모든 종류 (기존 동작). 지정하면 그 종류만 가져간다
+        self.job_types = job_types
 
     def _session(self) -> AsyncSession:
         return self.database.session_factory()
@@ -156,17 +165,23 @@ class JobRunner:
     async def claim(self) -> uuid.UUID | None:
         """실행할 작업 1건을 잡는다. 대기 중(QUEUED) 또는 lease가 만료된 RUNNING(죽은 Worker)."""
         lease = timedelta(seconds=self.settings.job_lease_seconds)
+        type_filter = " AND job_type = ANY(:types)" if self.job_types is not None else ""
+        params = {"types": sorted(t.value for t in self.job_types)} if self.job_types else {}
+        if self.job_types is not None and not self.job_types:
+            return None
         async with self._session() as session:
             while True:
                 row = (
                     await session.execute(
                         text(
                             "SELECT id FROM ai_processing_jobs"
-                            " WHERE (status = 'QUEUED' AND run_after <= now())"
-                            "    OR (status = 'RUNNING' AND lease_expires_at < now())"
+                            " WHERE ((status = 'QUEUED' AND run_after <= now())"
+                            "    OR (status = 'RUNNING' AND lease_expires_at < now()))"
+                            f"{type_filter}"
                             " ORDER BY run_after, created_at"
                             " LIMIT 1 FOR UPDATE SKIP LOCKED"
-                        )
+                        ),
+                        params,
                     )
                 ).first()
                 if row is None:
@@ -232,6 +247,46 @@ class JobRunner:
                 },
             )
         return True
+
+    async def run_batch(
+        self, *, max_jobs: int, max_seconds: float, maintenance: bool = True
+    ) -> dict[str, int]:
+        """일괄 실행: 큐가 비거나 max_jobs·max_seconds에 닿으면 끝난다 (새 작업을 더 잡지 않음).
+
+        진행 중인 작업은 끝까지 처리한다. 실행 환경이 강제로 끝나도 lease가 만료되면 다음 실행이
+        이어받는다 (시도 횟수 1 소모).
+        """
+        started = time.monotonic()
+        stats = {"processed": 0, "expired_audio": 0, "notifications": 0}
+        if maintenance:
+            try:
+                stats.update(await self.maintenance())
+            except Exception:  # 정기 작업 실패가 큐 처리를 막지 않게
+                logger.exception("maintenance error")
+        while stats["processed"] < max_jobs and time.monotonic() - started < max_seconds:
+            if not await self.run_once():
+                break
+            stats["processed"] += 1
+        logger.info(
+            "batch done",
+            extra={**stats, "elapsed_ms": int((time.monotonic() - started) * 1000)},
+        )
+        return stats
+
+    async def pending_counts(self) -> dict[str, int]:
+        """지금 가져갈 수 있는 작업 수 (종류별). 내용은 보지 않는다."""
+        async with self._session() as session:
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT job_type, count(*) FROM ai_processing_jobs"
+                        " WHERE (status = 'QUEUED' AND run_after <= now())"
+                        "    OR (status = 'RUNNING' AND lease_expires_at < now())"
+                        " GROUP BY job_type"
+                    )
+                )
+            ).all()
+        return {job_type: count for job_type, count in rows}
 
     async def maintenance(self) -> dict[str, int]:
         """정기 작업 (v0.9): 음성 보관 기간 표시, 미완료 과제·학습 목표 알림. DB만 사용."""

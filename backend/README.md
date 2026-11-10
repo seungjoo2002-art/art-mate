@@ -197,7 +197,7 @@ v0.8 참고작·커뮤니티 API (상세: docs/frontend-integration-v0.8.md)
 | `/api/v1/community/posts[...]`, `/bookmarks`, `/comments/{id}` | 피드·게시물·좋아요·저장·댓글·신고 | 로그인 (게시는 STUDENT) |
 | `/api/v1/admin/community/...` | 신고 처리·숨김·이력 | 시스템 ADMIN |
 
-AI Worker: `uv sync --extra stt && uv run python -m app.worker` (또는 `docker build --target worker`). API 서버는 작업을 큐에 넣기만 합니다.
+AI Worker: `uv sync --extra stt && uv run python -m app.worker` (또는 `docker build --target worker`). 무료 운영은 GitHub Actions 일괄 실행 `python -m app.worker --once` ([docs/stt-worker-github-actions.md](../docs/stt-worker-github-actions.md)). API 서버는 작업을 큐에 넣기만 합니다.
 
 v0.5.1에서 제거된 API (404): `/attendance/**`, `/personal-todos/**`, `/users/me/today`, `/academies/{id}/dashboard`, `/exam-templates/**`, `/exam-sessions/**`, `/help-requests/**`, `/help-queue/**`.
 
