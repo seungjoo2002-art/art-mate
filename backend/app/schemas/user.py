@@ -12,10 +12,13 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.enums import PracticalType, UserType
+from app.models.enums import PracticalType, StudentGrade, UserType
 from app.schemas.common import APIModel
 
 DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
+LearningGoal = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
+]
 
 # Storage 객체 경로: avatars/<user_id>/<파일명>. URL·상위 경로(..)·절대 경로는 허용하지 않는다.
 _AVATAR_PATH = re.compile(r"^avatars/[0-9a-f-]{36}/(?!\.{1,2}$)[A-Za-z0-9._-]{1,200}$")
@@ -53,6 +56,11 @@ class ProfileUpdate(BaseModel):
     practical_type: PracticalType | None = Field(
         default=None, description="실기 유형. null이면 미선택으로 변경"
     )
+    grade: StudentGrade | None = Field(default=None, description="학년 (v0.9). null이면 미선택")
+    learning_goal: LearningGoal | None = Field(
+        default=None,
+        description="개인 학습 목표 (v0.9, 500자). 바꾸면 수정일 갱신, null이면 삭제",
+    )
 
     @field_validator("avatar_path")
     @classmethod
@@ -76,6 +84,11 @@ class ProfileRead(APIModel):
     user_type: UserType
     avatar_path: str | None
     practical_type: PracticalType | None = Field(description="실기 유형 (미선택이면 null)")
+    grade: StudentGrade | None = Field(default=None, description="학년 (v0.9)")
+    learning_goal: str | None = Field(default=None, description="개인 학습 목표 (v0.9)")
+    learning_goal_updated_at: datetime | None = Field(
+        default=None, description="학습 목표 수정일 (v0.9)"
+    )
     is_active: bool
     created_at: datetime
     updated_at: datetime

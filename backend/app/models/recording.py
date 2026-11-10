@@ -24,7 +24,13 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
-from app.models.enums import ConsentGrantor, ConsentType, RecordingStatus, TranscriptionStatus
+from app.models.enums import (
+    ConsentGrantor,
+    ConsentType,
+    RecordingStatus,
+    SpeakerConsentStatus,
+    TranscriptionStatus,
+)
 
 
 class RecordingConsent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -90,6 +96,12 @@ class FeedbackRecording(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     consent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("recording_consents.id"))
     # 녹음에 다른 사람(강사)의 목소리가 담긴다는 사실을 알렸다고 학생이 확인함
     speaker_notice_confirmed: Mapped[bool] = mapped_column(Boolean)
+    # v0.9: 강사 고지·동의 상태 (학생 자기 신고값, 강사의 법적 동의를 대신하지 않음)
+    speaker_consent_status: Mapped[SpeakerConsentStatus] = mapped_column(
+        enum_column(SpeakerConsentStatus, "speaker_consent_status"),
+        server_default=SpeakerConsentStatus.NOT_RECORDED.value,
+        default=SpeakerConsentStatus.NOTICE_GIVEN,
+    )
     title: Mapped[str | None] = mapped_column(String(100))
     status: Mapped[RecordingStatus] = mapped_column(
         enum_column(RecordingStatus, "recording_status"), default=RecordingStatus.PENDING
@@ -114,3 +126,5 @@ class FeedbackRecording(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=TranscriptionStatus.NOT_REQUESTED,
     )
     transcription_updated_at: Mapped[datetime | None]
+    # v0.9 보관 기간 정책: 음성 원본만 삭제한 시각 (전사·첨삭은 남는다). NULL = 음성 있음
+    audio_deleted_at: Mapped[datetime | None]

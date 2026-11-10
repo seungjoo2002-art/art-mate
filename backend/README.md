@@ -2,7 +2,8 @@
 
 미술 입시생을 위한 **AI 기반 미술 실기 학습·성장 관리 플랫폼** ART MATE의 백엔드입니다.
 
-> **현재 버전: v0.8** — **F-15 참고작 추천**(강사가 확인한 우수 사례 + 원작자 동의만, 반복 약점 기반 규칙 추천) · **작품 공유 동의**(목적별·범위·익명, 공유용 파생 이미지) · **커뮤니티**(게시물·좋아요·저장·댓글·신고·관리). [설계](../docs/reference-community-v0.8.md)
+> **현재 버전: v0.9** — **기능명세서 V2 1~2단계**: 학습 목표·복수 지망 대학, 작품 시간 기록·타이머, 텍스트 첨삭(강사/자기 메모/다른 학생 출처 구분)·STT 결과 수정·음성 보관 기간, 작품 비교·약점별 과거 첨삭, 학습 시간 리포트, 과제 수행 작품·후속 분석, 커뮤니티 피드백 채택, 앱 내부 알림. [설계](../docs/v2-backend-completion-v0.9.md)
+> 이전(v0.8) — **F-15 참고작 추천**(강사가 확인한 우수 사례 + 원작자 동의만, 반복 약점 기반 규칙 추천) · **작품 공유 동의**(목적별·범위·익명, 공유용 파생 이미지) · **커뮤니티**(게시물·좋아요·저장·댓글·신고·관리). [설계](../docs/reference-community-v0.8.md)
 > 이전(v0.7) — **AI 개인 맞춤형 성장 코치**: 승인된 첨삭 기반 반복 약점 분석(규칙 통계)·기간별 추이, 성장 리포트(통계 + 선택적 AI 설명문), 맞춤 연습 과제(규칙/AI) → 강사 승인 후 기존 과제로 배포 / 개인 작품은 본인 채택. [설계](../docs/growth-coach-v0.7.md)
 > 이전(v0.6) — **AI 첨삭 기록**: 녹음 전사(faster-whisper, 서버 내부) → Gemini 요약·약점 분류(별도 AI 전송 동의) → 담당 강사(개인 작품은 학생 본인) 검토·수정·승인 → 학생 아카이브. DB 작업 큐 + 별도 AI Worker. [설계·운영](../docs/ai-feedback-v0.6.md)
 > 이전(v0.5.1) — 기획 변경 반영: **프로필 실기 유형**, **작품 분류(실기 유형 × 작업 목적)·필터**, **작품 완료/작업 재개**, 작품 목록 **`recording_count`**, 선택지 API.
@@ -20,6 +21,7 @@
 | STT·AI 피드백 요약·약점 분류·강사 검토·승인, AI 전송 동의 | ✅ v0.6 |
 | 성장 리포트·반복 약점·맞춤 과제·강사 승인·배포 | ✅ v0.7 |
 | F-15 참고작 추천·작품 공유 동의·커뮤니티 | ✅ v0.8 |
+| V2 F-1~F-9 학생 단독 학습 사이클 (목표·시간·텍스트 첨삭·비교·과제 수행·알림) | ✅ v0.9 |
 | AI 직접 작품 분석·실기 튜터 / 입시 합격 가능성 예측 | 이후 / 장기 |
 | 출석, 오늘 할 일, 질문 콜, 시험 타이머, 강사 대시보드 | ⛔ v0.5.1 제외 |
 
@@ -29,6 +31,8 @@
 | [docs/database-design.md](../docs/database-design.md) | 엔티티 설계, 학원별 데이터 격리, RLS 방향 |
 | [docs/development-guide.md](../docs/development-guide.md) | Git 협업 규칙, 새 API 추가 방법, 버전 체크리스트, 운영 절차(마이그레이션 적용·ADMIN 지정) |
 | [docs/v0.5.1-planning-changes.md](../docs/v0.5.1-planning-changes.md) | **기획 변경 정리**: 유지·제외·보류, DB 변경, 테이블 처리 계획, 로드맵, F-15 설계 메모 |
+| [docs/v2-backend-completion-v0.9.md](../docs/v2-backend-completion-v0.9.md) | v0.9 V2 1~2단계 설계·출처 구분·시간 기록·알림·연동 검증 절차 |
+| [docs/frontend-integration-v0.9.md](../docs/frontend-integration-v0.9.md) | v0.9 API·요청/응답 예시·오류 코드·화면 체크리스트 |
 | [docs/reference-community-v0.8.md](../docs/reference-community-v0.8.md) | v0.8 F-15 알고리즘·우수성 검증·공유 동의·원본 보호·커뮤니티·법적 검토 항목 |
 | [docs/frontend-integration-v0.8.md](../docs/frontend-integration-v0.8.md) | v0.8 참고작 카드·공유 동의·커뮤니티·관리 API, 오류 코드 |
 | [docs/growth-coach-v0.7.md](../docs/growth-coach-v0.7.md) | v0.7 반복 약점 알고리즘, 리포트·추천 생성, 과제 재사용, 동의 목적 분리, 비용 |
@@ -294,7 +298,7 @@ backend/
 │   └── utils/
 ├── alembic/                 # env.py(async), versions/0001 (v0.2), 0002 (v0.3 학원 운영), 0003 (v0.4 작품·시험),
 │                            # 0004 (v0.5 질문 콜·녹음), 0005 (v0.5.1 실기 유형·작품 분류·완료),
-│                            # 0006 (v0.6 AI 첨삭), 0007 (v0.7 성장 코치), 0008 (v0.8 참고작·커뮤니티) = head
+│                            # 0006 (v0.6 AI 첨삭), 0007 (v0.7 성장 코치), 0008 (v0.8 참고작·커뮤니티), 0009 (v0.9 V2 1~2단계) = head
 ├── scripts/verify_dev_environment.py  # 개발 DB·Storage 읽기 전용 점검
 ├── supabase/storage-setup.sql  # Supabase 전용: artworks·feedback-audio 버킷, storage.objects RLS 정책 (수동 적용)
 ├── tests/

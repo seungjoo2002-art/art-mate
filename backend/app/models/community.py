@@ -36,7 +36,7 @@ from sqlalchemy import (
     false,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
@@ -44,6 +44,7 @@ from app.models.enums import (
     ArtworkWorkCategory,
     AuthorDisplay,
     CommentStatus,
+    CommentType,
     CommunityReportStatus,
     ConsentGrantor,
     ModerationAction,
@@ -255,6 +256,8 @@ class CommunityPost(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     hidden_at: Mapped[datetime | None]
     hidden_reason: Mapped[str | None] = mapped_column(String(300))
     deleted_at: Mapped[datetime | None]
+    # v0.9 F-6: 작품에 대해 묻고 싶은 질문 (선택)
+    question: Mapped[str | None] = mapped_column(String(1000))
 
 
 class CommunityComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -263,6 +266,17 @@ class CommunityComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_community_comments_post", "post_id", "status", "created_at"),
         Index("ix_community_comments_author", "author_id", "created_at"),
         CheckConstraint("length(btrim(body)) > 0", name="body_not_blank"),
+        # v0.9: 항목 지정은 작품 피드백 댓글만
+        CheckConstraint(
+            "comment_type = 'FEEDBACK' OR cardinality(categories) = 0",
+            name="categories_only_feedback",
+        ),
+        CheckConstraint(
+            "categories <@ ARRAY["
+            + ", ".join(f"'{c.value}'" for c in WeaknessCategory)
+            + "]::varchar[]",
+            name="categories_known",
+        ),
     )
 
     post_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("community_posts.id", ondelete="CASCADE"))
@@ -273,6 +287,15 @@ class CommunityComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     hidden_at: Mapped[datetime | None]
     deleted_at: Mapped[datetime | None]
+    # v0.9 F-6: 일반 의견 / 작품 피드백(+ 선택 항목: 약점 카테고리 코드)
+    comment_type: Mapped[CommentType] = mapped_column(
+        enum_column(CommentType, "comment_type"),
+        server_default=CommentType.GENERAL.value,
+        default=CommentType.GENERAL,
+    )
+    categories: Mapped[list[str]] = mapped_column(
+        ARRAY(String(20)), server_default=text("'{}'::varchar[]"), default=list
+    )
 
 
 class CommunityLike(UUIDPrimaryKeyMixin, TimestampMixin, Base):

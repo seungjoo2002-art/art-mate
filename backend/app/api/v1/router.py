@@ -21,6 +21,7 @@ from app.api.v1.endpoints import (
     health,
     lesson_topics,
     meta,
+    notifications,
     recordings,
     schedules,
     tasks,
@@ -36,6 +37,8 @@ api_v1_router.include_router(ai_feedback.staff_processing)
 api_v1_router.include_router(ai_feedback.owner_feedback)
 api_v1_router.include_router(ai_feedback.archive)
 api_v1_router.include_router(ai_feedback.staff_feedback)
+api_v1_router.include_router(ai_feedback.artwork_notes)
+api_v1_router.include_router(ai_feedback.notes)
 api_v1_router.include_router(artworks.router)
 api_v1_router.include_router(artworks.staff_router)
 api_v1_router.include_router(classes.router)
@@ -49,6 +52,7 @@ api_v1_router.include_router(growth.staff)
 api_v1_router.include_router(health.router)
 api_v1_router.include_router(lesson_topics.router)
 api_v1_router.include_router(meta.router)
+api_v1_router.include_router(notifications.router)
 api_v1_router.include_router(recordings.consents)
 api_v1_router.include_router(recordings.router)
 api_v1_router.include_router(recordings.staff_router)

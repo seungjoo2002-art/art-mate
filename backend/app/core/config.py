@@ -107,6 +107,8 @@ class Settings(BaseSettings):
         default_factory=lambda: sorted(SUPPORTED_AUDIO_TYPES)
     )
     recording_max_per_artwork: int = Field(default=20, ge=1, le=100)
+    # v0.9 음성 원본 보관 기간 (일). 지나면 음성 파일만 삭제하고 전사·첨삭은 남긴다. 0 = 무기한
+    recording_audio_retention_days: int = Field(default=180, ge=0, le=3650)
     # 현재 녹음 동의서 버전. 바꾸면 학생은 새 버전에 다시 동의해야 녹음할 수 있다.
     recording_consent_version: str = Field(
         default="2026-11-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
@@ -189,6 +191,8 @@ class Settings(BaseSettings):
     job_lease_seconds: int = Field(default=300, ge=30, le=3600)
     job_retry_base_seconds: int = Field(default=30, ge=1, le=3600)
     worker_poll_seconds: float = Field(default=5.0, gt=0, le=300)
+    # v0.9 Worker 정기 작업 간격 (음성 보관 기간 정리·미완료 과제 알림·목표 확인 알림)
+    worker_maintenance_seconds: int = Field(default=3600, ge=60, le=86400)
 
     # --- HTTP --------------------------------------------------------------
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)

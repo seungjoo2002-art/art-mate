@@ -34,20 +34,26 @@ from app.schemas.ai_feedback import (
     AiConsentCreate,
     AiConsentStatus,
     FeedbackDecision,
+    FeedbackNoteCreate,
+    FeedbackNoteRead,
+    FeedbackNoteUpdate,
     FeedbackRead,
     FeedbackReject,
     FeedbackUpdate,
     JobRead,
+    NoteSummaryRequest,
     ReviewerFeedbackRead,
     ReviewHistoryRead,
     ReviewQueueItem,
     SummaryStatusRead,
+    TranscriptEdit,
     TranscriptionRequest,
     TranscriptionStatusRead,
     TranscriptRead,
 )
 from app.schemas.common import Page, PaginationQuery
 from app.services.ai_feedback import AiFeedbackService
+from app.services.feedback_notes import FeedbackNoteService
 
 consents = APIRouter(prefix="/ai-processing-consents", tags=["ai-feedback"])
 owner_processing = APIRouter(
@@ -60,6 +66,9 @@ staff_processing = APIRouter(
 owner_feedback = APIRouter(prefix="/feedbacks", tags=["ai-feedback"])
 archive = APIRouter(prefix="/artworks/{artwork_id}/feedbacks", tags=["ai-feedback"])
 staff_feedback = APIRouter(prefix="/academies/{academy_id}/feedbacks", tags=["ai-feedback"])
+# v0.9 텍스트 첨삭
+artwork_notes = APIRouter(prefix="/artworks/{artwork_id}/feedback-notes", tags=["ai-feedback"])
+notes = APIRouter(prefix="/feedback-notes", tags=["ai-feedback"])
 
 Student = Annotated[Profile, Depends(require_user_types(UserType.STUDENT))]
 READ = AUTH_ERRORS | error_responses(404, 409)
@@ -227,6 +236,30 @@ async def owner_transcript(
     svc = _svc(session, settings)
     _, recording = await svc.owner_target(owner, artwork_id, recording_id)
     return await svc.transcript(recording)
+
+
+@owner_processing.put(
+    "/transcript",
+    summary="전사(STT) 결과 수정 (학생 본인, v0.9)",
+    description=(
+        "잘못 인식된 문장을 고친다. 구간 번호·시각은 그대로 두고 바꾼 구간의 문장만 보낸다. "
+        "원본 전사는 보존되고 새 버전이 현재 전사가 된다. 초안·검토 중 요약은 대체되므로 "
+        "요약을 다시 요청한다. 확정된 첨삭이 있으면 409 `TRANSCRIPT_LOCKED`, base_transcript_id가 "
+        "최신이 아니면 409 `FEEDBACK_VERSION_CONFLICT`."
+    ),
+    responses=WRITE,
+)
+async def owner_edit_transcript(
+    artwork_id: uuid.UUID,
+    recording_id: uuid.UUID,
+    data: TranscriptEdit,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> TranscriptRead:
+    svc = _svc(session, settings)
+    _, recording = await svc.owner_target(owner, artwork_id, recording_id)
+    return await svc.edit_transcript(owner, recording, data)
 
 
 @owner_processing.post(
@@ -658,3 +691,104 @@ async def owner_feedback_history(
     feedback_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
 ) -> list[ReviewHistoryRead]:
     return await _svc(session, settings).owner_history(owner, feedback_id)
+
+
+# ======================================================================= v0.9 텍스트 첨삭 (F-3)
+
+
+def _notes(session, settings) -> FeedbackNoteService:  # type: ignore[no-untyped-def]
+    return FeedbackNoteService(session, settings)
+
+
+@artwork_notes.post(
+    "",
+    summary="텍스트 첨삭 입력 (학생, 녹음 없이)",
+    description=(
+        "출처: INSTRUCTOR(강사 첨삭을 받아 적음) / SELF_NOTE(자기 메모) / PEER(다른 학생 의견). "
+        "작품 하나에 여러 개 (최대 50). 원문은 문장 단위로 나눠 저장한다. "
+        "request_summary=true면 AI 요약을 바로 요청한다 (동의·설정이 없으면 저장만). "
+        "학원 가입과 무관하게 쓸 수 있다."
+    ),
+    status_code=status.HTTP_201_CREATED,
+    responses=WRITE,
+)
+async def create_note(
+    artwork_id: uuid.UUID,
+    data: FeedbackNoteCreate,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> FeedbackNoteRead:
+    return await _notes(session, settings).create(owner, artwork_id, data)
+
+
+@artwork_notes.get("", summary="작품의 텍스트 첨삭 목록 (학생 본인)", responses=READ)
+async def list_notes(
+    artwork_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
+) -> list[FeedbackNoteRead]:
+    return await _notes(session, settings).list_for_artwork(owner, artwork_id)
+
+
+@notes.get("/{note_id}", summary="텍스트 첨삭 원문·요약 상태", responses=READ)
+async def get_note(
+    note_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
+) -> FeedbackNoteRead:
+    return await _notes(session, settings).get(owner, note_id)
+
+
+@notes.patch(
+    "/{note_id}",
+    summary="텍스트 첨삭 수정",
+    description=(
+        "version 필수 (다르면 409 `FEEDBACK_VERSION_CONFLICT`). 원문·출처를 바꾸면 초안·검토 중 "
+        "요약은 대체되고 진행 중 요약 작업은 취소된다. 확정된 요약이 있으면 409 "
+        "`FEEDBACK_NOTE_LOCKED` (먼저 POST /feedbacks/{id}/reopen)."
+    ),
+    responses=WRITE,
+)
+async def update_note(
+    note_id: uuid.UUID,
+    data: FeedbackNoteUpdate,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> FeedbackNoteRead:
+    return await _notes(session, settings).update(owner, note_id, data)
+
+
+@notes.delete(
+    "/{note_id}",
+    summary="텍스트 첨삭 삭제 (요약·이력 함께 삭제, 성장 분석에서 제외)",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=READ,
+)
+async def delete_note(
+    note_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
+) -> None:
+    await _notes(session, settings).delete(owner, note_id)
+
+
+@notes.post(
+    "/{note_id}/summary",
+    summary="텍스트 첨삭 AI 요약·분류 요청",
+    description=(
+        "녹음 첨삭과 같은 요약 작업(SUMMARIZE)을 큐에 넣는다. 새 작업 202, 진행 중이면 200. "
+        "AI 전송 동의가 없으면 409 `AI_CONSENT_REQUIRED`, 초안이 있으면 regenerate=true. "
+        "결과 확인: GET /feedback-notes/{id} 의 feedback_id → GET /feedbacks/{feedback_id}."
+    ),
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=QUEUE,
+)
+async def request_note_summary(
+    note_id: uuid.UUID,
+    response: Response,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+    data: NoteSummaryRequest | None = None,
+) -> JobRead:
+    data = data or NoteSummaryRequest()
+    return _queued(
+        await _notes(session, settings).request_summary(owner, note_id, regenerate=data.regenerate),
+        response,
+    )

@@ -60,6 +60,7 @@ from app.services.audio import (
     normalize_content_type,
     storage_extension,
 )
+from app.services.retention import expire_recording_audio
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,10 @@ def recording_read(
         created_at=recording.created_at,
         consent_id=recording.consent_id,
         speaker_notice_confirmed=recording.speaker_notice_confirmed,
+        speaker_consent_status=recording.speaker_consent_status,
+        speaker_consent_verified=False,
+        audio_available=recording.audio_deleted_at is None,
+        audio_deleted_at=recording.audio_deleted_at,
         transcription_status=recording.transcription_status,
         url=url,
         url_expires_at=expires if url else None,
@@ -215,8 +220,9 @@ class RecordingService:
     ) -> list[RecordingRead]:
         urls: dict[str, str] = {}
         expires = clock.utc_now() + timedelta(seconds=self.settings.storage_signed_url_seconds)
-        if include_urls and recordings:
-            urls = await self._sign([r.storage_path for r in recordings], token)
+        playable = [r for r in recordings if r.audio_deleted_at is None]
+        if include_urls and playable:
+            urls = await self._sign([r.storage_path for r in playable], token)
         return [recording_read(r, urls.get(r.storage_path), expires) for r in recordings]
 
     async def _sign(self, paths: list[str], token: str) -> dict[str, str]:
@@ -275,6 +281,7 @@ class RecordingService:
             owner_id=owner.id,
             consent_id=consent.id,
             speaker_notice_confirmed=True,
+            speaker_consent_status=data.speaker_consent_status,
             title=data.title,
             status=RecordingStatus.PENDING,
             storage_path=path,
@@ -404,6 +411,10 @@ class RecordingService:
         self, owner: Profile, artwork_id: uuid.UUID, token: str, include_urls: bool
     ) -> list[RecordingRead]:
         artwork = await self.artworks.owned(owner, artwork_id)
+        # v0.9 보관 기간: 지난 음성은 DB에서 표시하고 학생 토큰으로 파일을 정리한다
+        if await expire_recording_audio(self.session, self.settings, owner_id=owner.id):
+            await self.session.commit()
+            await self.cleanup_storage(owner, token)
         return await self._reads(await self._active(artwork.id), token, include_urls)
 
     async def get_mine(
@@ -417,6 +428,11 @@ class RecordingService:
         if recording.status != RecordingStatus.ACTIVE:
             raise ConflictError(
                 "The recording is not uploaded yet", code=ErrorCode.RECORDING_NOT_ACTIVE
+            )
+        if recording.audio_deleted_at is not None:
+            raise ConflictError(
+                "The audio was deleted after the retention period (the transcript is kept)",
+                code=ErrorCode.RECORDING_AUDIO_EXPIRED,
             )
         urls = await self._sign([recording.storage_path], token)
         if recording.storage_path not in urls:

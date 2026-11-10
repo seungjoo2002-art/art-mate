@@ -39,11 +39,14 @@ from app.schemas.artworks import (
     SignedUrl,
     StaffArtworkDetail,
     StaffArtworkRead,
+    TimerEventCreate,
+    TimerRead,
     UploadRequest,
     UploadTicket,
 )
 from app.schemas.common import Page, PaginationQuery
 from app.schemas.students import student_ref
+from app.services.artwork_timer import ArtworkTimerService
 from app.services.artworks import ArtworkFilters, ArtworkService
 from app.services.recordings import RecordingService
 from app.services.sharing import SharingService
@@ -83,7 +86,9 @@ def _service(session, settings, storage) -> ArtworkService:  # type: ignore[no-u
 @router.post(
     "",
     summary="작품 생성 (학생)",
-    description="학원 미소속 학생도 개인 작품을 만들 수 있다. 학원·반·과제 연결은 선택.",
+    description="학원 미소속 학생도 개인 작품을 만들 수 있다. 학원·반·과제 연결은 선택. "
+    "v0.9: 실기 주제·작업 방식·실제 소요 시간·제한 시간(분), recommendation_id(개인 과제 수행 "
+    "작품으로 연결, 채택된 본인 과제만).",
     status_code=status.HTTP_201_CREATED,
     responses=WRITE_ERRORS,
 )
@@ -371,6 +376,40 @@ async def photo_url(
 
 
 # ----------------------------------------------------------------------------- staff
+
+
+# ============================================================================ v0.9 타이머 (F-2)
+
+
+@router.get(
+    "/{artwork_id}/timer",
+    summary="작품 타이머 상태 (새로고침·앱 재시작 후 복원)",
+    description="저장된 이벤트로 계산한 현재 상태·누적 시간·남은 제한 시간. "
+    "서버는 타이머를 돌리지 않으므로 RUNNING이면 running_since부터 클라이언트가 이어서 센다.",
+    responses=READ_ERRORS,
+)
+async def get_timer(
+    artwork_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
+) -> TimerRead:
+    return await ArtworkTimerService(session, settings).get(owner, artwork_id)
+
+
+@router.post(
+    "/{artwork_id}/timer/events",
+    summary="타이머 시작·일시정지·재개·종료·초기화",
+    description="STOP하면 누적 시간(올림, 분)이 작품의 actual_minutes(time_source=TIMER)로 "
+    "저장된다. 잘못된 전이 409 `TIMER_INVALID_TRANSITION`, 시각 오류 422 `TIMER_INVALID_TIME`, "
+    "24시간 초과 422 `TIMER_TOO_LONG`.",
+    responses=WRITE_ERRORS,
+)
+async def record_timer_event(
+    artwork_id: uuid.UUID,
+    data: TimerEventCreate,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> TimerRead:
+    return await ArtworkTimerService(session, settings).record(owner, artwork_id, data)
 
 
 @staff_router.get(

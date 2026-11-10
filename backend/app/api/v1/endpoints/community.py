@@ -35,13 +35,16 @@ from app.models.enums import (
     WeaknessCategory,
 )
 from app.models.profile import Profile
+from app.schemas.ai_feedback import FeedbackNoteRead
 from app.schemas.common import Page, PaginationQuery
 from app.schemas.community import (
     AdminReportRead,
     BookmarkState,
     CandidateRead,
+    CommentAdopt,
     CommentCreate,
     CommentRead,
+    CommentUpdate,
     LikeState,
     ModerationLogRead,
     ModerationRequest,
@@ -488,7 +491,9 @@ async def list_comments(
 @community.post(
     "/posts/{post_id}/comments",
     summary="댓글 작성",
-    description="10분당 작성 수 제한 (429 RATE_LIMITED).",
+    description="10분당 작성 수 제한 (429 RATE_LIMITED). "
+    "v0.9: comment_type=FEEDBACK(작품 피드백)이면 "
+    "categories(구도·비례·명암·채색 등)를 선택해 붙일 수 있다.",
     status_code=status.HTTP_201_CREATED,
     responses=LIMITED,
 )
@@ -505,12 +510,34 @@ async def add_comment(
 @community.patch("/comments/{comment_id}", summary="댓글 수정 (작성자)", responses=WRITE)
 async def update_comment(
     comment_id: uuid.UUID,
-    data: CommentCreate,
+    data: CommentUpdate,
     viewer: ActiveProfile,
     session: DbSession,
     settings: AppSettings,
 ) -> CommentRead:
     return await _community(session, settings, None).update_comment(viewer, comment_id, data)
+
+
+@community.post(
+    "/comments/{comment_id}/adopt",
+    summary="작품 피드백 댓글 채택 → 내 첨삭 기록 (게시물 작성자, v0.9)",
+    description="FEEDBACK 댓글을 출처 PEER(다른 학생 의견) 텍스트 첨삭으로 내 작품에 저장한다. "
+    "채택 전에는 성장 분석에 반영되지 않고, 채택해도 강사 첨삭과 구분되어 반복 약점 통계에는 "
+    "들어가지 않는다. 게시물 작성자만 (아니면 403), 일반 댓글 409 `COMMENT_NOT_FEEDBACK`, "
+    "이미 채택 409 `COMMENT_ALREADY_ADOPTED`.",
+    status_code=status.HTTP_201_CREATED,
+    responses=WRITE,
+)
+async def adopt_comment(
+    comment_id: uuid.UUID,
+    viewer: ActiveProfile,
+    session: DbSession,
+    settings: AppSettings,
+    data: CommentAdopt | None = None,
+) -> FeedbackNoteRead:
+    return await _community(session, settings, None).adopt_comment(
+        viewer, comment_id, data or CommentAdopt()
+    )
 
 
 @community.delete(

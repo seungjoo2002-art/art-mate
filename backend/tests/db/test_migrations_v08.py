@@ -64,7 +64,7 @@ async def test_v08_schema_and_roundtrip(migrated_database: str) -> None:
         _alembic("downgrade", "0007")
         _alembic("upgrade", "head")
         assert "No new upgrade operations detected" in _alembic("check")
-        assert "0007 -> 0008 (head)" in _alembic("history")
+        assert "0007 -> 0008," in _alembic("history")
     finally:
         _alembic("upgrade", "head")
 

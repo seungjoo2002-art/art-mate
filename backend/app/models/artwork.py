@@ -37,7 +37,12 @@ from app.models.enums import (
     ArtworkWorkStatus,
     PhotoStatus,
     PracticalType,
+    TimerEventType,
+    TimeSource,
 )
+
+# 작업 시간·제한 시간 상한 (분). 하루를 넘는 기록은 입력 오류로 본다
+MAX_WORK_MINUTES = 1440
 
 
 class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -66,6 +71,18 @@ class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "(work_status = 'COMPLETED') = (completed_at IS NOT NULL)",
             name="completed_has_time",
+        ),
+        # v0.9 F-2 시간 기록
+        CheckConstraint(
+            f"actual_minutes IS NULL OR actual_minutes BETWEEN 1 AND {MAX_WORK_MINUTES}",
+            name="actual_minutes_range",
+        ),
+        CheckConstraint(
+            f"time_limit_minutes IS NULL OR time_limit_minutes BETWEEN 1 AND {MAX_WORK_MINUTES}",
+            name="time_limit_range",
+        ),
+        CheckConstraint(
+            "(actual_minutes IS NULL) = (time_source IS NULL)", name="actual_minutes_source"
         ),
         Index("ix_artworks_owner_work_date", "owner_id", "work_date"),
         Index("ix_artworks_academy_student", "academy_id", "student_membership_id", "work_date"),
@@ -96,6 +113,38 @@ class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=ArtworkWorkStatus.IN_PROGRESS,
     )
     completed_at: Mapped[datetime | None]
+    # v0.9 F-2 작품 정보·시간 기록 (모두 선택)
+    topic: Mapped[str | None] = mapped_column(String(200))  # 실기 주제 (시험 제시어 등)
+    work_method: Mapped[str | None] = mapped_column(String(100))  # 작업 방식 (재료·기법)
+    actual_minutes: Mapped[int | None] = mapped_column(Integer)  # 실제 소요 시간 (분)
+    time_limit_minutes: Mapped[int | None] = mapped_column(Integer)  # 제한 시간 (분, 모의시험)
+    time_source: Mapped[TimeSource | None] = mapped_column(enum_column(TimeSource, "time_source"))
+
+
+class ArtworkTimerEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """작품 타이머 이벤트 (v0.9 F-2, append-only).
+
+    서버는 타이머 프로세스를 돌리지 않는다. 클라이언트가 시작·일시정지·재개·종료를 보내면 기록만
+    하고, 현재 상태와 누적 시간은 조회할 때 이벤트로 계산한다 → 새로고침·앱 종료 후에도 복원된다.
+    STOP 시 누적 시간을 artworks.actual_minutes(time_source=TIMER)에 기록한다.
+    """
+
+    __tablename__ = "artwork_timer_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["artwork_id", "owner_id"], ["artworks.id", "artworks.owner_id"], ondelete="CASCADE"
+        ),
+        CheckConstraint("elapsed_seconds >= 0", name="elapsed_nonnegative"),
+        Index("ix_artwork_timer_events_artwork", "artwork_id", "occurred_at", "created_at"),
+    )
+
+    artwork_id: Mapped[uuid.UUID]
+    owner_id: Mapped[uuid.UUID]
+    event_type: Mapped[TimerEventType] = mapped_column(enum_column(TimerEventType, "event_type"))
+    # 이벤트 시각 (오프라인으로 늦게 보낸 이벤트는 클라이언트 시각, 서버가 범위 검증)
+    occurred_at: Mapped[datetime]
+    # 이 이벤트 직후 현재 세션의 누적 작업 시간 (감사·복원 확인용)
+    elapsed_seconds: Mapped[int] = mapped_column(Integer)
 
 
 class ArtworkPhoto(UUIDPrimaryKeyMixin, TimestampMixin, Base):

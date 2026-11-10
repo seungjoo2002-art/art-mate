@@ -50,6 +50,7 @@ from app.models.ai_feedback import (
     AiProcessingJob,
     FeedbackCategory,
     FeedbackItem,
+    FeedbackNote,
     FeedbackSummary,
     FeedbackTranscript,
 )
@@ -65,6 +66,7 @@ from app.models.enums import (
     ClassMemberStatus,
     ClassStatus,
     FeedbackItemKind,
+    FeedbackSource,
     FeedbackStatus,
     GrowthScope,
     MembershipRole,
@@ -80,7 +82,12 @@ from app.models.enums import (
     TaskTargetType,
     WeaknessCategory,
 )
-from app.models.growth import GrowthReport, PracticeRecommendation, PracticeRecommendationHistory
+from app.models.growth import (
+    GrowthReport,
+    PracticeRecommendation,
+    PracticeRecommendationArtwork,
+    PracticeRecommendationHistory,
+)
 from app.models.membership import AcademyMembership
 from app.models.profile import Profile
 from app.models.task import Task, TaskAssignment
@@ -88,9 +95,14 @@ from app.repositories.pagination import fetch_page
 from app.schemas.ai_feedback import JobRead
 from app.schemas.common import PaginationParams
 from app.schemas.growth import (
+    ArtworkComparison,
+    ComparisonPhoto,
+    ComparisonSide,
     Evidence,
+    FollowUp,
     GenerationResult,
     GrowthSummary,
+    LinkedArtwork,
     NarrativeRead,
     RecentFeedback,
     RecommendationCompletion,
@@ -99,7 +111,9 @@ from app.schemas.growth import (
     RecommendationGenerate,
     RecommendationHistoryRead,
     RecommendationRead,
+    RecommendationRef,
     RecommendationReject,
+    RecommendationStart,
     RecommendationUpdate,
     ReportCreate,
     ReportListItem,
@@ -114,6 +128,7 @@ from app.schemas.growth import (
     TimelineFeedback,
     TimelineTask,
     WeaknessAnalysis,
+    WeaknessHistoryItem,
 )
 from app.schemas.students import StudentRef, student_ref
 from app.schemas.tasks import TaskCreate
@@ -132,6 +147,8 @@ from app.services.growth_analytics import (
     analyze,
     fingerprint,
 )
+from app.services.notifications import NotificationService
+from app.services.practice_links import link_artwork, personal_recommendation, unlink_artwork
 from app.services.tasks import TaskService
 
 logger = logging.getLogger(__name__)
@@ -227,6 +244,13 @@ class GrowthService:
             },
         )
 
+    @staticmethod
+    def _feedback_visibility(scope: Scope) -> list[Any]:
+        """강사 화면에는 강사 첨삭만 (자기 메모·다른 학생 의견은 학생 개인 기록)."""
+        if scope.staff is not None:
+            return [FeedbackSummary.source == FeedbackSource.INSTRUCTOR]
+        return []
+
     def _artwork_filter(self, scope: Scope) -> list[Any]:
         conditions: list[Any] = [Artwork.owner_id == scope.owner_id, Artwork.deleted_at.is_(None)]
         if scope.scope == GrowthScope.PERSONAL:
@@ -267,6 +291,8 @@ class GrowthService:
                 completed_at=a.completed_at,
                 practical_type=a.practical_type,
                 work_category=a.work_category,
+                actual_minutes=a.actual_minutes,
+                time_limit_minutes=a.time_limit_minutes,
             )
             for a in artworks
         ]
@@ -280,14 +306,16 @@ class GrowthService:
                     FeedbackSummary.artwork_id,
                     FeedbackSummary.approved_at,
                     FeedbackSummary.version,
+                    FeedbackSummary.source,
                 ).where(
                     FeedbackSummary.artwork_id.in_(work_dates),
                     FeedbackSummary.status == FeedbackStatus.APPROVED,
+                    *self._feedback_visibility(scope),
                 )
             )
         ).all()
         feedbacks = [
-            FeedbackFact(id=r[0], artwork_id=r[1], approved_at=r[2], version=r[3])
+            FeedbackFact(id=r[0], artwork_id=r[1], approved_at=r[2], version=r[3], source=r[4])
             for r in feedback_rows
         ]
         approved_at = {f.id: (f.artwork_id, f.approved_at) for f in feedbacks}
@@ -335,34 +363,58 @@ class GrowthService:
             return {}
         rows = (
             await self.session.execute(
-                select(FeedbackItem, FeedbackSummary, Artwork, FeedbackTranscript.segments)
-                .join(FeedbackSummary, FeedbackSummary.id == FeedbackItem.summary_id)
-                .join(Artwork, Artwork.id == FeedbackSummary.artwork_id)
-                .join(FeedbackTranscript, FeedbackTranscript.id == FeedbackSummary.transcript_id)
-                .where(
+                self._evidence_query().where(
                     FeedbackItem.id.in_(ids),
                     FeedbackSummary.status == FeedbackStatus.APPROVED,
                     *self._artwork_filter(scope),
+                    *self._feedback_visibility(scope),
                 )
             )
         ).all()
-        result: dict[str, Evidence] = {}
-        for item, summary, artwork, segments in rows:
-            starts = {s["index"]: s["start_ms"] for s in segments}
-            first = item.evidence_segment_ids[0] if item.evidence_segment_ids else None
-            result[str(item.id)] = Evidence(
-                item_id=item.id,
-                feedback_id=summary.id,
-                recording_id=summary.recording_id,
-                artwork_id=artwork.id,
-                artwork_title=artwork.title,
-                work_date=artwork.work_date,
-                kind=item.kind,
-                category=item.category,
-                content=item.content,
-                start_ms=starts.get(first) if first is not None else None,
+        return {str(row[0].id): self._evidence(*row) for row in rows}
+
+    @staticmethod
+    def _evidence_query() -> Any:
+        """근거 항목 + 원문 (녹음 전사 또는 텍스트 첨삭 문장)."""
+        return (
+            select(
+                FeedbackItem,
+                FeedbackSummary,
+                Artwork,
+                FeedbackTranscript.segments,
+                FeedbackNote.segments,
             )
-        return result
+            .join(FeedbackSummary, FeedbackSummary.id == FeedbackItem.summary_id)
+            .join(Artwork, Artwork.id == FeedbackSummary.artwork_id)
+            .outerjoin(FeedbackTranscript, FeedbackTranscript.id == FeedbackSummary.transcript_id)
+            .outerjoin(FeedbackNote, FeedbackNote.id == FeedbackSummary.note_id)
+        )
+
+    @staticmethod
+    def _evidence(
+        item: FeedbackItem,
+        summary: FeedbackSummary,
+        artwork: Artwork,
+        transcript_segments: list[dict[str, Any]] | None,
+        note_segments: list[dict[str, Any]] | None,
+    ) -> Evidence:
+        by_index = {s["index"]: s for s in (transcript_segments or note_segments or [])}
+        first = item.evidence_segment_ids[0] if item.evidence_segment_ids else None
+        return Evidence(
+            item_id=item.id,
+            feedback_id=summary.id,
+            recording_id=summary.recording_id,
+            note_id=summary.note_id,
+            source=summary.source,
+            artwork_id=artwork.id,
+            artwork_title=artwork.title,
+            work_date=artwork.work_date,
+            kind=item.kind,
+            category=item.category,
+            content=item.content,
+            start_ms=by_index.get(first, {}).get("start_ms") if first is not None else None,
+            source_text=[by_index[i]["text"] for i in item.evidence_segment_ids if i in by_index],
+        )
 
     async def _analysis_read(
         self, scope: Scope, metrics: dict[str, Any], start: date | None, end: date | None
@@ -403,6 +455,18 @@ class GrowthService:
                 }
                 for g in metrics["next_goals"]
             ],
+            # v0.9 (이전 버전 리포트 지표에는 없을 수 있음)
+            **{
+                key: metrics[key]
+                for key in (
+                    "time_stats",
+                    "activity",
+                    "source_breakdown",
+                    "unverified_mentions",
+                    "guidance",
+                )
+                if key in metrics
+            },
             notes=metrics["notes"],
         )
 
@@ -444,7 +508,9 @@ class GrowthService:
                 select(FeedbackSummary, Artwork)
                 .join(Artwork, Artwork.id == FeedbackSummary.artwork_id)
                 .where(
-                    FeedbackSummary.status == FeedbackStatus.APPROVED, *self._artwork_filter(scope)
+                    FeedbackSummary.status == FeedbackStatus.APPROVED,
+                    *self._artwork_filter(scope),
+                    *self._feedback_visibility(scope),
                 )
                 .order_by(FeedbackSummary.approved_at.desc())
                 .limit(5)
@@ -487,6 +553,7 @@ class GrowthService:
             recent_feedbacks=[
                 RecentFeedback(
                     id=s.id,
+                    source=s.source,
                     artwork_id=a.id,
                     artwork_title=a.title,
                     summary=s.summary,
@@ -570,6 +637,7 @@ class GrowthService:
                         .where(
                             FeedbackSummary.artwork_id.in_(ids),
                             FeedbackSummary.status == FeedbackStatus.APPROVED,
+                            *self._feedback_visibility(scope),
                         )
                         .order_by(FeedbackSummary.approved_at)
                     )
@@ -606,6 +674,28 @@ class GrowthService:
                     )
                 ).all():
                     tasks[task.id] = (task, assignment)
+        rec_refs: dict[uuid.UUID, list[RecommendationRef]] = defaultdict(list)
+        if ids and scope.staff is None:
+            for link_artwork_id, rec in (
+                await self.session.execute(
+                    select(PracticeRecommendationArtwork.artwork_id, PracticeRecommendation)
+                    .join(
+                        PracticeRecommendation,
+                        PracticeRecommendation.id
+                        == PracticeRecommendationArtwork.recommendation_id,
+                    )
+                    .where(PracticeRecommendationArtwork.artwork_id.in_(ids))
+                    .order_by(PracticeRecommendationArtwork.created_at)
+                )
+            ).all():
+                rec_refs[link_artwork_id].append(
+                    RecommendationRef(
+                        id=rec.id,
+                        title=rec.title,
+                        weakness_category=rec.weakness_category,
+                        status=rec.status,
+                    )
+                )
         categories = await self._categories([s.id for v in feedbacks.values() for s in v])
 
         def texts(summary_id: uuid.UUID, kind: FeedbackItemKind) -> list[str]:
@@ -648,6 +738,8 @@ class GrowthService:
                         TimelineFeedback(
                             id=s.id,
                             recording_id=s.recording_id,
+                            note_id=s.note_id,
+                            source=s.source,
                             summary=s.summary,
                             categories=categories.get(s.id, []),
                             strengths=texts(s.id, FeedbackItemKind.STRENGTH),
@@ -664,6 +756,11 @@ class GrowthService:
                     )
                     if task_pair
                     else None,
+                    topic=a.topic,
+                    work_method=a.work_method,
+                    actual_minutes=a.actual_minutes,
+                    time_limit_minutes=a.time_limit_minutes,
+                    recommendations=rec_refs.get(a.id, []),
                 )
             )
         self._log_access(scope, "timeline")
@@ -693,6 +790,7 @@ class GrowthService:
                     .where(
                         FeedbackSummary.status == FeedbackStatus.APPROVED,
                         *self._artwork_filter(scope),
+                        *self._feedback_visibility(scope),
                     )
                 )
             ).scalar_one()
@@ -788,6 +886,8 @@ class GrowthService:
         await self.session.flush()
         if data.include_ai_narrative:
             await self._request_narrative(report, requester)
+        # v0.9 F-9: 학생에게 새 리포트 알림 (강사가 만들어도 학생에게)
+        await NotificationService(self.session).report_ready(scope.owner_id, report.id)
         try:
             await self.session.commit()
         except IntegrityError:
@@ -1073,6 +1173,11 @@ class GrowthService:
             recs = await self.create_rule_recommendations(
                 scope, metrics, categories, batch_key, requester.id
             )
+            if scope.scope == GrowthScope.PERSONAL:
+                # 학원 추천은 강사 검토 후 배포될 때 알린다
+                await NotificationService(self.session).tasks_recommended(
+                    scope.owner_id, recs, f"recs:{batch_key}"
+                )
             await self.session.commit()
         except IntegrityError:
             await self.session.rollback()
@@ -1322,6 +1427,10 @@ class GrowthService:
             model_name=model_name,
             prompt_version=prompt_version,
             created_by=actor_id,
+            learning_goal=(
+                f"다음 작품에서 '{WEAKNESS_CATEGORY_LABELS[category]}'을(를) 의식적으로 점검하며 "
+                "지적이 반복되는지 확인하기"
+            ),
         )
         self.session.add(rec)
         self._history(rec, actor_id, None, RecommendationAction.CREATED, None, note=source.value)
@@ -1409,6 +1518,23 @@ class GrowthService:
             "evidence": [evidence[i] for i in rec.evidence_item_ids if i in evidence],
             "analysis": rec.analysis_snapshot,
             "task": task,
+            "learning_goal": rec.learning_goal,
+            "started_at": rec.started_at,
+            "linked_artwork_ids": list(
+                (
+                    await self.session.execute(
+                        select(PracticeRecommendationArtwork.artwork_id)
+                        .join(Artwork, Artwork.id == PracticeRecommendationArtwork.artwork_id)
+                        .where(
+                            PracticeRecommendationArtwork.recommendation_id == rec.id,
+                            Artwork.deleted_at.is_(None),
+                        )
+                        .order_by(PracticeRecommendationArtwork.created_at)
+                    )
+                ).scalars()
+            )
+            if rec.scope == GrowthScope.PERSONAL
+            else [],
             "completed_at": rec.completed_at,
             "approved_at": rec.approved_at,
             "approved_by_name": approver,
@@ -1721,8 +1847,14 @@ class GrowthService:
     ) -> ReviewerRecommendationRead | RecommendationRead:
         """개인 추천 완료 기록. 학원 과제(배포됨)는 기존 과제 완료 API를 쓴다."""
         rec, mode = await self._locked(owner, rec_id, None, self_only=True)
+        if data.artwork_id is not None:
+            if not data.completed:
+                raise UnprocessableError("artwork_id can be sent only when completing")
+            artwork = await self._own_artwork(owner, data.artwork_id)
         if data.completed:
             self._check(rec, data.version, (RecommendationStatus.ADOPTED,))
+            if rec.started_at is None:
+                rec.started_at = clock.utc_now()
             rec.status = RecommendationStatus.COMPLETED
             rec.completed_at = clock.utc_now()
             from_status = RecommendationStatus.ADOPTED
@@ -1740,6 +1872,9 @@ class GrowthService:
             from_status,
             note=None if data.completed else "uncompleted",
         )
+        if data.artwork_id is not None:
+            await self.session.flush()
+            await link_artwork(self.session, owner, rec.id, artwork)
         return await self._reload(rec, None)
 
     async def _distribution_class(
@@ -1811,6 +1946,7 @@ class GrowthService:
                 from_status,
                 changes={"task_id": str(task.id), "class_id": str(class_id)},
             )
+            await NotificationService(self.session).task_distributed(rec)
 
         await TaskService(self.session).create(
             actor,
@@ -1871,3 +2007,351 @@ class GrowthService:
         ):
             raise ForbiddenError("This student is not in your classes")
         return job_read(job)
+
+    # ================================================================ v0.9 F-8 과제 수행
+
+    async def _own_artwork(self, owner: Profile, artwork_id: uuid.UUID) -> Artwork:
+        artwork = (
+            await self.session.execute(
+                select(Artwork).where(
+                    Artwork.id == artwork_id,
+                    Artwork.owner_id == owner.id,
+                    Artwork.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if artwork is None:
+            # 다른 사람 작품도 존재를 드러내지 않는다
+            raise NotFoundError("Artwork not found")
+        return artwork
+
+    async def start(
+        self, owner: Profile, rec_id: uuid.UUID, data: RecommendationStart
+    ) -> ReviewerRecommendationRead | RecommendationRead:
+        """개인 과제 시작 기록 (채택 후). 이미 시작했으면 그대로 (멱등)."""
+        rec, mode = await self._locked(owner, rec_id, None, self_only=True)
+        self._check(rec, data.version, (RecommendationStatus.ADOPTED,))
+        if rec.started_at is None:
+            rec.started_at = clock.utc_now()
+            rec.version += 1
+            self._history(rec, owner.id, mode, RecommendationAction.STARTED, rec.status)
+        return await self._reload(rec, None)
+
+    async def link_artwork(
+        self, owner: Profile, rec_id: uuid.UUID, artwork_id: uuid.UUID
+    ) -> list[LinkedArtwork]:
+        artwork = await self._own_artwork(owner, artwork_id)
+        await link_artwork(self.session, owner, rec_id, artwork)
+        await self.session.commit()
+        return await self.linked_artworks(owner, rec_id)
+
+    async def unlink_artwork(
+        self, owner: Profile, rec_id: uuid.UUID, artwork_id: uuid.UUID
+    ) -> None:
+        await unlink_artwork(self.session, owner, rec_id, artwork_id)
+        await self.session.commit()
+
+    async def _linked(
+        self, rec: PracticeRecommendation
+    ) -> tuple[list[tuple[Artwork, Any]], dict[uuid.UUID, list[uuid.UUID]], set[uuid.UUID]]:
+        """연결 작품, 작품별 승인된 강사 첨삭 id, 과제 약점이 지적된 첨삭 id."""
+        rows = list(
+            (
+                await self.session.execute(
+                    select(Artwork, PracticeRecommendationArtwork.created_at)
+                    .join(
+                        PracticeRecommendationArtwork,
+                        PracticeRecommendationArtwork.artwork_id == Artwork.id,
+                    )
+                    .where(
+                        PracticeRecommendationArtwork.recommendation_id == rec.id,
+                        Artwork.deleted_at.is_(None),
+                    )
+                    .order_by(Artwork.work_date, PracticeRecommendationArtwork.created_at)
+                )
+            ).all()
+        )
+        ids = [a.id for a, _ in rows]
+        feedbacks: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
+        flagged: set[uuid.UUID] = set()
+        if ids:
+            summaries = (
+                await self.session.execute(
+                    select(FeedbackSummary.id, FeedbackSummary.artwork_id).where(
+                        FeedbackSummary.artwork_id.in_(ids),
+                        FeedbackSummary.status == FeedbackStatus.APPROVED,
+                        FeedbackSummary.source == FeedbackSource.INSTRUCTOR,
+                    )
+                )
+            ).all()
+            for sid, aid in summaries:
+                feedbacks[aid].append(sid)
+            if summaries:
+                flagged = set(
+                    (
+                        await self.session.execute(
+                            select(FeedbackCategory.summary_id).where(
+                                FeedbackCategory.summary_id.in_([s for s, _ in summaries]),
+                                FeedbackCategory.category == rec.weakness_category,
+                            )
+                        )
+                    ).scalars()
+                )
+        return [(a, at) for a, at in rows], feedbacks, flagged
+
+    async def linked_artworks(self, owner: Profile, rec_id: uuid.UUID) -> list[LinkedArtwork]:
+        rec = await personal_recommendation(self.session, owner, rec_id)
+        rows, feedbacks, flagged = await self._linked(rec)
+        return [
+            LinkedArtwork(
+                artwork_id=a.id,
+                title=a.title,
+                work_date=a.work_date,
+                linked_at=at,
+                feedback_count=len(feedbacks[a.id]),
+                weakness_mentioned=any(s in flagged for s in feedbacks[a.id])
+                if feedbacks[a.id]
+                else None,
+            )
+            for a, at in rows
+        ]
+
+    async def follow_up(self, owner: Profile, rec_id: uuid.UUID) -> FollowUp:
+        """과제 수행 작품의 후속 강사 첨삭에서 같은 약점이 다시 지적됐는지 (향상 판정 아님)."""
+        rec = await personal_recommendation(self.session, owner, rec_id)
+        linked = await self.linked_artworks(owner, rec_id)
+        analyzed = [la for la in linked if la.weakness_mentioned is not None]
+        reappeared = [la for la in analyzed if la.weakness_mentioned]
+        if not linked:
+            status = "NO_LINKED_ARTWORK"
+        elif not analyzed:
+            status = "NO_FOLLOW_UP_FEEDBACK"
+        elif reappeared:
+            status = "REAPPEARED"
+        else:
+            status = "NOT_MENTIONED"
+        scope = Scope(owner.id, GrowthScope.ALL)
+        evidence: list[Evidence] = []
+        if reappeared:
+            rows = (
+                await self.session.execute(
+                    self._evidence_query()
+                    .where(
+                        FeedbackSummary.artwork_id.in_([la.artwork_id for la in reappeared]),
+                        FeedbackSummary.status == FeedbackStatus.APPROVED,
+                        FeedbackSummary.source == FeedbackSource.INSTRUCTOR,
+                        FeedbackItem.category == rec.weakness_category,
+                        *self._artwork_filter(scope),
+                    )
+                    .order_by(Artwork.work_date.desc(), FeedbackItem.position)
+                    .limit(10)
+                )
+            ).all()
+            evidence = [self._evidence(*row) for row in rows]
+        label = WEAKNESS_CATEGORY_LABELS[rec.weakness_category]
+        return FollowUp(
+            recommendation_id=rec.id,
+            weakness_category=rec.weakness_category,
+            completed=rec.status == RecommendationStatus.COMPLETED,
+            status=status,  # type: ignore[arg-type]
+            linked_artworks=linked,
+            reappeared_count=len(reappeared),
+            analyzed_count=len(analyzed),
+            evidence=evidence,
+            notes=[
+                "과제를 완료했다는 것과 실력이 향상되었다는 것은 같은 뜻이 아닙니다.",
+                f"후속 첨삭에서 '{label}'이(가) 언급되지 않았다고 해서 개선되었다고 단정할 수 "
+                "없습니다 (첨삭에서 다루지 않았을 수 있음).",
+                "강사 첨삭만 확인합니다 (자기 메모·다른 학생 의견 제외).",
+            ],
+        )
+
+    # ================================================================ v0.9 F-5 아카이브
+
+    async def weakness_history(
+        self,
+        scope: Scope,
+        category: WeaknessCategory,
+        params: PaginationParams,
+        *,
+        include_unverified: bool = False,
+    ) -> tuple[list[WeaknessHistoryItem], int]:
+        """특정 약점이 지적된 과거 첨삭 항목 (최근순). 기본은 강사 첨삭만."""
+        stmt = self._evidence_query().where(
+            FeedbackItem.category == category,
+            FeedbackItem.kind != FeedbackItemKind.STRENGTH,
+            FeedbackSummary.status == FeedbackStatus.APPROVED,
+            *self._artwork_filter(scope),
+            *self._feedback_visibility(scope),
+        )
+        if not include_unverified or scope.staff is not None:
+            stmt = stmt.where(FeedbackSummary.source == FeedbackSource.INSTRUCTOR)
+        stmt = stmt.order_by(
+            Artwork.work_date.desc(), FeedbackSummary.approved_at.desc(), FeedbackItem.id
+        )
+        rows, total = await fetch_page(self.session, stmt, params)
+        self._log_access(scope, "weakness_history")
+        return [
+            WeaknessHistoryItem(
+                evidence=self._evidence(*row),
+                feedback_summary=row[1].summary,
+                approved_at=row[1].approved_at,
+            )
+            for row in rows
+        ], total
+
+    async def _comparison_side(
+        self, scope: Scope, artwork: Artwork, photo_urls: dict[uuid.UUID, tuple[str, Any]]
+    ) -> ComparisonSide:
+        photos = (await self._photo_map([artwork.id]))[artwork.id]
+        summaries = list(
+            (
+                await self.session.execute(
+                    select(FeedbackSummary).where(
+                        FeedbackSummary.artwork_id == artwork.id,
+                        FeedbackSummary.status == FeedbackStatus.APPROVED,
+                        FeedbackSummary.source == FeedbackSource.INSTRUCTOR,
+                    )
+                )
+            ).scalars()
+        )
+        categories = await self._categories([s.id for s in summaries])
+        items = (
+            list(
+                (
+                    await self.session.execute(
+                        select(FeedbackItem)
+                        .where(FeedbackItem.summary_id.in_([s.id for s in summaries]))
+                        .order_by(FeedbackItem.position)
+                    )
+                ).scalars()
+            )
+            if summaries
+            else []
+        )
+        merged = sorted(
+            {c for s in summaries for c in categories.get(s.id, [])},
+            key=list(WeaknessCategory).index,
+        )
+        return ComparisonSide(
+            artwork_id=artwork.id,
+            title=artwork.title,
+            work_date=artwork.work_date,
+            practical_type=artwork.practical_type,
+            work_category=artwork.work_category,
+            topic=artwork.topic,
+            actual_minutes=artwork.actual_minutes,
+            time_limit_minutes=artwork.time_limit_minutes,
+            photos=[
+                ComparisonPhoto(
+                    stage=p.stage.value,
+                    photo_id=p.id,
+                    url=photo_urls.get(p.id, (None, None))[0],
+                    url_expires_at=photo_urls.get(p.id, (None, None))[1],
+                )
+                for p in photos
+                if p.is_representative
+            ],
+            feedback_count=len(summaries),
+            categories=merged,
+            strengths=[i.content for i in items if i.kind == FeedbackItemKind.STRENGTH],
+            weaknesses=[i.content for i in items if i.kind == FeedbackItemKind.WEAKNESS],
+        )
+
+    async def _photo_map(self, artwork_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[ArtworkPhoto]]:
+        result: dict[uuid.UUID, list[ArtworkPhoto]] = defaultdict(list)
+        for photo in (
+            await self.session.execute(
+                select(ArtworkPhoto)
+                .where(
+                    ArtworkPhoto.artwork_id.in_(artwork_ids),
+                    ArtworkPhoto.status == PhotoStatus.ACTIVE,
+                )
+                .order_by(ArtworkPhoto.stage, ArtworkPhoto.uploaded_at)
+            )
+        ).scalars():
+            result[photo.artwork_id].append(photo)
+        return result
+
+    async def compare(
+        self,
+        scope: Scope,
+        current_id: uuid.UUID,
+        previous_id: uuid.UUID | None,
+        *,
+        storage: Any,
+        token: str | None,
+    ) -> ArtworkComparison:
+        """이전 작품과 현재 작품 비교. previous를 생략하면 같은 실기 유형의 직전 작품."""
+        current = (
+            await self.session.execute(
+                select(Artwork).where(Artwork.id == current_id, *self._artwork_filter(scope))
+            )
+        ).scalar_one_or_none()
+        if current is None:
+            raise NotFoundError("Artwork not found")
+        if previous_id is not None:
+            previous = (
+                await self.session.execute(
+                    select(Artwork).where(Artwork.id == previous_id, *self._artwork_filter(scope))
+                )
+            ).scalar_one_or_none()
+            if previous is None:
+                raise NotFoundError("Artwork not found")
+        else:
+            stmt = select(Artwork).where(
+                *self._artwork_filter(scope),
+                Artwork.id != current.id,
+                (Artwork.work_date < current.work_date)
+                | (
+                    (Artwork.work_date == current.work_date)
+                    & (Artwork.created_at < current.created_at)
+                ),
+            )
+            if current.practical_type is not None:
+                stmt = stmt.where(Artwork.practical_type == current.practical_type)
+            previous = (
+                await self.session.execute(
+                    stmt.order_by(Artwork.work_date.desc(), Artwork.created_at.desc()).limit(1)
+                )
+            ).scalar_one_or_none()
+            if previous is None:
+                raise ConflictError(
+                    "There is no earlier artwork to compare with",
+                    code=ErrorCode.ARTWORK_NOT_COMPARABLE,
+                )
+        if previous.id == current.id:
+            raise UnprocessableError("Choose two different artworks")
+        photo_urls: dict[uuid.UUID, tuple[str, Any]] = {}
+        photos = await self._photo_map([previous.id, current.id])
+        reps = [p for ps in photos.values() for p in ps if p.is_representative]
+        if storage is not None and token and reps:
+            expires = clock.utc_now() + timedelta(seconds=self.settings.storage_signed_url_seconds)
+            try:
+                urls = await storage.create_signed_urls(
+                    [p.storage_path for p in reps],
+                    access_token=token,
+                    expires_in=self.settings.storage_signed_url_seconds,
+                )
+            except Exception:  # Storage 장애여도 메타데이터 비교는 제공 (URL만 null)
+                logger.warning("comparison photo urls unavailable")
+                urls = {}
+            photo_urls = {
+                p.id: (urls[p.storage_path], expires) for p in reps if p.storage_path in urls
+            }
+        prev_side = await self._comparison_side(scope, previous, photo_urls)
+        cur_side = await self._comparison_side(scope, current, photo_urls)
+        before, after = set(prev_side.categories), set(cur_side.categories)
+        order = list(WeaknessCategory).index
+        self._log_access(scope, "compare", current.id)
+        return ArtworkComparison(
+            previous=prev_side,
+            current=cur_side,
+            still_mentioned=sorted(before & after, key=order),
+            not_mentioned_now=sorted(before - after, key=order),
+            newly_mentioned=sorted(after - before, key=order),
+            notes=[
+                "강사 첨삭에서 지적된 항목만 비교합니다 (AI가 사진을 평가하지 않습니다).",
+                "이번 작품에서 언급되지 않은 항목이 개선되었다는 뜻은 아닙니다.",
+            ],
+        )

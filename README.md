@@ -15,7 +15,7 @@
 | [frontend/](frontend/README.md) | Vite + React 웹 앱 |
 | [docs/](docs/) | 아키텍처, DB 설계, 프론트 연동 가이드, 개발 가이드 |
 
-## 구현 현황 (v0.8)
+## 구현 현황 (v0.9)
 
 | 기능 | 상태 |
 | --- | --- |
@@ -27,6 +27,7 @@
 | 첨삭 녹음 전사(STT)·AI 요약·약점 분류·강사 검토·승인 | ✅ v0.6 |
 | 개인 성장 리포트·반복 약점 분석·맞춤 연습 과제(강사 승인·배포) | ✅ v0.7 |
 | F-15 참고작 추천 (강사 확인 우수 사례)·작품 공유 동의·커뮤니티 | ✅ v0.8 |
+| 기능명세서 V2 F-1~F-9 (학생 단독 학습 사이클·텍스트 첨삭·시간 기록·과제 수행·알림) | ✅ v0.9 |
 | AI 직접 작품 분석·실기 튜터 | 이후 |
 | 입시 합격 가능성 예측 | 장기 |
 
@@ -45,7 +46,9 @@
 - [docs/architecture.md](docs/architecture.md) — 구조와 AI 연동 계획
 - [docs/database-design.md](docs/database-design.md) — 테이블 설계
 - [docs/reference-community-v0.8.md](docs/reference-community-v0.8.md) — 참고작·커뮤니티·공유 동의
-- [docs/frontend-integration-v0.8.md](docs/frontend-integration-v0.8.md) — 최신 프론트 연동 (v0.8)
+- [docs/v2-backend-completion-v0.9.md](docs/v2-backend-completion-v0.9.md) — V2 1~2단계 설계·연동 검증 절차
+- [docs/frontend-integration-v0.9.md](docs/frontend-integration-v0.9.md) — 최신 프론트 연동 (v0.9)
+- [docs/frontend-integration-v0.8.md](docs/frontend-integration-v0.8.md) — v0.8 연동
 - [docs/growth-coach-v0.7.md](docs/growth-coach-v0.7.md) — 성장 코치 알고리즘·추천·동의
 - [docs/frontend-integration-v0.7.md](docs/frontend-integration-v0.7.md) — v0.7 연동
 - [docs/ai-feedback-v0.6.md](docs/ai-feedback-v0.6.md) — AI 첨삭 구조·비용·개인정보

@@ -14,6 +14,7 @@ from app.models.enums import (
     ConsentGrantor,
     FeedbackItemKind,
     FeedbackItemOrigin,
+    FeedbackSource,
     FeedbackStatus,
     ReviewAction,
     ReviewMode,
@@ -118,6 +119,36 @@ class TranscriptRead(TranscriptMeta):
     recording_id: uuid.UUID
     text: str
     segments: list[Segment]
+    edited: bool = Field(default=False, description="사람이 수정한 버전 (v0.9)")
+    edited_from_id: uuid.UUID | None = Field(default=None, description="수정 전 전사 (보존됨)")
+
+
+SegmentText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)
+]
+
+
+class SegmentEdit(InputModel):
+    index: int = Field(ge=0)
+    text: SegmentText
+
+
+class TranscriptEdit(InputModel):
+    """STT 결과 수정 (v0.9). 구간 수·시각은 그대로, 문장만 고친다 (근거 연결 유지)."""
+
+    base_transcript_id: uuid.UUID = Field(
+        description="수정한 전사 id (지금 최신 전사여야 함, 아니면 409 FEEDBACK_VERSION_CONFLICT)"
+    )
+    segments: list[SegmentEdit] = Field(
+        min_length=1, max_length=2000, description="바꾼 구간만 보내도 된다"
+    )
+
+    @model_validator(mode="after")
+    def _unique(self) -> "TranscriptEdit":
+        indexes = [s.index for s in self.segments]
+        if len(indexes) != len(set(indexes)):
+            raise ValueError("duplicate segment index")
+        return self
 
 
 class SummaryStatusRead(BaseModel):
@@ -134,9 +165,12 @@ class SummaryStatusRead(BaseModel):
 
 
 class Evidence(BaseModel):
+    """근거 원문 구간. 녹음 전사면 시각(재생 위치)이 있고, 텍스트 첨삭이면 시각이 없다."""
+
     index: int
-    start_ms: int
-    end_ms: int
+    start_ms: int | None = None
+    end_ms: int | None = None
+    text: str | None = Field(default=None, description="근거 원문 문장 (v0.9)")
 
 
 class FeedbackItemRead(BaseModel):
@@ -145,13 +179,18 @@ class FeedbackItemRead(BaseModel):
     position: int
     content: str
     category: WeaknessCategory | None
-    evidence: list[Evidence] = Field(description="근거 전사 구간 (재생 위치 이동용)")
+    evidence: list[Evidence] = Field(description="근거 원문 구간 (녹음은 재생 위치 포함)")
     origin: FeedbackItemOrigin
 
 
 class FeedbackRead(BaseModel):
     id: uuid.UUID
-    recording_id: uuid.UUID
+    recording_id: uuid.UUID | None = Field(description="녹음 첨삭이면 녹음 id")
+    note_id: uuid.UUID | None = Field(default=None, description="텍스트 첨삭이면 원문 id (v0.9)")
+    source: FeedbackSource = Field(
+        default=FeedbackSource.INSTRUCTOR,
+        description="INSTRUCTOR 강사 첨삭 / SELF_NOTE 자기 메모 / PEER 다른 학생 의견 (v0.9)",
+    )
     artwork_id: uuid.UUID
     status: FeedbackStatus
     review_mode: ReviewMode
@@ -182,7 +221,8 @@ class ReviewerFeedbackRead(FeedbackRead):
 
 class ReviewQueueItem(BaseModel):
     id: uuid.UUID
-    recording_id: uuid.UUID
+    recording_id: uuid.UUID | None
+    note_id: uuid.UUID | None = None
     artwork_id: uuid.UUID
     artwork_title: str
     recording_title: str | None
@@ -258,3 +298,66 @@ class ReviewHistoryRead(BaseModel):
     changes: dict[str, Any] | None = Field(description="변경 전후 (before/after)")
     note: str | None
     created_at: dt.datetime
+
+
+# ----------------------------------------------------------------------------- v0.9 텍스트 첨삭
+
+NoteBody = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=5000)]
+
+
+class FeedbackNoteCreate(InputModel):
+    source: FeedbackSource = Field(
+        description="INSTRUCTOR(강사 첨삭을 받아 적음) / SELF_NOTE(자기 메모) / "
+        "PEER(다른 학생 의견)"
+    )
+    body: NoteBody = Field(description="첨삭 원문 (5000자). 문장 단위로 나눠 근거 번호를 붙인다")
+    feedback_date: dt.date | None = Field(default=None, description="첨삭 받은 날 (기본 오늘)")
+    request_summary: bool = Field(
+        default=False,
+        description="저장 후 AI 요약·분류를 바로 요청 (AI 전송 동의 필요, 없으면 저장만 하고 "
+        "summary_job=null)",
+    )
+
+
+class FeedbackNoteUpdate(InputModel):
+    version: int = Field(ge=1, description="조회한 version (다르면 409 FEEDBACK_VERSION_CONFLICT)")
+    source: FeedbackSource | None = None
+    body: NoteBody | None = None
+    feedback_date: dt.date | None = None
+
+    @model_validator(mode="after")
+    def _some(self) -> "FeedbackNoteUpdate":
+        if not ({"source", "body", "feedback_date"} & self.model_fields_set):
+            raise ValueError("Nothing to update")
+        for name in ("source", "body", "feedback_date"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"'{name}' cannot be null")
+        return self
+
+
+class NoteSegment(BaseModel):
+    index: int
+    text: str
+
+
+class FeedbackNoteRead(BaseModel):
+    id: uuid.UUID
+    artwork_id: uuid.UUID
+    source: FeedbackSource
+    body: str = Field(description="원문 (AI 결과와 별도로 보존)")
+    segments: list[NoteSegment] = Field(description="문장 단위 구간 (AI 근거 번호)")
+    feedback_date: dt.date
+    version: int
+    community_comment_id: uuid.UUID | None = Field(description="커뮤니티 피드백 채택으로 만든 경우")
+    feedback_id: uuid.UUID | None = Field(description="현재 AI 요약 (DRAFT/IN_REVIEW/APPROVED)")
+    feedback_status: FeedbackStatus | None
+    review_mode: ReviewMode = Field(
+        description="SELF: 학생 본인이 확정 / INSTRUCTOR: 학원 작품의 강사 첨삭은 담당 강사가 확정"
+    )
+    summary_job: JobRead | None = Field(description="가장 최근 요약 작업")
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+class NoteSummaryRequest(InputModel):
+    regenerate: bool = Field(default=False, description="초안이 있어도 다시 만든다")
