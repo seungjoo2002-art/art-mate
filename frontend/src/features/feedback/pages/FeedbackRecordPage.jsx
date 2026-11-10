@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Mic, Sparkles, Square } from 'lucide-react'
+import { FileAudio, Mic, Sparkles, Square } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
@@ -8,6 +8,7 @@ import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getConsent, uploadRecording } from '../api'
 import { startAiSummary } from '../aiApi'
+import { ACCEPT } from '../audioFile'
 import ConsentForm from '../components/ConsentForm'
 import { formatDuration } from '../format'
 import { useAudioRecorder } from '../useAudioRecorder'
@@ -45,8 +46,9 @@ export default function FeedbackRecordPage() {
 
 function Recorder({ artworkId }) {
   const navigate = useNavigate()
-  const { status, elapsedMs, result, error, start, stop, reset } = useAudioRecorder()
+  const { status, elapsedMs, result, error, start, stop, reset, loadFile } = useAudioRecorder()
   const [uploading, setUploading] = useState(false)
+  const [loadingFile, setLoadingFile] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const recording = status === 'recording'
 
@@ -79,6 +81,17 @@ function Recorder({ artworkId }) {
     navigate(artworkPath, { replace: true })
   }
 
+  async function handleFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // 같은 파일을 다시 골라도 change가 발생하도록
+    if (!file) return
+    setLoadingFile(true)
+    await loadFile(file)
+    setLoadingFile(false)
+  }
+
+  const fromFile = Boolean(result?.fileName)
+
   return (
     <>
       <div className={`${styles.wave} ${recording ? styles.waveActive : ''}`} aria-hidden>
@@ -97,7 +110,9 @@ function Recorder({ artworkId }) {
         {recording
           ? '녹음 중이에요. 화면을 끄거나 다른 앱으로 이동하면 녹음이 멈출 수 있어요.'
           : status === 'recorded'
-            ? '녹음을 들어 보고 저장해 주세요.'
+            ? fromFile
+              ? `${result.fileName} · 들어 보고 저장해 주세요.`
+              : '녹음을 들어 보고 저장해 주세요.'
             : '버튼을 눌러 녹음을 시작하세요'}
       </p>
 
@@ -113,7 +128,7 @@ function Recorder({ artworkId }) {
             녹음만 저장하기
           </Button>
           <Button variant="soft" onClick={reset} disabled={uploading}>
-            다시 녹음
+            {fromFile ? '다른 방법으로 올리기' : '다시 녹음'}
           </Button>
         </div>
       ) : (
@@ -126,6 +141,22 @@ function Recorder({ artworkId }) {
           >
             {recording ? <Square size={30} fill="currentColor" /> : <Mic size={34} />}
           </button>
+          {!recording && (
+            <label className={styles.fileButton} aria-busy={loadingFile}>
+              <input
+                type="file"
+                accept={ACCEPT}
+                className={styles.fileInput}
+                onChange={handleFile}
+                disabled={loadingFile}
+              />
+              <FileAudio size={20} aria-hidden />
+              {loadingFile ? '파일 확인하는 중…' : '녹음 파일 올리기'}
+            </label>
+          )}
+          {!recording && (
+            <p className={styles.hint}>휴대폰 음성 메모 등 m4a·mp3·wav 파일 (25MB, 20분 이하)</p>
+          )}
           {error && <p className={styles.error}>{error}</p>}
         </>
       )}
