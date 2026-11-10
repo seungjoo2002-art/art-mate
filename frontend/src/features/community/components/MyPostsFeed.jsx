@@ -63,15 +63,10 @@ export default function MyPostsFeed() {
             )}
           </>
         )
-        // 게시물 상세 화면은 커뮤니티 작업 때 추가. 지금은 원본 작품으로 이동
-        return post.artwork_id ? (
-          <Link key={post.id} to={`/artworks/${post.artwork_id}`} className={styles.card}>
+        return (
+          <Link key={post.id} to={`/community/posts/${post.id}`} className={styles.card}>
             {card}
           </Link>
-        ) : (
-          <div key={post.id} className={styles.card}>
-            {card}
-          </div>
         )
       })}
     </div>

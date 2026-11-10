@@ -3,6 +3,8 @@ import AppLayout from '../components/layout/AppLayout'
 import SubLayout from '../components/layout/SubLayout'
 import ArtworkCreatePage from '../features/artworks/pages/ArtworkCreatePage'
 import ArtworkDetailPage from '../features/artworks/pages/ArtworkDetailPage'
+import PostDetailPage from '../features/community/pages/PostDetailPage'
+import PostWritePage from '../features/community/pages/PostWritePage'
 import FeedbackTimeline from '../features/feedback/components/FeedbackTimeline'
 import AiConsentPage from '../features/feedback/pages/AiConsentPage'
 import GrowthReportPage from '../features/growth/pages/GrowthReportPage'
@@ -65,6 +67,8 @@ export const router = createBrowserRouter([
         element: <SubLayout />,
         children: [
           { path: '/my/edit', element: <ProfileEditPage /> },
+          { path: '/community/write', element: <PostWritePage /> },
+          { path: '/community/posts/:postId', element: <PostDetailPage /> },
           { path: '/artworks/new', element: <ArtworkCreatePage /> },
           {
             path: '/artworks/:artworkId',
