@@ -394,6 +394,8 @@ class WeaknessCategory(StrEnum):
     RENDERING = "RENDERING"
     FINISH = "FINISH"
     OTHER = "OTHER"
+    # v0.9 (기능명세서 V2 F-4): 시간 관리 (제한 시간 안에 완성하지 못함 등)
+    TIME_MANAGEMENT = "TIME_MANAGEMENT"
 
 
 WEAKNESS_CATEGORY_LABELS: dict[WeaknessCategory, str] = {
@@ -407,6 +409,7 @@ WEAKNESS_CATEGORY_LABELS: dict[WeaknessCategory, str] = {
     WeaknessCategory.RENDERING: "묘사",
     WeaknessCategory.FINISH: "완성도",
     WeaknessCategory.OTHER: "기타",
+    WeaknessCategory.TIME_MANAGEMENT: "시간 관리",
 }
 
 FEEDBACK_ITEM_KIND_LABELS: dict[FeedbackItemKind, str] = {
@@ -525,6 +528,10 @@ class RecommendationAction(StrEnum):
     ADOPTED = "ADOPTED"
     COMPLETED = "COMPLETED"
     SUPERSEDED = "SUPERSEDED"
+    # v0.9 F-8: 과제 시작, 작품 연결·해제
+    STARTED = "STARTED"
+    ARTWORK_LINKED = "ARTWORK_LINKED"
+    ARTWORK_UNLINKED = "ARTWORK_UNLINKED"
 
 
 class TrendDirection(StrEnum):
@@ -639,3 +646,89 @@ class ModerationAction(StrEnum):
     AUTO_HIDE_COMMENT = "AUTO_HIDE_COMMENT"
     RESOLVE_REPORT = "RESOLVE_REPORT"
     DISMISS_REPORT = "DISMISS_REPORT"
+
+
+# --------------------------------------------------------------------------- v0.9 V2 1~2단계
+
+
+class StudentGrade(StrEnum):
+    """학년 (profiles.grade, 선택). 나이·학교명은 저장하지 않는다."""
+
+    MIDDLE_SCHOOL = "MIDDLE_SCHOOL"  # 중학생
+    HIGH_1 = "HIGH_1"
+    HIGH_2 = "HIGH_2"
+    HIGH_3 = "HIGH_3"
+    GRADUATE = "GRADUATE"  # 졸업생 (N수)
+    OTHER = "OTHER"
+
+
+GRADE_LABELS: dict[StudentGrade, str] = {
+    StudentGrade.MIDDLE_SCHOOL: "중학생",
+    StudentGrade.HIGH_1: "고1",
+    StudentGrade.HIGH_2: "고2",
+    StudentGrade.HIGH_3: "고3",
+    StudentGrade.GRADUATE: "졸업생(N수)",
+    StudentGrade.OTHER: "기타",
+}
+
+
+class TimeSource(StrEnum):
+    """artworks.actual_minutes 를 누가 기록했나."""
+
+    MANUAL = "MANUAL"  # 학생이 직접 입력
+    TIMER = "TIMER"  # 타이머 종료 기록에서 계산
+
+
+class TimerEventType(StrEnum):
+    """작품 타이머 이벤트 (artwork_timer_events, append-only)."""
+
+    START = "START"
+    PAUSE = "PAUSE"
+    RESUME = "RESUME"
+    STOP = "STOP"  # 종료 → actual_minutes 기록
+    RESET = "RESET"  # 기록 버림 (다시 시작 가능)
+
+
+class TimerState(StrEnum):
+    IDLE = "IDLE"  # 시작 전 또는 RESET 후
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    STOPPED = "STOPPED"
+
+
+class FeedbackSource(StrEnum):
+    """첨삭 출처. 성장 분석의 신뢰도 구분 기준 (INSTRUCTOR만 반복 약점 통계에 집계)."""
+
+    INSTRUCTOR = "INSTRUCTOR"  # 강사의 첨삭 (녹음, 또는 학생이 받아 적은 텍스트)
+    SELF_NOTE = "SELF_NOTE"  # 학생 본인의 학습 메모
+    PEER = "PEER"  # 다른 학생의 의견 (커뮤니티 피드백 채택 포함)
+
+
+FEEDBACK_SOURCE_LABELS: dict[FeedbackSource, str] = {
+    FeedbackSource.INSTRUCTOR: "강사 첨삭",
+    FeedbackSource.SELF_NOTE: "자기 메모",
+    FeedbackSource.PEER: "다른 학생 의견",
+}
+
+
+class SpeakerConsentStatus(StrEnum):
+    """녹음에 목소리가 담긴 다른 사람(강사)에 대한 고지·동의 상태 (학생 자기 신고값).
+
+    학생의 기록일 뿐 강사의 동의를 법적으로 대신하지 않는다 (API 응답에도 그렇게 표시).
+    """
+
+    NOT_RECORDED = "NOT_RECORDED"  # v0.9 이전 녹음
+    NOTICE_GIVEN = "NOTICE_GIVEN"  # 녹음 사실을 알림
+    CONSENT_REPORTED = "CONSENT_REPORTED"  # 강사가 동의했다고 학생이 기록
+
+
+class CommentType(StrEnum):
+    GENERAL = "GENERAL"  # 일반 의견
+    FEEDBACK = "FEEDBACK"  # 작품 피드백 (항목 지정 가능, 작성자가 채택하면 PEER 첨삭으로 기록)
+
+
+class NotificationType(StrEnum):
+    REPORT_READY = "REPORT_READY"  # 새 성장 리포트
+    TASK_RECOMMENDED = "TASK_RECOMMENDED"  # 새 맞춤 과제 (개인 추천·학원 배포)
+    TASK_REMINDER = "TASK_REMINDER"  # 채택 후 미완료 과제 안내
+    GOAL_CHECK = "GOAL_CHECK"  # 학습 목표 확인 안내

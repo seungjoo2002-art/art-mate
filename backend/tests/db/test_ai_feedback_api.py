@@ -15,7 +15,7 @@ from app.integrations.ai.stt import SttError
 from app.worker.runner import JobRunner
 from tests.db.conftest import Actor, World
 from tests.db.test_recordings_api import _consent, _record
-from tests.fake_ai import FakeFetcher, FakeLlm, FakeStt, ai_json
+from tests.fake_ai import SEGMENTS, FakeFetcher, FakeLlm, FakeStt, ai_json
 from tests.fake_storage import FakeStorage
 
 API = "/api/v1"
@@ -177,10 +177,13 @@ async def test_academy_flow_transcribe_summarize_review_approve(  # type: ignore
     assert detail["status"] == "DRAFT" and detail["version"] == 1
     assert detail["ai_draft"]["weaknesses"][0]["category"] == "VALUE"
     assert detail["categories"] == ["FORM", "VALUE"]
-    assert detail["weaknesses"][0]["evidence"] == [{"index": 1, "start_ms": 4000, "end_ms": 7500}]
+    # v0.9: 근거에 원문 문장(text)도 함께 내려준다
+    assert detail["weaknesses"][0]["evidence"] == [
+        {"index": 1, "start_ms": 4000, "end_ms": 7500, "text": SEGMENTS[1]}
+    ]
     assert (detail["model_name"], detail["prompt_version"]) == (
         "gemini-3.1-flash-lite",
-        "feedback-summary-v1",
+        "feedback-summary-v2",
     )
 
     # 강사 수정 → IN_REVIEW, AI 원본은 그대로

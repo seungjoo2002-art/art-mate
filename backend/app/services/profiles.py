@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import timezone as clock
 from app.core.exceptions import ErrorCode, ForbiddenError, NotFoundError
 from app.core.security import AuthenticatedUser
 from app.models.profile import Profile
@@ -40,7 +41,10 @@ class ProfileService:
         locked = await self.profiles.get_for_update(profile.id)
         assert locked is not None
         for field_name in data.model_fields_set:
-            setattr(locked, field_name, getattr(data, field_name))
+            value = getattr(data, field_name)
+            if field_name == "learning_goal" and value != locked.learning_goal:
+                locked.learning_goal_updated_at = clock.utc_now()
+            setattr(locked, field_name, value)
         await self.session.commit()
         await self.session.refresh(locked)
         return locked

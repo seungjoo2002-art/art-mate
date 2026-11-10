@@ -46,6 +46,7 @@ from app.models.ai_feedback import (
     AiProcessingJob,
     FeedbackCategory,
     FeedbackItem,
+    FeedbackNote,
     FeedbackReviewHistory,
     FeedbackSummary,
     FeedbackTranscript,
@@ -60,6 +61,7 @@ from app.models.enums import (
     ConsentType,
     FeedbackItemKind,
     FeedbackItemOrigin,
+    FeedbackSource,
     FeedbackStatus,
     GrowthScope,
     NarrativeStatus,
@@ -73,13 +75,17 @@ from app.models.growth import GrowthReport
 from app.models.recording import FeedbackRecording, RecordingConsent
 from app.schemas.growth import Evidence
 from app.services.ai_cleanup import consent_version
+from app.services.ai_feedback import review_mode_for
 from app.services.ai_summary import (
     KIND_FIELDS,
     PROMPT_VERSION,
     RESPONSE_SCHEMA,
     SYSTEM_INSTRUCTION,
+    TEXT_PROMPT_VERSION,
+    TEXT_SYSTEM_INSTRUCTION,
     InvalidAiOutput,
     build_prompt,
+    build_text_prompt,
     parse_output,
 )
 from app.services.growth import GrowthService, Scope
@@ -96,6 +102,8 @@ from app.services.growth_ai import (
     parse_narrative,
     parse_recommendations,
 )
+from app.services.notifications import NotificationService
+from app.services.retention import expire_recording_audio
 
 logger = logging.getLogger("app.worker")
 
@@ -225,9 +233,26 @@ class JobRunner:
             )
         return True
 
+    async def maintenance(self) -> dict[str, int]:
+        """정기 작업 (v0.9): 음성 보관 기간 표시, 미완료 과제·학습 목표 알림. DB만 사용."""
+        async with self._session() as session:
+            expired = await expire_recording_audio(session, self.settings)
+            await session.commit()
+        async with self._session() as session:
+            notified = await NotificationService(session).sweep_all()
+        logger.info("maintenance done", extra={"expired_audio": expired, "notifications": notified})
+        return {"expired_audio": expired, "notifications": notified}
+
     async def run_forever(self, stop: asyncio.Event) -> None:
         logger.info("worker started", extra={"worker_id": self.worker_id})
+        next_maintenance = time.monotonic()
         while not stop.is_set():
+            if time.monotonic() >= next_maintenance:
+                next_maintenance = time.monotonic() + self.settings.worker_maintenance_seconds
+                try:
+                    await self.maintenance()
+                except Exception:  # 정기 작업 실패가 큐 처리를 막지 않게
+                    logger.exception("maintenance error")
             try:
                 processed = await self.run_once()
             except Exception:  # DB 일시 장애 등: 잠시 쉬고 계속 (작업은 lease 만료로 복구)
@@ -583,6 +608,13 @@ class JobRunner:
         async with self._session() as session:
             job = await session.get(AiProcessingJob, job_id)
             assert job is not None
+            is_note = job.note_id is not None
+        if is_note:
+            await self._summarize_note(job_id)
+            return
+        async with self._session() as session:
+            job = await session.get(AiProcessingJob, job_id)
+            assert job is not None
             await self._load_recording(session, job)
             await self._check_ai_consent(session, job.owner_id)
             transcript = None
@@ -630,7 +662,9 @@ class JobRunner:
         await self._record_usage(job_id, usage)
 
         try:
-            output, dropped = parse_output(response.text, segment_count)
+            output, dropped = parse_output(
+                response.text, segment_count, [s["text"] for s in segments]
+            )
         except InvalidAiOutput:
             raise JobFailure(
                 "LLM_INVALID_OUTPUT", "AI response did not match the schema", retryable=True
@@ -641,104 +675,202 @@ class JobRunner:
             _, artwork = await self._load_recording(session, job)
             # 호출 중 동의를 철회했으면 결과를 저장하지 않는다
             await self._check_ai_consent(session, job.owner_id)
-            mode = ReviewMode.SELF if artwork.academy_id is None else ReviewMode.INSTRUCTOR
-            previous = list(
-                (
-                    await session.execute(
-                        select(FeedbackSummary)
-                        .where(
-                            FeedbackSummary.recording_id == job.recording_id,
-                            FeedbackSummary.status.in_(
-                                [
-                                    FeedbackStatus.DRAFT,
-                                    FeedbackStatus.IN_REVIEW,
-                                    FeedbackStatus.APPROVED,
-                                ]
-                            ),
-                        )
-                        .with_for_update()
-                    )
-                ).scalars()
-            )
-            if any(p.status == FeedbackStatus.APPROVED for p in previous):
-                raise JobCancelled("FEEDBACK_ALREADY_APPROVED")
-            for old in previous:
-                from_status = old.status
-                old.status = FeedbackStatus.SUPERSEDED
-                old.version += 1
-                session.add(
-                    FeedbackReviewHistory(
-                        id=uuid.uuid4(),
-                        summary_id=old.id,
-                        actor_id=None,
-                        actor_mode=None,
-                        action=ReviewAction.SUPERSEDED,
-                        from_status=from_status,
-                        to_status=FeedbackStatus.SUPERSEDED,
-                        version=old.version,
-                    )
-                )
-            await session.flush()
-
-            summary = FeedbackSummary(
-                id=uuid.uuid4(),
-                recording_id=job.recording_id,
-                artwork_id=job.artwork_id,
-                owner_id=job.owner_id,
-                transcript_id=transcript_pk,
-                job_id=job.id,
-                status=FeedbackStatus.DRAFT,
-                review_mode=mode,
-                version=1,
-                summary=output.summary,
-                ai_output=output.model_dump(mode="json"),
-                model_name=response.model_name,
+            await self._store_summary(
+                session,
+                job,
+                FeedbackSummary.recording_id == job.recording_id,
+                mode=review_mode_for(artwork),
+                source=FeedbackSource.INSTRUCTOR,
+                refs={"recording_id": job.recording_id, "transcript_id": transcript_pk},
+                output=output,
+                response=response,
+                dropped=dropped,
                 prompt_version=PROMPT_VERSION,
-                input_tokens=response.input_tokens,
-                output_tokens=response.output_tokens,
-                dropped_item_count=dropped,
             )
-            session.add(summary)
-            await session.flush()
-            for kind, field in KIND_FIELDS.items():
-                for position, item in enumerate(getattr(output, field)):
-                    session.add(
-                        FeedbackItem(
-                            id=uuid.uuid4(),
-                            summary_id=summary.id,
-                            kind=FeedbackItemKind(kind),
-                            position=position,
-                            content=item.text,
-                            category=item.category,
-                            evidence_segment_ids=item.evidence,
-                            origin=FeedbackItemOrigin.AI,
-                        )
+            await session.commit()
+
+    async def _store_summary(
+        self,
+        session: AsyncSession,
+        job: AiProcessingJob,
+        same_source: Any,
+        *,
+        mode: ReviewMode,
+        source: FeedbackSource,
+        refs: dict[str, Any],
+        output: Any,
+        response: Any,
+        dropped: int,
+        prompt_version: str,
+    ) -> None:
+        """AI 초안 저장 (녹음·텍스트 공통): 이전 초안 대체 → 첨삭·항목·카테고리·이력."""
+        previous = list(
+            (
+                await session.execute(
+                    select(FeedbackSummary)
+                    .where(
+                        same_source,
+                        FeedbackSummary.status.in_(
+                            [
+                                FeedbackStatus.DRAFT,
+                                FeedbackStatus.IN_REVIEW,
+                                FeedbackStatus.APPROVED,
+                            ]
+                        ),
                     )
-            for category in output.weakness_categories:
-                session.add(
-                    FeedbackCategory(
-                        id=uuid.uuid4(),
-                        summary_id=summary.id,
-                        category=category,
-                        origin=FeedbackItemOrigin.AI,
-                    )
+                    .with_for_update()
                 )
+            ).scalars()
+        )
+        if any(p.status == FeedbackStatus.APPROVED for p in previous):
+            raise JobCancelled("FEEDBACK_ALREADY_APPROVED")
+        for old in previous:
+            from_status = old.status
+            old.status = FeedbackStatus.SUPERSEDED
+            old.version += 1
             session.add(
                 FeedbackReviewHistory(
                     id=uuid.uuid4(),
-                    summary_id=summary.id,
+                    summary_id=old.id,
                     actor_id=None,
                     actor_mode=None,
-                    action=ReviewAction.CREATED,
-                    from_status=None,
-                    to_status=FeedbackStatus.DRAFT,
-                    version=1,
-                    note=f"{response.model_name} / {PROMPT_VERSION}",
+                    action=ReviewAction.SUPERSEDED,
+                    from_status=from_status,
+                    to_status=FeedbackStatus.SUPERSEDED,
+                    version=old.version,
                 )
             )
-            self._finish(job, AiJobStatus.SUCCEEDED, clock.utc_now())
-            job.last_error_code = None
-            job.last_error_message = None
+        await session.flush()
+
+        summary = FeedbackSummary(
+            id=uuid.uuid4(),
+            artwork_id=job.artwork_id,
+            owner_id=job.owner_id,
+            job_id=job.id,
+            status=FeedbackStatus.DRAFT,
+            review_mode=mode,
+            source=source,
+            version=1,
+            summary=output.summary,
+            ai_output=output.model_dump(mode="json"),
+            model_name=response.model_name,
+            prompt_version=prompt_version,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            dropped_item_count=dropped,
+            **refs,
+        )
+        session.add(summary)
+        await session.flush()
+        for kind, field in KIND_FIELDS.items():
+            for position, item in enumerate(getattr(output, field)):
+                session.add(
+                    FeedbackItem(
+                        id=uuid.uuid4(),
+                        summary_id=summary.id,
+                        kind=FeedbackItemKind(kind),
+                        position=position,
+                        content=item.text,
+                        category=item.category,
+                        evidence_segment_ids=item.evidence,
+                        origin=FeedbackItemOrigin.AI,
+                    )
+                )
+        for category in output.weakness_categories:
+            session.add(
+                FeedbackCategory(
+                    id=uuid.uuid4(),
+                    summary_id=summary.id,
+                    category=category,
+                    origin=FeedbackItemOrigin.AI,
+                )
+            )
+        session.add(
+            FeedbackReviewHistory(
+                id=uuid.uuid4(),
+                summary_id=summary.id,
+                actor_id=None,
+                actor_mode=None,
+                action=ReviewAction.CREATED,
+                from_status=None,
+                to_status=FeedbackStatus.DRAFT,
+                version=1,
+                note=f"{response.model_name} / {prompt_version}",
+            )
+        )
+        self._finish(job, AiJobStatus.SUCCEEDED, clock.utc_now())
+        job.last_error_code = None
+        job.last_error_message = None
+
+    # ------------------------------------------------------------------ SUMMARIZE (텍스트, v0.9)
+
+    async def _load_note(
+        self, session: AsyncSession, job: AiProcessingJob
+    ) -> tuple[FeedbackNote, Artwork]:
+        row = (
+            await session.execute(
+                select(FeedbackNote, Artwork)
+                .join(Artwork, Artwork.id == FeedbackNote.artwork_id)
+                .where(FeedbackNote.id == job.note_id)
+            )
+        ).one_or_none()
+        if row is None or row[1].deleted_at is not None:
+            raise JobCancelled("NOTE_DELETED")
+        expected = job.params.get("note_version")
+        if expected is not None and expected != row[0].version:
+            raise JobCancelled("NOTE_CHANGED")
+        return row[0], row[1]
+
+    async def _summarize_note(self, job_id: uuid.UUID) -> None:
+        async with self._session() as session:
+            job = await session.get(AiProcessingJob, job_id)
+            assert job is not None
+            note, _ = await self._load_note(session, job)
+            await self._check_ai_consent(session, job.owner_id)
+            approved = (
+                await session.execute(
+                    select(FeedbackSummary.id).where(
+                        FeedbackSummary.note_id == job.note_id,
+                        FeedbackSummary.status == FeedbackStatus.APPROVED,
+                    )
+                )
+            ).first()
+            if approved is not None:
+                raise JobCancelled("FEEDBACK_ALREADY_APPROVED")
+            if self.llm is None:
+                raise JobFailure("AI_NOT_CONFIGURED", "AI summary is not enabled", retryable=False)
+            segments = list(note.segments)
+            segment_count = note.segment_count
+
+        # 외부 전송: 문장 번호와 문장만 (출처·이름·학원·작품 정보·ID 미포함)
+        response = await self._call_llm(
+            job_id, TEXT_SYSTEM_INSTRUCTION, build_text_prompt(segments), RESPONSE_SCHEMA
+        )
+        try:
+            output, dropped = parse_output(
+                response.text, segment_count, [s["text"] for s in segments]
+            )
+        except InvalidAiOutput:
+            raise JobFailure(
+                "LLM_INVALID_OUTPUT", "AI response did not match the schema", retryable=True
+            ) from None
+
+        async with self._session() as session:
+            job = await self._locked_own_job(session, job_id)
+            note, artwork = await self._load_note(session, job)
+            await self._check_ai_consent(session, job.owner_id)
+            await self._store_summary(
+                session,
+                job,
+                FeedbackSummary.note_id == note.id,
+                mode=review_mode_for(artwork, note.source),
+                source=note.source,
+                refs={"note_id": note.id},
+                output=output,
+                response=response,
+                dropped=dropped,
+                prompt_version=TEXT_PROMPT_VERSION,
+            )
             await session.commit()
 
     # ------------------------------------------------------------------ v0.7 성장 코치
@@ -914,6 +1046,11 @@ class JobRunner:
                         actor_id=job.requested_by,
                         model_name=response.model_name,
                         prompt_version=RECOMMEND_PROMPT_VERSION,
+                    )
+                if scope.scope == GrowthScope.PERSONAL:
+                    await session.flush()
+                    await NotificationService(session).tasks_recommended(
+                        scope.owner_id, await service._batch(scope, batch_key), f"recs:{batch_key}"
                     )
             self._finish(job, AiJobStatus.SUCCEEDED, clock.utc_now())
             job.last_error_code = None

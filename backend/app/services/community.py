@@ -40,6 +40,7 @@ from app.core.exceptions import (
     UnprocessableError,
 )
 from app.integrations.supabase.storage import StorageClient
+from app.models.ai_feedback import FeedbackNote
 from app.models.artwork import Artwork
 from app.models.community import (
     ArtworkSharingConsent,
@@ -53,7 +54,9 @@ from app.models.community import (
 )
 from app.models.enums import (
     CommentStatus,
+    CommentType,
     CommunityReportStatus,
+    FeedbackSource,
     ModerationAction,
     PostStatus,
     PracticalType,
@@ -64,13 +67,16 @@ from app.models.enums import (
 )
 from app.models.profile import Profile
 from app.repositories.pagination import fetch_page
+from app.schemas.ai_feedback import FeedbackNoteCreate, FeedbackNoteRead
 from app.schemas.common import PaginationParams
 from app.schemas.community import (
     AdminReportRead,
     AuthorRead,
     BookmarkState,
+    CommentAdopt,
     CommentCreate,
     CommentRead,
+    CommentUpdate,
     LikeState,
     ModerationLogRead,
     PostCreate,
@@ -82,6 +88,7 @@ from app.schemas.community import (
     ReportResolve,
     VisibilityRead,
 )
+from app.services.feedback_notes import FeedbackNoteService
 from app.services.sharing import ANONYMOUS_NAME, author_name, sign_images, visible_consent
 
 
@@ -194,6 +201,7 @@ class CommunityService:
                     artwork_id=post.artwork_id if mine else None,
                     title=post.title,
                     body=post.body,
+                    question=post.question,
                     practical_type=post.practical_type,
                     work_category=post.work_category,
                     author=AuthorRead(
@@ -280,6 +288,7 @@ class CommunityService:
             image_id=image.id,
             title=data.title,
             body=data.body or None,
+            question=data.question or None,
             practical_type=data.practical_type or artwork.practical_type,
             work_category=data.work_category or artwork.work_category,
             status=PostStatus.ACTIVE,
@@ -392,7 +401,7 @@ class CommunityService:
         if "title" in changes and changes["title"] is None:
             raise UnprocessableError("'title' cannot be null")
         for field, value in changes.items():
-            setattr(post, field, value or None if field == "body" else value)
+            setattr(post, field, value or None if field in ("body", "question") else value)
         await self.session.commit()
         return await self.get_post(author, post.id, token)
 
@@ -471,7 +480,12 @@ class CommunityService:
     # ================================================================ 댓글
 
     def _comment_read(
-        self, comment: CommunityComment, author: Profile, viewer: Profile
+        self,
+        comment: CommunityComment,
+        author: Profile,
+        viewer: Profile,
+        *,
+        adopted: bool | None = None,
     ) -> CommentRead:
         return CommentRead(
             id=comment.id,
@@ -480,6 +494,9 @@ class CommunityService:
             author=AuthorRead(
                 display_name=author.display_name, is_anonymous=False, is_me=author.id == viewer.id
             ),
+            comment_type=comment.comment_type,
+            categories=list(comment.categories),
+            adopted=adopted,
             status=comment.status,
             created_at=comment.created_at,
             updated_at=comment.updated_at,
@@ -503,7 +520,33 @@ class CommunityService:
             .order_by(CommunityComment.created_at, CommunityComment.id)
         )
         rows, total = await fetch_page(self.session, stmt, params)
-        return [self._comment_read(c, p, viewer) for c, p in rows], total
+        adopted = await self._adopted({c.id for c, _ in rows})
+        return [
+            self._comment_read(
+                c,
+                p,
+                viewer,
+                # 채택 여부는 게시물 작성자와 댓글 작성자에게만
+                adopted=(c.id in adopted)
+                if viewer.id in (post.author_id, c.author_id)
+                and c.comment_type == CommentType.FEEDBACK
+                else None,
+            )
+            for c, p in rows
+        ], total
+
+    async def _adopted(self, comment_ids: set[uuid.UUID]) -> set[uuid.UUID]:
+        if not comment_ids:
+            return set()
+        return set(
+            (
+                await self.session.execute(
+                    select(FeedbackNote.community_comment_id).where(
+                        FeedbackNote.community_comment_id.in_(comment_ids)
+                    )
+                )
+            ).scalars()
+        )
 
     async def add_comment(
         self, viewer: Profile, post_id: uuid.UUID, data: CommentCreate
@@ -521,6 +564,8 @@ class CommunityService:
             post_id=post.id,
             author_id=viewer.id,
             body=data.body,
+            comment_type=data.comment_type,
+            categories=[c.value for c in data.categories],
             status=CommentStatus.ACTIVE,
         )
         self.session.add(comment)
@@ -551,10 +596,16 @@ class CommunityService:
         return comment
 
     async def update_comment(
-        self, viewer: Profile, comment_id: uuid.UUID, data: CommentCreate
+        self, viewer: Profile, comment_id: uuid.UUID, data: CommentUpdate
     ) -> CommentRead:
         comment = await self._own_comment(viewer, comment_id)
         comment.body = data.body
+        if data.comment_type is not None:
+            comment.comment_type = data.comment_type
+        if data.categories is not None:
+            comment.categories = sorted({c.value for c in data.categories})
+        if comment.comment_type != CommentType.FEEDBACK and comment.categories:
+            raise UnprocessableError("categories are only for FEEDBACK comments")
         await self.session.commit()
         await self.session.refresh(comment)
         return self._comment_read(comment, viewer, viewer)
@@ -577,6 +628,62 @@ class CommunityService:
                 .where(CommunityPost.id == comment.post_id)
                 .values(comment_count=func.greatest(CommunityPost.comment_count - 1, 0))
             )
+
+    # ================================================================ v0.9 피드백 채택
+
+    async def adopt_comment(
+        self, viewer: Profile, comment_id: uuid.UUID, data: CommentAdopt
+    ) -> FeedbackNoteRead:
+        """게시물 작성자가 작품 피드백 댓글을 자기 첨삭 기록(출처 PEER)으로 채택한다.
+
+        채택하기 전에는 성장 분석에 쓰지 않는다. 채택해도 출처가 PEER라 강사 첨삭과 구분되고,
+        반복 약점 통계에는 들어가지 않는다 (참고 통계만). 원문 사본을 저장하므로 댓글이 나중에
+        지워져도 학생의 기록은 남는다.
+        """
+        row = (
+            await self.session.execute(
+                select(CommunityComment, CommunityPost)
+                .join(CommunityPost, CommunityPost.id == CommunityComment.post_id)
+                .where(
+                    CommunityComment.id == comment_id,
+                    CommunityComment.status == CommentStatus.ACTIVE,
+                    CommunityPost.status != PostStatus.DELETED,
+                )
+            )
+        ).first()
+        if row is None:
+            raise NotFoundError("Comment not found")
+        comment, post = row
+        if post.author_id != viewer.id:
+            await self._visible_post(viewer, post.id)
+            raise ForbiddenError("Only the post author can adopt feedback")
+        if comment.author_id == viewer.id:
+            raise UnprocessableError("You cannot adopt your own comment")
+        if comment.comment_type != CommentType.FEEDBACK:
+            raise ConflictError(
+                "Only FEEDBACK comments can be adopted", code=ErrorCode.COMMENT_NOT_FEEDBACK
+            )
+        if await self._adopted({comment.id}):
+            raise ConflictError(
+                "This comment is already adopted", code=ErrorCode.COMMENT_ALREADY_ADOPTED
+            )
+        notes = FeedbackNoteService(self.session, self.settings)
+        try:
+            return await notes.create(
+                viewer,
+                post.artwork_id,
+                FeedbackNoteCreate(
+                    source=FeedbackSource.PEER,
+                    body=comment.body,
+                    request_summary=data.request_summary,
+                ),
+                community_comment_id=comment.id,
+            )
+        except IntegrityError:
+            await self.session.rollback()
+            raise ConflictError(
+                "This comment is already adopted", code=ErrorCode.COMMENT_ALREADY_ADOPTED
+            ) from None
 
     # ================================================================ 신고
 

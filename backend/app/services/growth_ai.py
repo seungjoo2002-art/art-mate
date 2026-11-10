@@ -205,6 +205,21 @@ TEMPLATES: dict[WeaknessCategory, tuple[Template, ...]] = {
             Difficulty.EASY,
         ),
     ),
+    # v0.9: 시간 관리 (제한 시간 안에 완성하지 못함)
+    WeaknessCategory.TIME_MANAGEMENT: (
+        _T(
+            "단계별 시간 배분 모의 연습",
+            "제한 시간을 스케치·채색·마무리 단계로 나눠 목표 시간을 정하고 타이머로 지켜 본다.",
+            (
+                "제한 시간을 단계별 목표 시간으로 나눠 적는다",
+                "타이머를 켜고 단계마다 목표 시간에 맞춰 넘어간다",
+                "단계가 끝날 때마다 실제 걸린 시간을 기록한다",
+                "가장 많이 넘친 단계를 다음 연습의 점검 항목으로 정한다",
+            ),
+            120,
+            Difficulty.NORMAL,
+        ),
+    ),
 }
 
 

@@ -25,6 +25,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
@@ -134,6 +135,11 @@ class PracticeRecommendation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             postgresql_where=text("status NOT IN ('REJECTED', 'SUPERSEDED')"),
         ),
         Index("ix_practice_recommendations_owner_status", "owner_id", "status", "created_at"),
+        # v0.9: 시작은 채택(ADOPTED) 이후에만
+        CheckConstraint(
+            "started_at IS NULL OR status IN ('ADOPTED', 'COMPLETED', 'SUPERSEDED', 'REJECTED')",
+            name="started_after_adopt",
+        ),
         Index("ix_practice_recommendations_academy_status", "academy_id", "status", "created_at"),
     )
 
@@ -197,6 +203,32 @@ class PracticeRecommendation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     task_id: Mapped[uuid.UUID | None]
     # 개인: 학생 본인 완료 기록
     completed_at: Mapped[datetime | None]
+    # v0.9 F-8: 과제 시작 시각 (개인), 학습 목표 문장
+    started_at: Mapped[datetime | None]
+    learning_goal: Mapped[str | None] = mapped_column(String(300))
+
+
+class PracticeRecommendationArtwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """과제 수행 작품 연결 (v0.9 F-8). 개인 과제에 학생 본인의 작품만 연결한다.
+
+    완료(과제 상태)와 실력 향상(연결 작품의 후속 첨삭에서 약점이 다시 나왔는지)은 별개로 다룬다.
+    작품이 삭제되면 연결도 사라진다 (CASCADE). owner_id 복합 FK로 다른 사람 작품 연결을 막는다.
+    """
+
+    __tablename__ = "practice_recommendation_artworks"
+    __table_args__ = (
+        UniqueConstraint("recommendation_id", "artwork_id"),
+        ForeignKeyConstraint(
+            ["artwork_id", "owner_id"], ["artworks.id", "artworks.owner_id"], ondelete="CASCADE"
+        ),
+        Index("ix_practice_recommendation_artworks_artwork", "artwork_id"),
+    )
+
+    recommendation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("practice_recommendations.id", ondelete="CASCADE")
+    )
+    artwork_id: Mapped[uuid.UUID]
+    owner_id: Mapped[uuid.UUID]
 
 
 class PracticeRecommendationHistory(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -4,12 +4,13 @@ import datetime as dt
 import uuid
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 
 from app.models.enums import (
     ArtworkWorkCategory,
     AuthorDisplay,
     CommentStatus,
+    CommentType,
     CommunityReportStatus,
     ConsentGrantor,
     ModerationAction,
@@ -174,6 +175,9 @@ class PostCreate(InputModel):
     artwork_id: uuid.UUID
     title: Text100
     body: Text2000 | None = None
+    question: Text1000 | None = Field(
+        default=None, description="작품에 대해 묻고 싶은 질문 (v0.9, 선택)"
+    )
     practical_type: PracticalType | None = Field(default=None, description="생략하면 작품 값")
     work_category: ArtworkWorkCategory | None = Field(default=None, description="생략하면 작품 값")
 
@@ -181,6 +185,7 @@ class PostCreate(InputModel):
 class PostUpdate(InputModel):
     title: Text100 | None = None
     body: Text2000 | None = None
+    question: Text1000 | None = None
     practical_type: PracticalType | None = None
     work_category: ArtworkWorkCategory | None = None
 
@@ -195,6 +200,7 @@ class PostRead(BaseModel):
     artwork_id: uuid.UUID | None = Field(description="본인 게시물일 때만")
     title: str
     body: str | None
+    question: str | None = Field(default=None, description="작성자의 질문 (v0.9)")
     practical_type: PracticalType | None
     work_category: ArtworkWorkCategory | None
     author: AuthorRead
@@ -223,6 +229,37 @@ class BookmarkState(BaseModel):
 
 class CommentCreate(InputModel):
     body: Text1000
+    comment_type: CommentType = Field(
+        default=CommentType.GENERAL,
+        description="v0.9: GENERAL(일반 의견) / FEEDBACK(작품 피드백, 작성자가 채택 가능)",
+    )
+    categories: list[WeaknessCategory] = Field(
+        default_factory=list,
+        max_length=5,
+        description="작품 피드백 항목 (구도·비례·명암·채색 등, FEEDBACK일 때만)",
+    )
+
+    @model_validator(mode="after")
+    def _categories_only_feedback(self) -> "CommentCreate":
+        if self.categories and self.comment_type != CommentType.FEEDBACK:
+            raise ValueError("categories are only for FEEDBACK comments")
+        if len(set(self.categories)) != len(self.categories):
+            raise ValueError("duplicate category")
+        return self
+
+
+class CommentUpdate(InputModel):
+    """댓글 수정. 보내지 않은 필드는 그대로 (기존처럼 body만 보내도 된다)."""
+
+    body: Text1000
+    comment_type: CommentType | None = None
+    categories: list[WeaknessCategory] | None = Field(default=None, max_length=5)
+
+
+class CommentAdopt(InputModel):
+    request_summary: bool = Field(
+        default=False, description="채택 후 AI 요약·분류 요청 (AI 전송 동의 필요, 없으면 저장만)"
+    )
 
 
 class CommentRead(BaseModel):
@@ -230,6 +267,12 @@ class CommentRead(BaseModel):
     post_id: uuid.UUID
     body: str
     author: AuthorRead = Field(description="댓글은 항상 표시 이름 (익명 아님)")
+    comment_type: CommentType = CommentType.GENERAL
+    categories: list[WeaknessCategory] = Field(default_factory=list)
+    adopted: bool | None = Field(
+        default=None,
+        description="게시물 작성자가 내 첨삭 기록으로 채택함 (게시물 작성자·댓글 작성자에게만)",
+    )
     status: CommentStatus
     created_at: dt.datetime
     updated_at: dt.datetime
