@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createMe, getMe } from '../../features/auth/api'
+import { createMe, getMe, updateMe } from '../../features/auth/api'
 import { clearPendingProfile, readPendingProfile } from '../../features/auth/pendingProfile'
 import { supabase } from '../../lib/supabase'
 import { AuthContext } from './AuthContext'
@@ -61,6 +61,16 @@ export default function AuthProvider({ children }) {
     [userId],
   )
 
+  /** 프로필 수정 후 화면에 바로 반영 */
+  const updateProfile = useCallback(
+    async (patch) => {
+      const profile = await updateMe(patch)
+      setResult({ userId, profile, error: null })
+      return profile
+    },
+    [userId],
+  )
+
   const signOut = useCallback(async () => {
     clearPendingProfile()
     await supabase.auth.signOut()
@@ -83,9 +93,10 @@ export default function AuthProvider({ children }) {
       error: status === 'error' ? result.error : null,
       retry,
       createProfile,
+      updateProfile,
       signOut,
     }
-  }, [session, userId, result, retry, createProfile, signOut])
+  }, [session, userId, result, retry, createProfile, updateProfile, signOut])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

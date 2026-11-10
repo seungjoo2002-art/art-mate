@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import FullScreenStatus from '../components/layout/FullScreenStatus'
 import { Button } from '../components/ui'
 import AuthStatusScreen from './AuthStatusScreen'
@@ -7,6 +7,7 @@ import { useAuth } from './providers/AuthContext'
 /** 로그인 + 프로필이 있어야 들어갈 수 있는 화면. 학생 전용 서비스 */
 export default function ProtectedRoute() {
   const { status, profile, signOut } = useAuth()
+  const { pathname } = useLocation()
 
   if (status === 'signedOut') return <Navigate to="/" replace />
   if (status === 'needsProfile') return <Navigate to="/onboarding" replace />
@@ -25,5 +26,7 @@ export default function ProtectedRoute() {
       </FullScreenStatus>
     )
   }
+  // 학습 정보(실기 유형)를 아직 안 정했으면 먼저 설정 (v0.9 F-1)
+  if (!profile.practical_type && pathname !== '/setup') return <Navigate to="/setup" replace />
   return <Outlet />
 }
