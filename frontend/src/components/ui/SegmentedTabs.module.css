@@ -1,0 +1,25 @@
+.tabs {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+}
+
+.tab {
+  height: 44px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-sub);
+  transition: background-color 0.15s;
+}
+
+.active {
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}

@@ -1,19 +1,37 @@
 import { api } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 
-export const listArtworks = ({ limit = 100, offset = 0 } = {}) =>
-  api(`/artworks?limit=${limit}&offset=${offset}`)
+/** 목록 필터 (v0.5.1): workCategory MOCK_EXAM | PERSONAL_PRACTICE | CLASS_WORK, practicalType 실기 유형 */
+export const listArtworks = ({ limit = 100, offset = 0, workCategory, practicalType } = {}) => {
+  const params = new URLSearchParams({ limit, offset })
+  if (workCategory) params.set('work_category', workCategory)
+  if (practicalType) params.set('practical_type', practicalType)
+  return api(`/artworks?${params}`)
+}
 
 export const getArtwork = (artworkId) => api(`/artworks/${artworkId}?include_urls=true`)
 
-/** recommendationId: 맞춤 연습 과제의 수행 작품으로 연결 (v0.9) */
-export const createArtwork = ({ title, description, recommendationId }) =>
+/**
+ * recommendationId: 맞춤 연습 과제의 수행 작품으로 연결 (v0.9)
+ * workCategory·timeLimitMinutes: 실기시험 모드면 MOCK_EXAM + 제한 시간(분) (v0.5.1, v0.9 F-2)
+ */
+export const createArtwork = ({
+  title,
+  description,
+  recommendationId,
+  practicalType,
+  workCategory,
+  timeLimitMinutes,
+}) =>
   api('/artworks', {
     method: 'POST',
     body: {
       title,
       description: description || null,
       ...(recommendationId ? { recommendation_id: recommendationId } : {}),
+      ...(practicalType ? { practical_type: practicalType } : {}),
+      ...(workCategory ? { work_category: workCategory } : {}),
+      ...(timeLimitMinutes ? { time_limit_minutes: timeLimitMinutes } : {}),
     },
   })
 

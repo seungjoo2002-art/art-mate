@@ -1,0 +1,79 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-6) var(--space-4);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.cover {
+  position: relative;
+  margin-bottom: var(--space-2);
+}
+
+.image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 0.9;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-muted);
+  object-fit: cover;
+}
+
+.badge {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.hidden {
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-5);
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-xl);
+  text-align: center;
+}
+
+.emptyTitle {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.emptySub {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
