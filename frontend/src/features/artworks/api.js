@@ -6,8 +6,16 @@ export const listArtworks = ({ limit = 100, offset = 0 } = {}) =>
 
 export const getArtwork = (artworkId) => api(`/artworks/${artworkId}?include_urls=true`)
 
-export const createArtwork = ({ title, description }) =>
-  api('/artworks', { method: 'POST', body: { title, description: description || null } })
+/** recommendationId: 맞춤 연습 과제의 수행 작품으로 연결 (v0.9) */
+export const createArtwork = ({ title, description, recommendationId }) =>
+  api('/artworks', {
+    method: 'POST',
+    body: {
+      title,
+      description: description || null,
+      ...(recommendationId ? { recommendation_id: recommendationId } : {}),
+    },
+  })
 
 export const deleteArtwork = (artworkId) => api(`/artworks/${artworkId}`, { method: 'DELETE' })
 

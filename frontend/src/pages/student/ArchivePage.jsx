@@ -1,6 +1,8 @@
 import { useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button, Card, PageIntro } from '../../components/ui'
+import GrowthOverview from '../../features/growth/components/GrowthOverview'
+import RecentFeedbacks from '../../features/growth/components/RecentFeedbacks'
 import { listArtworks } from '../../features/artworks/api'
 import ArtworkCard from '../../features/artworks/components/ArtworkCard'
 import { isCompleted } from '../../features/artworks/stages'
@@ -8,7 +10,16 @@ import { useAsync } from '../../hooks/useAsync'
 import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './ArchivePage.module.css'
 
+const TABS = [
+  { key: 'artworks', label: '전체 작품' },
+  { key: 'feedbacks', label: '첨삭' },
+  { key: 'growth', label: '성장 분석' },
+]
+
 export default function ArchivePage() {
+  const [params, setParams] = useSearchParams()
+  const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'artworks'
+
   return (
     <>
       <PageIntro
@@ -16,7 +27,23 @@ export default function ArchivePage() {
         title="나의 성장 기록"
         description="완성보다 과정에 집중해온 기록이에요."
       />
-      <ArtworkArchive />
+      <div className={styles.tabs} role="tablist">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            className={`${styles.tab} ${tab === t.key ? styles.tabActive : ''}`}
+            onClick={() => setParams(t.key === 'artworks' ? {} : { tab: t.key }, { replace: true })}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'artworks' && <ArtworkArchive />}
+      {tab === 'feedbacks' && <RecentFeedbacks />}
+      {tab === 'growth' && <GrowthOverview />}
     </>
   )
 }

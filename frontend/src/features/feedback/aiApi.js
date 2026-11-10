@@ -2,14 +2,17 @@ import { api } from '../../lib/api'
 
 // v0.6 AI 첨삭 (docs/frontend-integration-v0.6.md). 개인 작품은 학생 본인이 검토·확정(review_mode SELF)
 
-export const getAiConsent = () => api('/ai-processing-consents/me')
+// 동의 목적: FEEDBACK_SUMMARY(첨삭 요약, v0.6) / GROWTH_COACHING(성장 리포트 설명·AI 연습 과제, v0.7). 서로 별개
+export const getAiConsent = (purpose = 'FEEDBACK_SUMMARY') =>
+  api(`/ai-processing-consents/me?purpose=${purpose}`)
 
-export const revokeAiConsent = () => api('/ai-processing-consents/me', { method: 'DELETE' })
+export const revokeAiConsent = (purpose = 'FEEDBACK_SUMMARY') =>
+  api(`/ai-processing-consents/me?purpose=${purpose}`, { method: 'DELETE' })
 
-export const saveAiConsent = ({ policyVersion, grantedBy }) =>
+export const saveAiConsent = ({ purpose = 'FEEDBACK_SUMMARY', policyVersion, grantedBy }) =>
   api('/ai-processing-consents', {
     method: 'POST',
-    body: { policy_version: policyVersion, agreed: true, granted_by: grantedBy },
+    body: { purpose, policy_version: policyVersion, agreed: true, granted_by: grantedBy },
   })
 
 const recordingPath = (artworkId, recordingId) =>

@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
 import { Button } from '../../../components/ui'
@@ -9,11 +9,15 @@ import { getAiConsent } from '../aiApi'
 import AiConsentForm from '../components/AiConsentForm'
 import styles from './FeedbackRecordPage.module.css'
 
-/** AI 전송 동의. 동의하면 들어온 화면(state.from)으로 돌아감 */
+const PURPOSES = ['FEEDBACK_SUMMARY', 'GROWTH_COACHING']
+
+/** AI 전송 동의 (?purpose=GROWTH_COACHING). 동의하면 들어온 화면(state.from)으로 돌아감 */
 export default function AiConsentPage() {
   const navigate = useNavigate()
   const from = useLocation().state?.from ?? '/archive'
-  const load = useCallback(() => getAiConsent(), [])
+  const requested = useSearchParams()[0].get('purpose')
+  const purpose = PURPOSES.includes(requested) ? requested : 'FEEDBACK_SUMMARY'
+  const load = useCallback(() => getAiConsent(purpose), [purpose])
   const { data: consent, error, reload } = useAsync(load)
 
   if (error) {
@@ -31,6 +35,7 @@ export default function AiConsentPage() {
       <TopBar title="AI 정리 동의" belowHeader />
       <main className={`${styles.body} ${styles.left}`}>
         <AiConsentForm
+          purpose={purpose}
           requiredVersion={consent.required_version}
           onSaved={() => navigate(from, { replace: true, state: { aiConsented: true } })}
         />

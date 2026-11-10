@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import TopBar from '../../../components/layout/TopBar'
-import { Button, Input } from '../../../components/ui'
+import { Button, Card, Input } from '../../../components/ui'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { createArtwork } from '../api'
 import styles from './ArtworkPage.module.css'
 
 export default function ArtworkCreatePage() {
   const navigate = useNavigate()
+  const recommendationId = useSearchParams()[0].get('recommendation')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [formError, setFormError] = useState('')
@@ -25,6 +26,7 @@ export default function ArtworkCreatePage() {
       const artwork = await createArtwork({
         title: title.trim(),
         description: description.trim(),
+        recommendationId,
       })
       navigate(`/artworks/${artwork.id}`, { replace: true })
     } catch (error) {
@@ -37,6 +39,7 @@ export default function ArtworkCreatePage() {
     <>
       <TopBar title="작품 제작 시작" belowHeader />
       <form className={styles.body} onSubmit={handleSubmit} noValidate>
+        {recommendationId && <Card variant="soft">맞춤 연습 과제를 수행한 작품으로 기록돼요.</Card>}
         <Input
           label="작품명"
           placeholder="정물 기초디자인 04"

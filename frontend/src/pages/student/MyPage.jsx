@@ -26,7 +26,8 @@ export default function MyPage() {
         </div>
       </Card>
 
-      <AiConsentRow />
+      <AiConsentRow purpose="FEEDBACK_SUMMARY" title="AI 피드백 정리 동의" />
+      <AiConsentRow purpose="GROWTH_COACHING" title="AI 성장 코칭 동의" />
 
       <Card className={styles.menu}>
         <button type="button" className={styles.logout} onClick={signOut}>
@@ -38,21 +39,21 @@ export default function MyPage() {
   )
 }
 
-/** AI 정리 동의 상태 + 철회 (동의서에 "마이 탭에서 철회 가능"으로 안내함) */
-function AiConsentRow() {
-  const load = useCallback(() => getAiConsent(), [])
+/** AI 동의 상태 + 철회 (동의서에 "마이 탭에서 철회 가능"으로 안내함) */
+function AiConsentRow({ purpose, title }) {
+  const load = useCallback(() => getAiConsent(purpose), [purpose])
   const { data: consent, reload } = useAsync(load)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function handleRevoke() {
-    if (!window.confirm('AI 정리 동의를 철회할까요? 진행 중인 AI 정리는 취소되고, 이미 만든 정리는 남아요.')) {
+    if (!window.confirm(`${title}를 철회할까요? 진행 중인 AI 작업은 취소되고, 이미 만든 결과는 남아요.`)) {
       return
     }
     setBusy(true)
     setError('')
     try {
-      await revokeAiConsent()
+      await revokeAiConsent(purpose)
       reload()
     } catch (err) {
       setError(toErrorMessage(err))
@@ -67,7 +68,7 @@ function AiConsentRow() {
     <Card className={styles.menu}>
       <div className={styles.row}>
         <div>
-          <p className={styles.rowTitle}>AI 피드백 정리 동의</p>
+          <p className={styles.rowTitle}>{title}</p>
           <p className={styles.rowSub}>{consent.is_valid ? '동의함' : '동의하지 않음'}</p>
         </div>
         {consent.is_valid && (
