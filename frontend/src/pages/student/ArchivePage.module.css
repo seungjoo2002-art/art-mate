@@ -38,3 +38,23 @@
   gap: var(--space-4);
   text-align: center;
 }
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1.5px solid var(--color-border);
+}
+
+.tab {
+  padding: var(--space-3) 0;
+  margin-bottom: -1.5px;
+  border-bottom: 2px solid transparent;
+  font-size: var(--text-md);
+  color: var(--color-text-muted);
+}
+
+.tabActive {
+  border-bottom-color: var(--color-primary);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}

@@ -1,0 +1,144 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.heading {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+}
+
+.caption {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.emptyTitle {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+
+.guidance {
+  color: var(--color-text-sub);
+}
+
+.totals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: var(--space-6) 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.stat + .stat {
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.statValue {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+}
+
+.statLabel {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.weakness {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.weaknessHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+}
+
+.rank {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-on-dark);
+  font-weight: var(--weight-bold);
+}
+
+.weaknessText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.weaknessTitle {
+  font-weight: var(--weight-bold);
+}
+
+.weaknessSub {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.strength,
+.unverified {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+}
+
+.strength {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.unverified {
+  background: var(--color-surface-muted);
+  color: var(--color-text-sub);
+}
+
+.goals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.timeCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
