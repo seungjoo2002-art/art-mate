@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { MAX_AUDIO_BYTES, MAX_AUDIO_MS, audioTypeOf, readDurationMs } from './audioFile'
 
 const TYPES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
-const MAX_DURATION_MS = 20 * 60 * 1000 // 서버 제한 20분
+const MAX_DURATION_MS = MAX_AUDIO_MS // 서버 제한 20분
 
 /**
- * 브라우저 마이크 녹음 (v0.5 문서 §2.4)
- * status: idle → recording → recorded
- * result: { blob, mimeType, durationMs, recordedAt(시작 시각), url(미리듣기용) }
+ * 브라우저 마이크 녹음 (v0.5 문서 §2.4) 또는 녹음 파일 불러오기(loadFile)
+ * status: idle → recording → recorded  (파일: idle → recorded)
+ * result: { blob, mimeType, durationMs, recordedAt(시작 시각), url(미리듣기용), fileName? }
  */
 export function useAudioRecorder() {
   const [status, setStatus] = useState('idle')
@@ -85,6 +86,45 @@ export function useAudioRecorder() {
     recorder.start(1000) // 1초마다 청크 (긴 녹음에서 유실 방지)
   }, [releaseMic])
 
+  /** 휴대폰 음성 메모 등 이미 있는 녹음 파일. 형식·크기·길이를 검사한 뒤 녹음한 것처럼 미리듣기 상태로 */
+  const loadFile = useCallback(async (file) => {
+    setError('')
+    const mimeType = audioTypeOf(file)
+    if (!mimeType) {
+      setError('m4a, mp3, wav, webm, ogg 녹음 파일만 올릴 수 있어요.')
+      return
+    }
+    if (file.size > MAX_AUDIO_BYTES) {
+      setError('25MB 이하 파일만 올릴 수 있어요.')
+      return
+    }
+    const url = URL.createObjectURL(file)
+    let durationMs
+    try {
+      durationMs = await readDurationMs(url)
+    } catch {
+      URL.revokeObjectURL(url)
+      setError('이 파일은 재생할 수 없어요. 다른 파일을 골라 주세요.')
+      return
+    }
+    if (durationMs > MAX_AUDIO_MS) {
+      URL.revokeObjectURL(url)
+      setError('20분 이하 녹음만 올릴 수 있어요. 나눠서 올려 주세요.')
+      return
+    }
+    setResult({
+      blob: file,
+      mimeType,
+      durationMs,
+      // 녹음한 시각을 알 수 없어 파일 수정 시각을 사용 (타임라인 정렬용)
+      recordedAt: new Date(file.lastModified || Date.now()).toISOString(),
+      url,
+      fileName: file.name,
+    })
+    setElapsedMs(durationMs)
+    setStatus('recorded')
+  }, [])
+
   const reset = useCallback(() => {
     setResult((prev) => {
       if (prev) URL.revokeObjectURL(prev.url)
@@ -106,5 +146,5 @@ export function useAudioRecorder() {
     [releaseMic],
   )
 
-  return { status, elapsedMs, result, error, start, stop, reset }
+  return { status, elapsedMs, result, error, start, stop, reset, loadFile }
 }

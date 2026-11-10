@@ -122,3 +122,34 @@
 .left {
   text-align: left;
 }
+
+.fileButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 48px;
+  margin-top: var(--space-2);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.fileButton[aria-busy='true'] {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.fileButton:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
