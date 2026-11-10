@@ -17,6 +17,7 @@ import CheckEmailPage from '../features/auth/pages/CheckEmailPage'
 import LandingPage from '../features/auth/pages/LandingPage'
 import LoginPage from '../features/auth/pages/LoginPage'
 import OnboardingPage from '../features/auth/pages/OnboardingPage'
+import ProfileEditPage from '../features/auth/pages/ProfileEditPage'
 import SetupPage from '../features/auth/pages/SetupPage'
 import SignupPage from '../features/auth/pages/SignupPage'
 import NotFoundPage from '../pages/NotFoundPage'
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
       {
         element: <SubLayout />,
         children: [
+          { path: '/my/edit', element: <ProfileEditPage /> },
           { path: '/artworks/new', element: <ArtworkCreatePage /> },
           {
             path: '/artworks/:artworkId',
