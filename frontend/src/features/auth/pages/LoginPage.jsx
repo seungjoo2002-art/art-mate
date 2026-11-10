@@ -62,7 +62,7 @@ export default function LoginPage() {
         </form>
         <p className={styles.footer}>
           아직 계정이 없으신가요?
-          <Link to="/signup/role" className={styles.link}>
+          <Link to="/signup" className={styles.link}>
             회원가입
           </Link>
         </p>

@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../app/providers/AuthContext'
 import { Button, Card, PageIntro } from '../../components/ui'
 import { listArtworks } from '../../features/artworks/api'
 import ArtworkCard from '../../features/artworks/components/ArtworkCard'
@@ -10,8 +9,6 @@ import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './ArchivePage.module.css'
 
 export default function ArchivePage() {
-  const { profile } = useAuth()
-
   return (
     <>
       <PageIntro
@@ -19,11 +16,7 @@ export default function ArchivePage() {
         title="나의 성장 기록"
         description="완성보다 과정에 집중해온 기록이에요."
       />
-      {profile.user_type === 'STUDENT' ? (
-        <ArtworkArchive />
-      ) : (
-        <Card variant="soft">작품 아카이브는 학생 계정에서 사용할 수 있어요.</Card>
-      )}
+      <ArtworkArchive />
     </>
   )
 }
