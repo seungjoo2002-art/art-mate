@@ -117,3 +117,8 @@
   color: var(--color-danger);
   font-size: var(--text-sm);
 }
+
+/* 동의 화면처럼 왼쪽 정렬이 필요한 페이지 */
+.left {
+  text-align: left;
+}

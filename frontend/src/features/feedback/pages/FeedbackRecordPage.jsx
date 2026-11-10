@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Mic, Square } from 'lucide-react'
+import { Mic, Sparkles, Square } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getConsent, uploadRecording } from '../api'
+import { startAiSummary } from '../aiApi'
 import ConsentForm from '../components/ConsentForm'
 import { formatDuration } from '../format'
 import { useAudioRecorder } from '../useAudioRecorder'
@@ -49,17 +50,33 @@ function Recorder({ artworkId }) {
   const [uploadError, setUploadError] = useState('')
   const recording = status === 'recording'
 
-  async function handleSave() {
+  async function handleSave({ withAi = false } = {}) {
     setUploading(true)
     setUploadError('')
+    let saved
     try {
-      await uploadRecording(artworkId, result)
-      navigate(`/artworks/${artworkId}`, { replace: true })
+      saved = await uploadRecording(artworkId, result)
     } catch (err) {
       // 녹음 파일은 그대로 두고 다시 저장할 수 있게 함
       setUploadError(toErrorMessage(err))
       setUploading(false)
+      return
     }
+
+    const artworkPath = `/artworks/${artworkId}`
+    if (withAi) {
+      try {
+        const { needsConsent } = await startAiSummary(artworkId, saved.id)
+        if (needsConsent) {
+          // 동의 후 작품 화면에서 "AI로 피드백 정리하기"를 누르면 됨
+          navigate('/ai-consent', { replace: true, state: { from: artworkPath } })
+          return
+        }
+      } catch {
+        // 녹음은 저장됨. AI 요청 실패는 작품 화면의 녹음 카드에서 다시 시도
+      }
+    }
+    navigate(artworkPath, { replace: true })
   }
 
   return (
@@ -88,8 +105,12 @@ function Recorder({ artworkId }) {
         <div className={styles.review}>
           <audio controls src={result.url} className={styles.preview} />
           {uploadError && <p className={styles.error}>{uploadError}</p>}
-          <Button onClick={handleSave} disabled={uploading}>
-            {uploading ? '저장하는 중…' : '녹음 저장하기'}
+          <Button onClick={() => handleSave({ withAi: true })} disabled={uploading}>
+            <Sparkles size={20} aria-hidden />
+            {uploading ? '저장하는 중…' : '저장하고 AI로 정리하기'}
+          </Button>
+          <Button variant="soft" onClick={() => handleSave()} disabled={uploading}>
+            녹음만 저장하기
           </Button>
           <Button variant="soft" onClick={reset} disabled={uploading}>
             다시 녹음
@@ -108,7 +129,6 @@ function Recorder({ artworkId }) {
           {error && <p className={styles.error}>{error}</p>}
         </>
       )}
-      {/* TODO(v0.6): AI로 피드백 정리하기 */}
     </>
   )
 }

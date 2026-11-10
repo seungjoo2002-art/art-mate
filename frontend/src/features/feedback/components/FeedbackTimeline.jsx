@@ -5,6 +5,7 @@ import { useAsync } from '../../../hooks/useAsync'
 import { formatUploadedAt } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { deleteRecording, listRecordings } from '../api'
+import RecordingAiStatus from './RecordingAiStatus'
 import RecordingPlayer from './RecordingPlayer'
 import styles from './FeedbackTimeline.module.css'
 
@@ -63,6 +64,7 @@ export default function FeedbackTimeline({ artworkId, items }) {
             <Trash2 size={18} />
           </button>
         </div>
+        <RecordingAiStatus artworkId={artworkId} recording={recording} />
       </div>
     ),
   }))

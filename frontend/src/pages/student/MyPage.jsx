@@ -1,6 +1,10 @@
+import { useCallback, useState } from 'react'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '../../app/providers/AuthContext'
 import { Card, PageIntro } from '../../components/ui'
+import { getAiConsent, revokeAiConsent } from '../../features/feedback/aiApi'
+import { useAsync } from '../../hooks/useAsync'
+import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './MyPage.module.css'
 
 export default function MyPage() {
@@ -22,6 +26,8 @@ export default function MyPage() {
         </div>
       </Card>
 
+      <AiConsentRow />
+
       <Card className={styles.menu}>
         <button type="button" className={styles.logout} onClick={signOut}>
           로그아웃
@@ -29,5 +35,48 @@ export default function MyPage() {
         </button>
       </Card>
     </>
+  )
+}
+
+/** AI 정리 동의 상태 + 철회 (동의서에 "마이 탭에서 철회 가능"으로 안내함) */
+function AiConsentRow() {
+  const load = useCallback(() => getAiConsent(), [])
+  const { data: consent, reload } = useAsync(load)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleRevoke() {
+    if (!window.confirm('AI 정리 동의를 철회할까요? 진행 중인 AI 정리는 취소되고, 이미 만든 정리는 남아요.')) {
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await revokeAiConsent()
+      reload()
+    } catch (err) {
+      setError(toErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!consent) return null
+
+  return (
+    <Card className={styles.menu}>
+      <div className={styles.row}>
+        <div>
+          <p className={styles.rowTitle}>AI 피드백 정리 동의</p>
+          <p className={styles.rowSub}>{consent.is_valid ? '동의함' : '동의하지 않음'}</p>
+        </div>
+        {consent.is_valid && (
+          <button type="button" className={styles.revoke} onClick={handleRevoke} disabled={busy}>
+            {busy ? '철회하는 중…' : '동의 철회'}
+          </button>
+        )}
+      </div>
+      {error && <p className={styles.error}>{error}</p>}
+    </Card>
   )
 }

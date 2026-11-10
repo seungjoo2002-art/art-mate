@@ -4,7 +4,9 @@ import SubLayout from '../components/layout/SubLayout'
 import ArtworkCreatePage from '../features/artworks/pages/ArtworkCreatePage'
 import ArtworkDetailPage from '../features/artworks/pages/ArtworkDetailPage'
 import FeedbackTimeline from '../features/feedback/components/FeedbackTimeline'
+import AiConsentPage from '../features/feedback/pages/AiConsentPage'
 import FeedbackRecordPage from '../features/feedback/pages/FeedbackRecordPage'
+import FeedbackReviewPage from '../features/feedback/pages/FeedbackReviewPage'
 import AuthCallbackPage from '../features/auth/pages/AuthCallbackPage'
 import CheckEmailPage from '../features/auth/pages/CheckEmailPage'
 import LandingPage from '../features/auth/pages/LandingPage'
@@ -60,6 +62,8 @@ export const router = createBrowserRouter([
             element: <ArtworkDetailPage renderTimeline={renderArtworkTimeline} />,
           },
           { path: '/artworks/:artworkId/recordings/new', element: <FeedbackRecordPage /> },
+          { path: '/feedbacks/:feedbackId', element: <FeedbackReviewPage /> },
+          { path: '/ai-consent', element: <AiConsentPage /> },
         ],
       },
     ],
