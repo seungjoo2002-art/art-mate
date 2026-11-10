@@ -1,0 +1,37 @@
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.logo {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--color-primary);
+  color: var(--color-text-on-dark);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+}
+
+.title {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
+}
+
+.large {
+  font-size: var(--text-3xl);
+}
+
+.description {
+  font-size: var(--text-md);
+  line-height: 1.7;
+  color: var(--color-text-sub);
+  white-space: pre-line;
+}

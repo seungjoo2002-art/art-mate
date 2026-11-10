@@ -1,36 +1,23 @@
-/* 회원가입·로그인·온보딩 화면 공통 스타일 */
+/* 랜딩·로그인·회원가입·학습 정보 설정 공통 스타일 */
 .page {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: var(--color-surface);
+  background: var(--color-bg);
 }
 
 .body {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-8) var(--gutter) var(--space-10);
+  gap: var(--space-10);
+  padding: var(--space-10) var(--gutter);
 }
 
 .form {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-}
-
-.badge {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-}
-
-.options {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
 }
 
 .formError {
@@ -41,14 +28,62 @@
   font-size: var(--text-sm);
 }
 
-.footer {
-  text-align: center;
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
+.hint {
+  margin-top: calc(var(--space-3) * -1);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
-.link {
-  margin-left: var(--space-1);
+/* "처음 이용하시나요? 회원가입" 같은 주황 링크 */
+.switch {
+  align-self: center;
+  padding: var(--space-2);
+  font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   color: var(--color-primary);
+}
+
+/* 랜딩: 로고를 가운데, 버튼을 아래에 */
+.landing {
+  justify-content: space-between;
+  padding-top: 30dvh;
+  padding-bottom: var(--space-10);
+}
+
+.landingActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* 학습 정보 설정 단계 표시 */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.steps span {
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+}
+
+.setupIntro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.setupTitle {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  white-space: pre-line;
+}
+
+.setupSub {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }

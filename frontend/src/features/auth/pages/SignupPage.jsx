@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { Lock, Mail, Palette, User } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import TopBar from '../../../components/layout/TopBar'
-import { Badge, Button, Checkbox, Input, PageIntro } from '../../../components/ui'
+import { Button, Checkbox, Input } from '../../../components/ui'
 import { supabase } from '../../../lib/supabase'
 import { toErrorMessage } from '../../../utils/errorMessages'
+import AuthHero from '../components/AuthHero'
 import { clearPendingProfile, savePendingProfile } from '../pendingProfile'
 import styles from './AuthForm.module.css'
 
@@ -12,10 +11,10 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function validate({ displayName, email, password, agreed }) {
   const errors = {}
-  if (!displayName.trim()) errors.displayName = '이름 또는 닉네임을 입력해 주세요.'
+  if (!displayName.trim()) errors.displayName = '공개 닉네임을 입력해 주세요.'
   else if (displayName.trim().length > 50) errors.displayName = '50자 이하로 입력해 주세요.'
   if (!EMAIL_PATTERN.test(email)) errors.email = '올바른 이메일 주소를 입력해 주세요.'
-  if (password.length < 8) errors.password = '비밀번호는 8자 이상이어야 해요.'
+  if (password.length < 6) errors.password = '비밀번호는 6자 이상이어야 해요.'
   if (!agreed) errors.agreed = '약관에 동의해 주세요.'
   return errors
 }
@@ -66,29 +65,27 @@ export default function SignupPage() {
 
   return (
     <div className={styles.page}>
-      <TopBar title="회원가입" />
       <main className={styles.body}>
-        <Badge className={styles.badge}>
-          <Palette size={20} aria-hidden />
-          학생 계정 만들기
-        </Badge>
-        <PageIntro title="성장 기록을 시작해 볼까요?" />
+        <AuthHero
+          title="ART MATE 시작하기"
+          description="미술 입시 학습 기록을 한곳에서 관리해 보세요."
+        />
 
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
           <Input
-            label="이름 또는 닉네임"
-            icon={User}
-            placeholder="김서연"
+            label="공개 닉네임"
+            placeholder="서연의작업실"
             autoComplete="nickname"
+            maxLength={50}
             value={form.displayName}
             onChange={onInput('displayName')}
             error={errors.displayName}
           />
+          <p className={styles.hint}>커뮤니티 등에서 다른 사람에게 보이는 이름이에요.</p>
           <Input
             label="이메일"
-            icon={Mail}
             type="email"
-            placeholder="name@example.com"
+            placeholder="student@example.com"
             autoComplete="email"
             value={form.email}
             onChange={onInput('email')}
@@ -96,9 +93,8 @@ export default function SignupPage() {
           />
           <Input
             label="비밀번호"
-            icon={Lock}
             type="password"
-            placeholder="8자 이상 입력"
+            placeholder="6자 이상 입력"
             autoComplete="new-password"
             value={form.password}
             onChange={onInput('password')}
@@ -111,16 +107,12 @@ export default function SignupPage() {
           {formError && <p className={styles.formError}>{formError}</p>}
 
           <Button type="submit" disabled={submitting}>
-            {submitting ? '가입하는 중…' : '회원가입 완료'}
+            {submitting ? '가입하는 중…' : '회원가입'}
           </Button>
-        </form>
-
-        <p className={styles.footer}>
-          이미 계정이 있으신가요?
-          <Link to="/login" className={styles.link}>
-            로그인
+          <Link to="/login" className={styles.switch}>
+            이미 계정이 있으신가요? 로그인
           </Link>
-        </p>
+        </form>
       </main>
     </div>
   )

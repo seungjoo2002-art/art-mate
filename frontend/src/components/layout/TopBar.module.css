@@ -39,3 +39,19 @@
   font-weight: var(--weight-bold);
   color: var(--color-primary);
 }
+
+.plain {
+  grid-template-columns: 40px 1fr;
+  gap: var(--space-2);
+  background: transparent;
+  border-bottom: none;
+}
+
+.plain .title {
+  text-align: left;
+  font-size: var(--text-xl);
+}
+
+.plain .step {
+  display: none;
+}
