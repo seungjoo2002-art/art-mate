@@ -1,0 +1,121 @@
+# STT·AI 요약 Worker (일괄 실행)
+#
+# 유료 서버 없이 GitHub Actions에서 DB 작업 큐(ai_processing_jobs)를 주기적으로 처리한다.
+# - 전사(TRANSCRIBE): faster-whisper small · CPU INT8 · 한국어 (모델은 actions/cache로 재사용)
+# - 요약·성장 AI(SUMMARIZE 등): Gemini — 저장소 변수 AI_SUMMARY_ENABLED=true + GEMINI_API_KEY일 때만
+# 예약 실행은 GitHub 사정에 따라 늦어지거나 건너뛸 수 있다 (실시간 처리 보장 없음).
+# 설명: docs/stt-worker-github-actions.md
+
+name: stt-worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_jobs:
+        description: "이번 실행에서 처리할 최대 작업 수"
+        default: "10"
+        required: false
+      max_minutes:
+        description: "이 시간(분)이 지나면 새 작업을 잡지 않음"
+        default: "40"
+        required: false
+  schedule:
+    - cron: "*/15 * * * *"
+
+# 실행은 하나씩 (겹치면 다음 실행은 대기). 큐 선점은 DB에서도 SKIP LOCKED로 중복 방지
+concurrency:
+  group: stt-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  work:
+    # 포크 저장소의 예약 실행 방지 (원본 저장소에서만, 수동 실행은 쓰기 권한자만 가능)
+    if: github.repository == 'seungjoo2002-art/art-mate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      APP_ENV: production
+      LOG_FORMAT: json
+      LOG_LEVEL: INFO
+      # Supabase Session pooler 주소 (IPv4). 직접 연결 주소(db.<ref>.supabase.co)는 IPv6라 Actions에서 안 됨
+      DATABASE_URL: ${{ secrets.WORKER_DATABASE_URL }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      AI_SUMMARY_ENABLED: ${{ vars.AI_SUMMARY_ENABLED || 'false' }}
+      GROWTH_AI_ENABLED: ${{ vars.GROWTH_AI_ENABLED || 'false' }}
+      # API 서버(Render)와 같은 값이어야 동의가 유효하다 (빈 값은 무시되어 앱 기본값 사용)
+      AI_CONSENT_VERSION: ${{ vars.AI_CONSENT_VERSION }}
+      AI_GROWTH_CONSENT_VERSION: ${{ vars.AI_GROWTH_CONSENT_VERSION }}
+      STT_MODEL: small
+      STT_DEVICE: cpu
+      STT_COMPUTE_TYPE: int8
+      STT_LANGUAGE: ko
+      STT_TIMEOUT_SECONDS: "1200"
+      STT_MODEL_DIR: ${{ github.workspace }}/.cache/whisper
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      MAX_JOBS: ${{ inputs.max_jobs || '10' }}
+      MAX_MINUTES: ${{ inputs.max_minutes || '40' }}
+    steps:
+      - name: Check configuration
+        id: config
+        working-directory: .
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::WORKER_DATABASE_URL secret이 없어 실행하지 않습니다"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.config.outputs.ready == 'true'
+
+      - uses: astral-sh/setup-uv@v7
+        if: steps.config.outputs.ready == 'true'
+        with:
+          version: "0.12.3"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install (API dependencies only)
+        if: steps.config.outputs.ready == 'true'
+        run: uv sync --frozen --python 3.12 --no-dev
+
+      - name: Check queue
+        id: queue
+        if: steps.config.outputs.ready == 'true'
+        run: uv run --no-sync python -m app.worker --pending
+
+      - name: Install STT (faster-whisper)
+        if: steps.config.outputs.ready == 'true' && steps.queue.outputs.transcribe != '0'
+        run: uv sync --frozen --python 3.12 --no-dev --extra stt
+
+      - name: Restore Whisper model cache
+        id: model-cache
+        if: steps.config.outputs.ready == 'true' && steps.queue.outputs.transcribe != '0'
+        uses: actions/cache@v4
+        with:
+          path: .cache/whisper
+          key: whisper-small-ct2-v1
+
+      - name: Download Whisper model (cache miss)
+        if: >-
+          steps.config.outputs.ready == 'true' && steps.queue.outputs.transcribe != '0'
+          && steps.model-cache.outputs.cache-hit != 'true'
+        run: >-
+          uv run --no-sync python -c "from faster_whisper.utils import download_model;
+          import os; download_model(os.environ['STT_MODEL'], cache_dir=os.environ['STT_MODEL_DIR'])"
+
+      - name: Process queue
+        if: steps.config.outputs.ready == 'true'
+        env:
+          # 전사 작업이 없으면 STT를 켜지 않는다 (모델 로드·설치 생략)
+          STT_ENABLED: ${{ steps.queue.outputs.transcribe != '0' }}
+        run: >-
+          uv run --no-sync python -m app.worker --once
+          --max-jobs "$MAX_JOBS" --max-seconds "$(( MAX_MINUTES * 60 ))"
