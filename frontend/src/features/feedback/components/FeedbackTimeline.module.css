@@ -85,3 +85,9 @@
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
 }
+
+.buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}

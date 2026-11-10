@@ -11,6 +11,7 @@ import RecommendationPage from '../features/growth/pages/RecommendationPage'
 import RecommendationsPage from '../features/growth/pages/RecommendationsPage'
 import FeedbackRecordPage from '../features/feedback/pages/FeedbackRecordPage'
 import FeedbackReviewPage from '../features/feedback/pages/FeedbackReviewPage'
+import NoteFormPage from '../features/feedback/pages/NoteFormPage'
 import AuthCallbackPage from '../features/auth/pages/AuthCallbackPage'
 import CheckEmailPage from '../features/auth/pages/CheckEmailPage'
 import LandingPage from '../features/auth/pages/LandingPage'
@@ -67,6 +68,8 @@ export const router = createBrowserRouter([
           },
           { path: '/artworks/:artworkId/recordings/new', element: <FeedbackRecordPage /> },
           { path: '/feedbacks/:feedbackId', element: <FeedbackReviewPage /> },
+          { path: '/artworks/:artworkId/notes/new', element: <NoteFormPage /> },
+          { path: '/feedback-notes/:noteId/edit', element: <NoteFormPage /> },
           { path: '/ai-consent', element: <AiConsentPage /> },
           { path: '/growth/reports', element: <GrowthReportsPage /> },
           { path: '/growth/reports/:reportId', element: <GrowthReportPage /> },
