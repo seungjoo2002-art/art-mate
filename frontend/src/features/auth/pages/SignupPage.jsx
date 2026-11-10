@@ -14,7 +14,7 @@ function validate({ displayName, email, password, agreed }) {
   if (!displayName.trim()) errors.displayName = '공개 닉네임을 입력해 주세요.'
   else if (displayName.trim().length > 50) errors.displayName = '50자 이하로 입력해 주세요.'
   if (!EMAIL_PATTERN.test(email)) errors.email = '올바른 이메일 주소를 입력해 주세요.'
-  if (password.length < 6) errors.password = '비밀번호는 6자 이상이어야 해요.'
+  if (password.length < 8) errors.password = '비밀번호는 8자 이상이어야 해요.'
   if (!agreed) errors.agreed = '약관에 동의해 주세요.'
   return errors
 }
@@ -94,7 +94,7 @@ export default function SignupPage() {
           <Input
             label="비밀번호"
             type="password"
-            placeholder="6자 이상 입력"
+            placeholder="8자 이상 입력"
             autoComplete="new-password"
             value={form.password}
             onChange={onInput('password')}

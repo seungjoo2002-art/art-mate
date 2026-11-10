@@ -47,7 +47,7 @@ export default function LoginPage() {
           <Input
             label="비밀번호"
             type="password"
-            placeholder="6자 이상 입력"
+            placeholder="비밀번호 입력"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
