@@ -1,11 +1,13 @@
 import { api } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 
-/** workCategory: MOCK_EXAM | PERSONAL_PRACTICE | CLASS_WORK (v0.5.1 목록 필터) */
-export const listArtworks = ({ limit = 100, offset = 0, workCategory } = {}) =>
-  api(
-    `/artworks?limit=${limit}&offset=${offset}${workCategory ? `&work_category=${workCategory}` : ''}`,
-  )
+/** 목록 필터 (v0.5.1): workCategory MOCK_EXAM | PERSONAL_PRACTICE | CLASS_WORK, practicalType 실기 유형 */
+export const listArtworks = ({ limit = 100, offset = 0, workCategory, practicalType } = {}) => {
+  const params = new URLSearchParams({ limit, offset })
+  if (workCategory) params.set('work_category', workCategory)
+  if (practicalType) params.set('practical_type', practicalType)
+  return api(`/artworks?${params}`)
+}
 
 export const getArtwork = (artworkId) => api(`/artworks/${artworkId}?include_urls=true`)
 
