@@ -156,7 +156,24 @@ POST /feedback-notes/{id}/summary  → 202 JobRead (진행 중이면 200 같은 
   FAILED면 같은 POST로 다시 요청 (error_code: LLM_INVALID_OUTPUT, LLM_RATE_LIMITED, LLM_TIMEOUT …)
 ```
 
-### 3.2 녹음 첨삭 보완 (v0.6 API에 추가)
+### 3.2 녹음 → 전사 → 요약 처리 상태 (v0.9.1, GitHub Actions 처리)
+
+전사·요약은 서버가 즉시 처리하지 않고 **GitHub Actions가 약 15분마다(지연 가능)** 처리합니다 ([stt-worker-github-actions.md](stt-worker-github-actions.md)). 새 API는 없고 기존 API로 상태를 보여 주세요.
+
+| 단계 | API | 표시 |
+| --- | --- | --- |
+| 전사 요청 | `POST /artworks/{aid}/recordings/{rid}/transcription` `{auto_summarize}` → 202 | "변환 대기 중 (보통 15~60분)" |
+| 상태 조회 | `GET …/transcription` → `transcription_status` PENDING / PROCESSING / COMPLETED / FAILED, `job.status` QUEUED / RUNNING / SUCCEEDED / FAILED / CANCELLED, `job.error_code` | 대기 / 처리 중 / 완료 / 실패(재시도 버튼) |
+| 실패 재시도 | `POST …/transcription/retry` (FAILED·CANCELLED일 때) | `SOURCE_URL_EXPIRED`는 오래 대기해 링크가 만료된 경우 → 재시도하면 됨 |
+| 전사 확인·수정 | `GET …/transcript`, `PUT …/transcript` | 원본 보존, 수정본이 현재 전사 |
+| 요약 요청 (전사 확정) | `POST …/summary` (auto_summarize면 생략) | "AI 요약 대기 중" |
+| 요약 상태 | `GET …/summary` → `job.status`, `feedback_id`, `feedback_status` | 완료되면 `/feedbacks/{feedback_id}`로 검토·확정 |
+
+- 목록에서는 `GET /artworks/{aid}/recordings`의 `transcription_status`로 배지를 표시하세요. 폴링은 화면을 열었을 때·1~2분 간격이면 충분합니다.
+- auto_summarize=true면 학생이 전사를 보기 전에 요약이 만들어질 수 있습니다. "전사 확인 후 요약"을 원하면 false로 요청하고 확인·수정 후 `POST …/summary`를 호출하세요.
+- 요약 기능이 꺼져 있으면(`AI_SUMMARY_ENABLED=false`) 요약 요청은 503 `AI_NOT_CONFIGURED`, 서버만 켜고 처리기가 꺼져 있으면 `job.status=QUEUED`로 대기합니다.
+
+### 3.3 녹음 첨삭 보완 (v0.6 API에 추가)
 
 | Method | Path | 설명 |
 | --- | --- | --- |
