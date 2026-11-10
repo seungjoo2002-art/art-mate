@@ -4,19 +4,33 @@
 백엔드는 그 결과인 access token을 검증만 한다 (docs/frontend-integration.md).
 """
 
-from fastapi import APIRouter, Response, status
+import uuid
+from typing import Annotated
 
-from app.api.deps import ActiveProfile, DbSession
+from fastapi import APIRouter, Depends, Response, status
+
+from app.api.deps import ActiveProfile, DbSession, require_user_types
 from app.api.responses import AUTH_ERRORS, error_responses
 from app.core.security import CurrentUser
+from app.models.enums import UserType
 from app.models.profile import Profile
 from app.schemas.academy import JoinRequestRead, MyJoinRequest
 from app.schemas.common import Page, PaginationQuery
+from app.schemas.goals import (
+    LearningContext,
+    TargetUniversityCreate,
+    TargetUniversityOrder,
+    TargetUniversityRead,
+    TargetUniversityUpdate,
+)
 from app.schemas.user import MeRead, ProfileCreate, ProfileRead, ProfileUpdate
+from app.services.goals import GoalService
 from app.services.memberships import MembershipService
 from app.services.profiles import ProfileService
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+Student = Annotated[Profile, Depends(require_user_types(UserType.STUDENT))]
 
 
 def _me(profile: Profile, email: str | None) -> MeRead:
@@ -57,9 +71,10 @@ async def create_me(
 
 @router.patch(
     "/me",
-    summary="내 프로필 수정 (display_name, avatar_path, practical_type)",
+    summary="내 프로필 수정 (표시 이름·사진·실기 유형·학년·학습 목표)",
     description="user_type, is_active 등 다른 필드를 보내면 422. "
-    "practical_type은 선택지 외 값이면 422, null이면 미선택으로 되돌린다.",
+    "practical_type·grade는 선택지 외 값이면 422, null이면 미선택으로 되돌린다. "
+    "learning_goal을 바꾸면 learning_goal_updated_at(목표 수정일)이 갱신된다.",
     responses=AUTH_ERRORS | error_responses(422),
 )
 async def update_me(
@@ -79,3 +94,79 @@ async def list_my_join_requests(
         for req, name in rows
     ]
     return Page(items=items, total=total, limit=pagination.limit, offset=pagination.offset)
+
+
+# ============================================================================ v0.9 학습 목표 (F-1)
+
+GOAL_WRITE = AUTH_ERRORS | error_responses(404, 409, 422)
+
+
+@router.get(
+    "/me/learning-context",
+    summary="내 학습 목표 맥락 (실기 유형·학년·학습 목표·지망 대학)",
+    description="성장 리포트·과제 화면에서 함께 보여 줄 값. 학원 가입과 무관하다.",
+    responses=AUTH_ERRORS,
+)
+async def my_learning_context(owner: Student, session: DbSession) -> LearningContext:
+    return await GoalService(session).context(owner.id)
+
+
+@router.get(
+    "/me/target-universities",
+    summary="내 지망 대학 목록 (1지망부터)",
+    responses=AUTH_ERRORS,
+)
+async def list_target_universities(
+    owner: Student, session: DbSession
+) -> list[TargetUniversityRead]:
+    return await GoalService(session).list(owner)
+
+
+@router.post(
+    "/me/target-universities",
+    summary="지망 대학 추가 (최대 10개)",
+    description="직접 입력한다 (입시 정보 API·합격 예측 없음). priority를 생략하면 맨 뒤, "
+    "지정하면 그 순위에 넣고 기존 대학을 한 칸씩 민다. 10개를 넘으면 409 "
+    "`TARGET_UNIVERSITY_LIMIT`.",
+    status_code=status.HTTP_201_CREATED,
+    responses=GOAL_WRITE,
+)
+async def create_target_university(
+    data: TargetUniversityCreate, owner: Student, session: DbSession
+) -> TargetUniversityRead:
+    return await GoalService(session).create(owner, data)
+
+
+@router.put(
+    "/me/target-universities/order",
+    summary="지망 순위 한 번에 바꾸기",
+    description="ids = 새 순서 (1지망부터). 내 지망 대학 전체를 한 번씩 보내야 한다 (아니면 422).",
+    responses=GOAL_WRITE,
+)
+async def reorder_target_universities(
+    data: TargetUniversityOrder, owner: Student, session: DbSession
+) -> list[TargetUniversityRead]:
+    return await GoalService(session).reorder(owner, data)
+
+
+@router.patch(
+    "/me/target-universities/{target_id}",
+    summary="지망 대학 수정 (이름·학과·메모, priority로 순위 이동)",
+    responses=GOAL_WRITE,
+)
+async def update_target_university(
+    target_id: uuid.UUID, data: TargetUniversityUpdate, owner: Student, session: DbSession
+) -> TargetUniversityRead:
+    return await GoalService(session).update(owner, target_id, data)
+
+
+@router.delete(
+    "/me/target-universities/{target_id}",
+    summary="지망 대학 삭제 (뒤 순위가 한 칸씩 당겨짐)",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=AUTH_ERRORS | error_responses(404),
+)
+async def delete_target_university(
+    target_id: uuid.UUID, owner: Student, session: DbSession
+) -> None:
+    await GoalService(session).delete(owner, target_id)

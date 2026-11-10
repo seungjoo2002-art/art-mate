@@ -14,22 +14,35 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from app.api.deps import AcademyStaff, ActiveProfile, AppSettings, DbSession, require_user_types
+from app.api.deps import (
+    AcademyStaff,
+    ActiveProfile,
+    AppSettings,
+    DbSession,
+    OptionalStorage,
+    require_user_types,
+)
 from app.api.responses import AUTH_ERRORS, error_responses
 from app.core.exceptions import UnprocessableError
+from app.core.security import CurrentUser
 from app.models.enums import (
     ArtworkWorkCategory,
     GrowthScope,
     PracticalType,
     RecommendationStatus,
     UserType,
+    WeaknessCategory,
 )
 from app.models.profile import Profile
 from app.schemas.ai_feedback import JobRead
 from app.schemas.common import Page, PaginationQuery
 from app.schemas.growth import (
+    ArtworkComparison,
+    FollowUp,
     GenerationResult,
     GrowthSummary,
+    LinkedArtwork,
+    RecommendationArtworkLink,
     RecommendationCompletion,
     RecommendationDecision,
     RecommendationDistribute,
@@ -37,6 +50,7 @@ from app.schemas.growth import (
     RecommendationHistoryRead,
     RecommendationRead,
     RecommendationReject,
+    RecommendationStart,
     RecommendationUpdate,
     ReportCreate,
     ReportListItem,
@@ -46,6 +60,7 @@ from app.schemas.growth import (
     StudentGrowthRow,
     TimelineArtwork,
     WeaknessAnalysis,
+    WeaknessHistoryItem,
 )
 from app.services.growth import GrowthService, Scope
 
@@ -348,7 +363,8 @@ async def reject_my_recommendation(
     "/recommendations/{recommendation_id}/completion",
     summary="개인 추천 완료 기록 / 해제 (본인)",
     description="채택(ADOPTED)한 개인 추천만. 학원에서 배포된 과제는 "
-    "PUT /academies/{id}/tasks/{task_id}/completion 을 사용한다.",
+    "PUT /academies/{id}/tasks/{task_id}/completion 을 사용한다. "
+    "v0.9: artwork_id를 함께 보내면 수행 작품으로 연결한다 (완료할 때만, 본인 작품).",
     response_model=ReviewerRecommendationRead | RecommendationRead,
     responses=WRITE,
 )
@@ -371,6 +387,143 @@ async def my_recommendation_history(
     recommendation_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
 ) -> list[RecommendationHistoryRead]:
     return await _svc(session, settings).owner_history(owner, recommendation_id)
+
+
+# ============================================================================ v0.9 F-8 과제 수행
+
+
+@me.post(
+    "/recommendations/{recommendation_id}/start",
+    summary="개인 과제 시작 (본인, v0.9)",
+    description="채택(ADOPTED)한 개인 과제의 시작 시각을 기록한다. 이미 시작했으면 그대로.",
+    response_model=ReviewerRecommendationRead | RecommendationRead,
+    responses=WRITE,
+)
+async def start_my_recommendation(
+    recommendation_id: uuid.UUID,
+    data: RecommendationStart,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> ReviewerRecommendationRead | RecommendationRead:
+    return await _svc(session, settings).start(owner, recommendation_id, data)
+
+
+@me.get(
+    "/recommendations/{recommendation_id}/artworks",
+    summary="개인 과제에 연결된 수행 작품 (v0.9)",
+    description="작품별 후속 강사 첨삭 수와 과제 약점이 다시 지적됐는지(weakness_mentioned).",
+    responses=READ,
+)
+async def my_recommendation_artworks(
+    recommendation_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
+) -> list[LinkedArtwork]:
+    return await _svc(session, settings).linked_artworks(owner, recommendation_id)
+
+
+@me.post(
+    "/recommendations/{recommendation_id}/artworks",
+    summary="개인 과제에 수행 작품 연결 (본인 작품, v0.9)",
+    description="새 작품은 POST /artworks 의 recommendation_id로도 연결할 수 있다. 기존 작품도 "
+    "연결 가능. 채택·완료된 개인 과제만 (아니면 409 `RECOMMENDATION_INVALID_STATE`), "
+    "다른 사람 작품은 404. 이미 연결돼 있으면 그대로 (멱등). 과제당 최대 20개.",
+    status_code=status.HTTP_201_CREATED,
+    responses=WRITE,
+)
+async def link_my_recommendation_artwork(
+    recommendation_id: uuid.UUID,
+    data: RecommendationArtworkLink,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> list[LinkedArtwork]:
+    return await _svc(session, settings).link_artwork(owner, recommendation_id, data.artwork_id)
+
+
+@me.delete(
+    "/recommendations/{recommendation_id}/artworks/{artwork_id}",
+    summary="수행 작품 연결 해제 (v0.9)",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=READ,
+)
+async def unlink_my_recommendation_artwork(
+    recommendation_id: uuid.UUID,
+    artwork_id: uuid.UUID,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> None:
+    await _svc(session, settings).unlink_artwork(owner, recommendation_id, artwork_id)
+
+
+@me.get(
+    "/recommendations/{recommendation_id}/follow-up",
+    summary="과제 후속 분석: 약점 재등장 여부 (v0.9)",
+    description="연결 작품의 승인된 강사 첨삭에서 과제의 약점이 다시 지적됐는지. "
+    "completed(과제 완료)와 status(후속 첨삭 결과)는 별개다. NOT_MENTIONED도 향상의 증거가 아니다.",
+    responses=READ,
+)
+async def my_recommendation_follow_up(
+    recommendation_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
+) -> FollowUp:
+    return await _svc(session, settings).follow_up(owner, recommendation_id)
+
+
+# ============================================================================ v0.9 F-5 아카이브
+
+
+@me.get(
+    "/weaknesses/{category}/feedbacks",
+    summary="특정 약점의 과거 첨삭 (최근순, v0.9)",
+    description="이 카테고리가 지적된 승인 첨삭 항목과 원문 근거. 기본은 강사 첨삭만, "
+    "include_unverified=true면 자기 메모·다른 학생 의견도 (source로 구분).",
+    responses=READ,
+)
+async def my_weakness_history(
+    category: WeaknessCategory,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+    pagination: PaginationQuery,
+    scope: ScopeQ = GrowthScope.ALL,
+    academy_id: uuid.UUID | None = None,
+    include_unverified: bool = False,
+) -> Page[WeaknessHistoryItem]:
+    svc = _svc(session, settings)
+    items, total = await svc.weakness_history(
+        await _student_scope(svc, owner, scope, academy_id),
+        category,
+        pagination,
+        include_unverified=include_unverified,
+    )
+    return Page(items=items, total=total, limit=pagination.limit, offset=pagination.offset)
+
+
+@me.get(
+    "/compare",
+    summary="이전 작품과 현재 작품 비교 (v0.9)",
+    description="두 작품의 메타데이터·시간·단계별 대표 사진(짧은 Signed URL)과 강사 첨삭 카테고리 "
+    "차이. previous_artwork_id를 생략하면 같은 실기 유형의 직전 작품 (없으면 409 "
+    "`ARTWORK_NOT_COMPARABLE`). AI가 사진을 평가하지 않는다.",
+    responses=READ,
+)
+async def compare_my_artworks(
+    current_artwork_id: uuid.UUID,
+    owner: Student,
+    user: CurrentUser,
+    session: DbSession,
+    settings: AppSettings,
+    storage: OptionalStorage,
+    previous_artwork_id: uuid.UUID | None = None,
+) -> ArtworkComparison:
+    svc = _svc(session, settings)
+    return await svc.compare(
+        await _student_scope(svc, owner, GrowthScope.ALL, None),
+        current_artwork_id,
+        previous_artwork_id,
+        storage=storage,
+        token=user.access_token,
+    )
 
 
 @me.get("/jobs/{job_id}", summary="AI 생성 작업 상태 (리포트 설명문·AI 추천)", responses=READ)

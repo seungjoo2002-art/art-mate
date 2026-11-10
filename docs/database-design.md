@@ -1,6 +1,8 @@
 # ART MATE 데이터베이스 설계
 
-> 상태: **v0.8 참고작·커뮤니티 반영** (리비전 `0008`: §3.22 공유 동의·파생 이미지·우수 사례·참고작 추천·커뮤니티).
+> 상태: **v0.9 기능명세서 V2 1~2단계 반영** (리비전 `0009`: §3.23 지망 대학·타이머·텍스트 첨삭·과제 연결·알림).
+>
+> 이전: **v0.8 참고작·커뮤니티 반영** (리비전 `0008`: §3.22 공유 동의·파생 이미지·우수 사례·참고작 추천·커뮤니티).
 >
 > 이전: **v0.7 성장 코치 반영** (리비전 `0007`: §3.21 성장 리포트·맞춤 연습 과제·추천 이력, AI 동의 목적 분리).
 >
@@ -558,6 +560,32 @@ Storage 객체 메타데이터를 한 곳에서 관리 → 권한 확인·보존
 - Storage 권한 함수 `artmate_private.can_access_shared_image(uid, path, mode)` (SECURITY DEFINER, PUBLIC 실행 회수). 버킷·정책은 storage-setup.sql.
 - 공개 판단은 항상 현재 유효한 동의를 조인한다. 기존 테이블 변경 없음.
 
+### 3.23 v0.9 기능명세서 V2 1~2단계 ✅ v0.9 (리비전 `0009`)
+
+> 설명: [v2-backend-completion-v0.9.md](v2-backend-completion-v0.9.md)
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `target_universities` | user CASCADE, university_name(1~100), department, admission_note, priority(≥1). **(user_id, priority) 유니크 DEFERRABLE INITIALLY DEFERRED** (순서 변경), 사용자당 최대 10(서비스) |
+| `artwork_timer_events` | (artwork_id, owner_id) 복합 FK CASCADE, event_type START/PAUSE/RESUME/STOP/RESET, occurred_at, elapsed_seconds(≥0). append-only, 상태는 재생 계산 |
+| `feedback_notes` | (artwork_id, owner_id) 복합 FK CASCADE, source INSTRUCTOR/SELF_NOTE/PEER, body(1~5000), segments(jsonb 문장)·segment_count(≥1), feedback_date, version, community_comment_id(SET NULL, 부분 유니크), created_by |
+| `practice_recommendation_artworks` | recommendation CASCADE, (artwork_id, owner_id) 복합 FK CASCADE(소유자 일치 강제). 유니크 (recommendation_id, artwork_id) |
+| `notifications` | user CASCADE, type REPORT_READY/TASK_RECOMMENDED/TASK_REMINDER/GOAL_CHECK, title·body, report_id·recommendation_id(CASCADE), dedupe_key, read_at, hidden_at. **유니크 (user_id, dedupe_key)** |
+| `notification_preferences` | user_id PK, 유형별 boolean, reminder_after_days(1~30) |
+
+기존 테이블 변경
+- `profiles`: grade(CHECK), learning_goal(500), learning_goal_updated_at
+- `artworks`: topic(200), work_method(100), actual_minutes·time_limit_minutes(1~1440 CHECK), time_source MANUAL/TIMER, CHECK (actual_minutes IS NULL) = (time_source IS NULL)
+- `feedback_summaries`: recording_id·transcript_id **NULL 허용**, note_id(CASCADE), source(기존 행 INSTRUCTOR), CHECK `one_source`, 부분 유니크 `uq_feedback_summaries_current_note`
+- `ai_processing_jobs`: note_id(CASCADE), CHECK `recording_job_has_recording`(TRANSCRIBE만) + `summarize_has_source`, 부분 유니크 `uq_ai_processing_jobs_active_note`
+- `feedback_transcripts`: edited_from_id(SET NULL), edited_by(SET NULL)
+- `feedback_recordings`: speaker_consent_status(기존 행 NOT_RECORDED), audio_deleted_at
+- `community_posts.question`, `community_comments.comment_type`(GENERAL/FEEDBACK)·categories(varchar[], CHECK 알려진 카테고리·FEEDBACK만)
+- `practice_recommendations`: started_at(CHECK 채택 이후), learning_goal
+- 약점 카테고리 `TIME_MANAGEMENT` 추가 (feedback_items, feedback_categories, reference_artwork_reviews, reference_recommendations, practice_recommendations CHECK 교체), 추천 이력 action STARTED/ARTWORK_LINKED/ARTWORK_UNLINKED
+
+- 새 테이블 모두 RLS 활성화(정책 없음). Storage 정책 변경 없음.
+
 ## 4. 학원별 데이터 격리
 
 ### 4.1 원칙
@@ -648,5 +676,5 @@ Supabase는 `public` 스키마를 Data API(PostgREST)로 노출하며 anon key�
 2. `uv run alembic revision --autogenerate -m "..."` → **생성된 파일 직접 검토** (RLS 활성화, cross-schema FK, 부분 인덱스 등은 수동 추가)
 3. 개발 DB에서 `upgrade head` → `downgrade -1` → `upgrade head` 로 왕복 확인
 4. PR 리뷰 후 merge. 운영 적용은 사람이 명시적으로 (`ALLOW_PRODUCTION_MIGRATIONS=true`)
-5. 리비전 순서 (2026-11-09 기준 head = `0008`): `0001` v0.2 → `0002` v0.3 → `0003` v0.4 → `0004` v0.5 → `0005` v0.5.1 → `0006` v0.6 → `0007` v0.7 → `0008` v0.8. 다음 리비전은 `down_revision = "0008"`, rev-id `0009`. 제외 테이블 물리 삭제 리비전은 승인 후 그 시점의 head 다음 번호로 별도로 만듭니다.
+5. 리비전 순서 (2026-11-10 기준 head = `0009`): `0001` v0.2 → `0002` v0.3 → `0003` v0.4 → `0004` v0.5 → `0005` v0.5.1 → `0006` v0.6 → `0007` v0.7 → `0008` v0.8 → `0009` v0.9. 다음 리비전은 `down_revision = "0009"`, rev-id `0010`. 제외 테이블 물리 삭제 리비전은 승인 후 그 시점의 head 다음 번호로 별도로 만듭니다.
 6. 두 개발자가 동시에 리비전을 만들면 head가 2개가 됩니다 → 나중에 merge하는 쪽이 `down_revision`을 최신 head로 수정(또는 `alembic merge`) (→ development-guide.md)

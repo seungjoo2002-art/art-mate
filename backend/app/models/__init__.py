@@ -18,11 +18,12 @@ from app.models.ai_feedback import (
     AiProcessingJob,
     FeedbackCategory,
     FeedbackItem,
+    FeedbackNote,
     FeedbackReviewHistory,
     FeedbackSummary,
     FeedbackTranscript,
 )
-from app.models.artwork import Artwork, ArtworkPhoto
+from app.models.artwork import Artwork, ArtworkPhoto, ArtworkTimerEvent
 from app.models.attendance import AttendanceAuditLog, AttendanceRecord
 from app.models.community import (
     ArtworkSharingConsent,
@@ -43,11 +44,17 @@ from app.models.exam import (
     ExamStageTarget,
     ExamTemplate,
 )
-from app.models.growth import GrowthReport, PracticeRecommendation, PracticeRecommendationHistory
+from app.models.growth import (
+    GrowthReport,
+    PracticeRecommendation,
+    PracticeRecommendationArtwork,
+    PracticeRecommendationHistory,
+)
 from app.models.help import HelpQueueEvent, HelpRequest
 from app.models.membership import AcademyJoinRequest, AcademyMembership
+from app.models.notification import Notification, NotificationPreference
 from app.models.personal_todo import PersonalTodo
-from app.models.profile import Profile
+from app.models.profile import Profile, TargetUniversity
 from app.models.recording import FeedbackRecording, RecordingConsent
 from app.models.task import LessonTopic, Task, TaskAssignment
 
@@ -61,6 +68,7 @@ __all__ = [
     "Artwork",
     "ArtworkPhoto",
     "ArtworkSharingConsent",
+    "ArtworkTimerEvent",
     "AttendanceAuditLog",
     "AttendanceRecord",
     "Base",
@@ -79,6 +87,7 @@ __all__ = [
     "ExamTemplate",
     "FeedbackCategory",
     "FeedbackItem",
+    "FeedbackNote",
     "FeedbackRecording",
     "FeedbackReviewHistory",
     "FeedbackSummary",
@@ -87,8 +96,11 @@ __all__ = [
     "HelpQueueEvent",
     "HelpRequest",
     "LessonTopic",
+    "Notification",
+    "NotificationPreference",
     "PersonalTodo",
     "PracticeRecommendation",
+    "PracticeRecommendationArtwork",
     "PracticeRecommendationHistory",
     "Profile",
     "RecordingConsent",
@@ -96,6 +108,7 @@ __all__ = [
     "ReferenceRecommendation",
     "ScheduleException",
     "SharedArtworkImage",
+    "TargetUniversity",
     "Task",
     "TaskAssignment",
 ]

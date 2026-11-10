@@ -2,8 +2,9 @@ import datetime as dt
 import uuid
 from typing import Annotated, ClassVar
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import AwareDatetime, BaseModel, Field, StringConstraints
 
+from app.models.artwork import MAX_WORK_MINUTES
 from app.models.enums import (
     ArtworkProgress,
     ArtworkStage,
@@ -11,12 +12,18 @@ from app.models.enums import (
     ArtworkWorkStatus,
     PhotoStatus,
     PracticalType,
+    TimerEventType,
+    TimerState,
+    TimeSource,
 )
 from app.schemas.fields import InputModel, PatchModel, Title
 from app.schemas.students import StudentRef
 
 ArtworkDescription = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
 FileName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+Topic = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+WorkMethod = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+Minutes = Annotated[int, Field(ge=1, le=MAX_WORK_MINUTES)]
 
 
 class ArtworkCreate(InputModel):
@@ -37,6 +44,20 @@ class ArtworkCreate(InputModel):
     work_category: ArtworkWorkCategory | None = Field(
         default=None, description="작업 목적 (선택): MOCK_EXAM / PERSONAL_PRACTICE / CLASS_WORK"
     )
+    # v0.9 F-2
+    topic: Topic | None = Field(default=None, description="실기 주제 (시험 제시어 등)")
+    work_method: WorkMethod | None = Field(default=None, description="작업 방식 (재료·기법)")
+    actual_minutes: Minutes | None = Field(
+        default=None, description="실제 소요 시간(분, 1~1440). 타이머를 쓰면 종료 시 자동 기록"
+    )
+    time_limit_minutes: Minutes | None = Field(
+        default=None, description="제한 시간(분, 1~1440). 모의 실기시험이면 입력"
+    )
+    # v0.9 F-8
+    recommendation_id: uuid.UUID | None = Field(
+        default=None,
+        description="이 작품을 수행 작품으로 연결할 개인 맞춤 과제 (채택·완료된 본인 과제)",
+    )
 
 
 class ArtworkUpdate(PatchModel):
@@ -50,6 +71,12 @@ class ArtworkUpdate(PatchModel):
     task_id: uuid.UUID | None = None
     practical_type: PracticalType | None = Field(default=None, description="null이면 미분류")
     work_category: ArtworkWorkCategory | None = Field(default=None, description="null이면 미분류")
+    topic: Topic | None = None
+    work_method: WorkMethod | None = None
+    actual_minutes: Minutes | None = Field(
+        default=None, description="직접 입력(time_source=MANUAL). null이면 삭제"
+    )
+    time_limit_minutes: Minutes | None = Field(default=None, description="null이면 삭제")
 
 
 class StageSummary(BaseModel):
@@ -90,6 +117,15 @@ class ArtworkRead(BaseModel):
         description="재생 가능한(ACTIVE) 피드백 녹음 수. 삭제·업로드 미완료 녹음 제외"
     )
     cover_photo_id: uuid.UUID | None = Field(description="대표 사진 (가장 늦은 단계의 대표 사진)")
+    # v0.9 F-2
+    topic: str | None = None
+    work_method: str | None = None
+    actual_minutes: int | None = Field(default=None, description="실제 소요 시간 (분)")
+    time_limit_minutes: int | None = Field(default=None, description="제한 시간 (분)")
+    time_source: TimeSource | None = Field(default=None, description="MANUAL 직접 입력 / TIMER")
+    over_time_limit: bool | None = Field(
+        default=None, description="실제 시간 > 제한 시간 (둘 다 있을 때만 판단)"
+    )
     created_at: dt.datetime
     updated_at: dt.datetime
 
@@ -156,3 +192,41 @@ class SignedUrl(BaseModel):
     photo_id: uuid.UUID
     url: str
     expires_at: dt.datetime
+
+
+# ============================================================================ v0.9 F-2 타이머
+
+
+class TimerEventCreate(InputModel):
+    event: TimerEventType = Field(description="START / PAUSE / RESUME / STOP / RESET")
+    occurred_at: AwareDatetime | None = Field(
+        default=None,
+        description="오프라인에서 모아 보낸 이벤트의 실제 시각 (생략하면 서버 시각). "
+        "직전 이벤트보다 이르거나 미래·24시간 이전이면 422 `TIMER_INVALID_TIME`",
+    )
+
+
+class TimerEventRead(BaseModel):
+    id: uuid.UUID
+    event: TimerEventType
+    occurred_at: dt.datetime
+    elapsed_seconds: int = Field(description="이 이벤트 직후 누적 작업 시간 (초)")
+
+
+class TimerRead(BaseModel):
+    """저장된 이벤트로 계산한 현재 상태. 새로고침·앱 재시작 후 이 값으로 화면을 복원한다."""
+
+    artwork_id: uuid.UUID
+    state: TimerState
+    elapsed_seconds: int = Field(description="현재 세션 누적 작업 시간 (RUNNING이면 지금까지)")
+    running_since: dt.datetime | None = Field(
+        description="RUNNING일 때 마지막 시작·재개 시각 (클라이언트가 이어서 표시)"
+    )
+    session_started_at: dt.datetime | None
+    time_limit_minutes: int | None
+    remaining_seconds: int | None = Field(description="제한 시간이 있으면 남은 시간 (음수 = 초과)")
+    over_time_limit: bool | None
+    actual_minutes: int | None = Field(description="작품에 기록된 실제 소요 시간 (분)")
+    time_source: TimeSource | None
+    server_time: dt.datetime = Field(description="계산 기준 서버 시각")
+    events: list[TimerEventRead] = Field(description="현재 세션 이벤트 (최근 50개)")

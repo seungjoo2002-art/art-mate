@@ -13,6 +13,7 @@ from app.models.enums import (
     Confidence,
     Difficulty,
     FeedbackItemKind,
+    FeedbackSource,
     GrowthScope,
     NarrativeStatus,
     PracticalType,
@@ -43,7 +44,9 @@ class Evidence(BaseModel):
 
     item_id: uuid.UUID
     feedback_id: uuid.UUID
-    recording_id: uuid.UUID
+    recording_id: uuid.UUID | None = Field(description="녹음 첨삭이면 녹음 id")
+    note_id: uuid.UUID | None = Field(default=None, description="텍스트 첨삭이면 원문 id (v0.9)")
+    source: FeedbackSource = FeedbackSource.INSTRUCTOR
     artwork_id: uuid.UUID
     artwork_title: str
     work_date: dt.date
@@ -51,6 +54,9 @@ class Evidence(BaseModel):
     category: WeaknessCategory | None
     content: str
     start_ms: int | None = Field(description="녹음에서 근거 구간 시작 (재생 위치)")
+    source_text: list[str] = Field(
+        default_factory=list, description="근거 원문 문장 (전사 구간 또는 텍스트 첨삭 문장, v0.9)"
+    )
 
 
 class WindowStat(BaseModel):
@@ -107,6 +113,48 @@ class NextGoal(BaseModel):
     based_on: Evidence | None
 
 
+class MockExamStats(BaseModel):
+    artwork_count: int
+    timed_count: int = Field(description="실제·제한 시간이 모두 기록된 모의시험 작품 수")
+    over_limit_count: int = Field(description="제한 시간을 넘긴 작품 수")
+    average_time_ratio: float | None = Field(description="평균 (실제 / 제한) 시간 비율")
+
+
+class TimeStats(BaseModel):
+    recorded_artwork_count: int = Field(description="실제 소요 시간이 기록된 작품 수")
+    unrecorded_artwork_count: int
+    total_minutes: int
+    average_minutes: float | None
+    mock_exam: MockExamStats
+
+
+class ActivityBucket(BaseModel):
+    bucket_start: dt.date
+    artwork_count: int = Field(description="기간 안 모든 작품 수 (첨삭 유무 무관)")
+    timed_artwork_count: int
+    study_minutes: int = Field(description="기록된 실제 작업 시간 합계 (분)")
+    mock_exam_count: int
+
+
+class UnverifiedMention(BaseModel):
+    category: WeaknessCategory
+    label: str
+    mention_count: int
+    by_source: dict[str, int] = Field(description="SELF_NOTE / PEER 별 언급 수")
+
+
+def _empty_time_stats() -> TimeStats:
+    return TimeStats(
+        recorded_artwork_count=0,
+        unrecorded_artwork_count=0,
+        total_minutes=0,
+        average_minutes=None,
+        mock_exam=MockExamStats(
+            artwork_count=0, timed_count=0, over_limit_count=0, average_time_ratio=None
+        ),
+    )
+
+
 class WeaknessAnalysis(BaseModel):
     """규칙 기반 통계 (AI 생성 아님)."""
 
@@ -127,6 +175,23 @@ class WeaknessAnalysis(BaseModel):
     timeline_bucket: Literal["week", "month"]
     timeline: list[TimelineBucket]
     next_goals: list[NextGoal] = Field(description="규칙 기반 다음 학습 목표")
+    # v0.9 (이전 버전 리포트에는 없어서 기본값)
+    time_stats: TimeStats = Field(
+        default_factory=_empty_time_stats, description="학습 시간·모의시험 시간 (기록된 작품만)"
+    )
+    activity: list[ActivityBucket] = Field(
+        default_factory=list, description="기간별 작품 수·학습 시간"
+    )
+    source_breakdown: dict[str, int] = Field(
+        default_factory=dict, description="출처별 승인 첨삭 수 (INSTRUCTOR/SELF_NOTE/PEER)"
+    )
+    unverified_mentions: list[UnverifiedMention] = Field(
+        default_factory=list,
+        description="자기 메모·다른 학생 의견의 카테고리 언급 (참고용, 반복 약점에 미반영)",
+    )
+    guidance: list[str] = Field(
+        default_factory=list, description="데이터가 부족할 때 다음에 기록할 것 안내"
+    )
     notes: list[str] = Field(description="해석 시 주의 문구 (화면에 함께 표시)")
 
 
@@ -141,7 +206,9 @@ class StageCount(BaseModel):
 
 class TimelineFeedback(BaseModel):
     id: uuid.UUID
-    recording_id: uuid.UUID
+    recording_id: uuid.UUID | None
+    note_id: uuid.UUID | None = None
+    source: FeedbackSource = FeedbackSource.INSTRUCTOR
     summary: str
     categories: list[WeaknessCategory]
     strengths: list[str]
@@ -171,6 +238,21 @@ class TimelineArtwork(BaseModel):
     stages: list[StageCount]
     feedbacks: list[TimelineFeedback] = Field(description="승인된 첨삭만")
     task: TimelineTask | None = Field(description="작품에 연결된 v0.3 과제")
+    # v0.9
+    topic: str | None = None
+    work_method: str | None = None
+    actual_minutes: int | None = None
+    time_limit_minutes: int | None = None
+    recommendations: list["RecommendationRef"] = Field(
+        default_factory=list, description="이 작품을 수행 작품으로 연결한 개인 맞춤 과제"
+    )
+
+
+class RecommendationRef(BaseModel):
+    id: uuid.UUID
+    title: str
+    weakness_category: WeaknessCategory
+    status: RecommendationStatus
 
 
 # ============================================================================ 요약 (대시보드)
@@ -178,6 +260,7 @@ class TimelineArtwork(BaseModel):
 
 class RecentFeedback(BaseModel):
     id: uuid.UUID
+    source: FeedbackSource = FeedbackSource.INSTRUCTOR
     artwork_id: uuid.UUID
     artwork_title: str
     summary: str
@@ -349,7 +432,12 @@ class RecommendationRead(BaseModel):
     evidence: list[Evidence] = Field(description="근거 첨삭 (삭제된 것은 빠짐)")
     analysis: dict[str, Any] = Field(description="생성 시 약점 통계 (기간·작품 수·최근 비율)")
     task: TaskLink | None = Field(description="학원: 배포된 v0.3 과제와 이 학생의 완료 여부")
+    learning_goal: str | None = Field(default=None, description="학습 목표 (v0.9)")
+    started_at: dt.datetime | None = Field(default=None, description="개인: 과제 시작 시각 (v0.9)")
     completed_at: dt.datetime | None = Field(description="개인: 본인 완료 시각")
+    linked_artwork_ids: list[uuid.UUID] = Field(
+        default_factory=list, description="개인: 연결된 수행 작품 (v0.9)"
+    )
     approved_at: dt.datetime | None
     approved_by_name: str | None
     rejected_reason: str | None
@@ -408,6 +496,9 @@ class RecommendationDistribute(InputModel):
 class RecommendationCompletion(InputModel):
     version: int = Field(ge=1)
     completed: bool
+    artwork_id: uuid.UUID | None = Field(
+        default=None, description="v0.9: 완료하면서 수행 작품을 함께 연결 (본인 작품)"
+    )
 
 
 class RecommendationHistoryRead(BaseModel):
@@ -421,3 +512,91 @@ class RecommendationHistoryRead(BaseModel):
     changes: dict[str, Any] | None
     note: str | None
     created_at: dt.datetime
+
+
+# ============================================================================ v0.9 F-5·F-8
+
+
+class ComparisonPhoto(BaseModel):
+    stage: str
+    photo_id: uuid.UUID
+    url: str | None = Field(description="보는 사람 토큰으로 발급한 짧은 Signed URL (없으면 null)")
+    url_expires_at: dt.datetime | None
+
+
+class ComparisonSide(BaseModel):
+    artwork_id: uuid.UUID
+    title: str
+    work_date: dt.date
+    practical_type: PracticalType | None
+    work_category: ArtworkWorkCategory | None
+    topic: str | None
+    actual_minutes: int | None
+    time_limit_minutes: int | None
+    photos: list[ComparisonPhoto] = Field(description="단계별 대표 사진")
+    feedback_count: int = Field(description="승인된 강사 첨삭 수")
+    categories: list[WeaknessCategory] = Field(description="강사 첨삭에서 지적된 카테고리")
+    strengths: list[str]
+    weaknesses: list[str]
+
+
+class ArtworkComparison(BaseModel):
+    """이전 작품과 현재 작품 비교 (프론트가 두 이미지를 나란히 보여 준다). 평가·점수 없음."""
+
+    previous: ComparisonSide
+    current: ComparisonSide
+    still_mentioned: list[WeaknessCategory] = Field(description="두 작품 모두에서 지적")
+    not_mentioned_now: list[WeaknessCategory] = Field(
+        description="이전에만 지적 (언급되지 않았을 뿐 개선되었다는 뜻은 아님)"
+    )
+    newly_mentioned: list[WeaknessCategory]
+    notes: list[str]
+
+
+class WeaknessHistoryItem(BaseModel):
+    """특정 약점 카테고리가 언급된 과거 첨삭 항목 (최근순)."""
+
+    evidence: Evidence
+    feedback_summary: str
+    approved_at: dt.datetime
+
+
+class RecommendationStart(InputModel):
+    version: int = Field(ge=1)
+
+
+class RecommendationArtworkLink(InputModel):
+    artwork_id: uuid.UUID
+
+
+class LinkedArtwork(BaseModel):
+    artwork_id: uuid.UUID
+    title: str
+    work_date: dt.date
+    linked_at: dt.datetime
+    feedback_count: int = Field(description="이 작품의 승인된 강사 첨삭 수")
+    weakness_mentioned: bool | None = Field(
+        description="후속 첨삭에서 과제의 약점이 다시 지적됨 (첨삭이 없으면 null)"
+    )
+
+
+class FollowUp(BaseModel):
+    """과제 수행 후 후속 첨삭 분석. 과제 완료 여부와 실력 향상 여부를 구분한다."""
+
+    recommendation_id: uuid.UUID
+    weakness_category: WeaknessCategory
+    completed: bool = Field(description="과제 상태가 완료인지 (실력 향상과 별개)")
+    status: Literal["NO_LINKED_ARTWORK", "NO_FOLLOW_UP_FEEDBACK", "REAPPEARED", "NOT_MENTIONED"] = (
+        Field(
+            description="NOT_MENTIONED: 후속 강사 첨삭에서 이 약점이 언급되지 않음 "
+            "(향상의 근거로 단정하지 않는다)"
+        )
+    )
+    linked_artworks: list[LinkedArtwork]
+    reappeared_count: int
+    analyzed_count: int = Field(description="후속 강사 첨삭이 있는 연결 작품 수")
+    evidence: list[Evidence] = Field(description="후속 첨삭에서 이 약점을 지적한 항목")
+    notes: list[str]
+
+
+TimelineArtwork.model_rebuild()

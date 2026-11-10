@@ -11,6 +11,9 @@ Worker(app/worker)가 처리한다 → API 요청이 오래 걸리지 않고, �
 - 담당 강사·학원 관리자(학원 연결 작품, 담당 학생): 전사·요약 요청, 전사 원문, 초안 검토·수정·승인.
   비담당 403, 다른 학원·개인 작품 404.
 - 첨삭의 검토 주체는 저장값이 아니라 매 요청마다 작품의 현재 학원 연결로 판단한다.
+- v0.9 텍스트 첨삭: 출처가 SELF_NOTE·PEER면 학원 작품이어도 학생 본인이 확정한다 (강사 화면·검토
+  대기열에 나오지 않음). 강사 첨삭(INSTRUCTOR)을 학원 작품에 적었으면 기존처럼 담당 강사가 확정.
+- v0.9 STT 결과 수정: 학생이 전사 문장을 고치면 새 전사 행을 만든다 (원본 보존, 구간·시각 유지).
 
 동의
 - 전사(STT, 서버 내부): 녹음 소유 학생의 녹음 동의가 철회되지 않았어야 한다.
@@ -49,6 +52,7 @@ from app.models.ai_feedback import (
     AiProcessingJob,
     FeedbackCategory,
     FeedbackItem,
+    FeedbackNote,
     FeedbackReviewHistory,
     FeedbackSummary,
     FeedbackTranscript,
@@ -65,6 +69,7 @@ from app.models.enums import (
     ConsentType,
     FeedbackItemKind,
     FeedbackItemOrigin,
+    FeedbackSource,
     FeedbackStatus,
     RecordingStatus,
     ReviewAction,
@@ -92,6 +97,7 @@ from app.schemas.ai_feedback import (
     ReviewQueueItem,
     Segment,
     SummaryStatusRead,
+    TranscriptEdit,
     TranscriptionStatusRead,
     TranscriptMeta,
     TranscriptRead,
@@ -150,8 +156,13 @@ def transcript_meta(t: FeedbackTranscript) -> dict[str, Any]:
     }
 
 
-def review_mode_for(artwork: Artwork) -> ReviewMode:
-    return ReviewMode.SELF if artwork.academy_id is None else ReviewMode.INSTRUCTOR
+def review_mode_for(
+    artwork: Artwork, source: FeedbackSource = FeedbackSource.INSTRUCTOR
+) -> ReviewMode:
+    """개인 작품, 또는 강사 첨삭이 아닌 기록(자기 메모·다른 학생 의견)은 학생 본인이 확정한다."""
+    if artwork.academy_id is None or source != FeedbackSource.INSTRUCTOR:
+        return ReviewMode.SELF
+    return ReviewMode.INSTRUCTOR
 
 
 @dataclass(frozen=True)
@@ -371,6 +382,11 @@ class AiFeedbackService:
         active = await self._active_job(recording.id, AiJobType.TRANSCRIBE)
         if active is not None:
             return job_read(active), False
+        if recording.audio_deleted_at is not None:
+            raise ConflictError(
+                "The audio was deleted after the retention period",
+                code=ErrorCode.RECORDING_AUDIO_EXPIRED,
+            )
         latest = await self._latest_job(recording.id, AiJobType.TRANSCRIBE)
         if retry and (
             latest is None or latest.status not in (AiJobStatus.FAILED, AiJobStatus.CANCELLED)
@@ -457,7 +473,108 @@ class AiFeedbackService:
             recording_id=recording.id,
             text=transcript.text,
             segments=[Segment(**s) for s in transcript.segments],
+            edited=transcript.edited_from_id is not None,
+            edited_from_id=transcript.edited_from_id,
         )
+
+    async def edit_transcript(
+        self, editor: Profile, recording: FeedbackRecording, data: TranscriptEdit
+    ) -> TranscriptRead:
+        """STT 결과 수정: 새 전사 행 (원본 보존). 확정된 첨삭이 있으면 먼저 다시 열어야 한다."""
+        await self.session.execute(
+            select(FeedbackRecording.id)
+            .where(FeedbackRecording.id == recording.id)
+            .with_for_update()
+        )
+        base = await self.latest_transcript(recording.id)
+        if base is None:
+            raise ConflictError(
+                "The transcript is not ready yet", code=ErrorCode.TRANSCRIPT_NOT_READY
+            )
+        if base.id != data.base_transcript_id:
+            raise ConflictError(
+                "The transcript was changed; reload it",
+                code=ErrorCode.FEEDBACK_VERSION_CONFLICT,
+                details={"current_transcript_id": str(base.id)},
+            )
+        current = await self.current_feedback(recording.id)
+        if current is not None and current.status == FeedbackStatus.APPROVED:
+            raise ConflictError(
+                "The feedback from this transcript is approved; reopen it first",
+                code=ErrorCode.TRANSCRIPT_LOCKED,
+            )
+        segments = [dict(s) for s in base.segments]
+        by_index = {s["index"]: s for s in segments}
+        unknown = [e.index for e in data.segments if e.index not in by_index]
+        if unknown:
+            raise UnprocessableError(
+                "Unknown segment index", details={"indexes": unknown, "count": len(segments)}
+            )
+        for edit in data.segments:
+            by_index[edit.index]["text"] = edit.text
+        if current is not None:
+            await self._supersede(current, editor, note="transcript edited")
+        await self._cancel_active(AiProcessingJob.recording_id == recording.id, "TRANSCRIPT_EDITED")
+        edited = FeedbackTranscript(
+            id=uuid.uuid4(),
+            recording_id=recording.id,
+            artwork_id=recording.artwork_id,
+            owner_id=recording.owner_id,
+            job_id=None,
+            language=base.language,
+            duration_ms=base.duration_ms,
+            text=" ".join(s["text"] for s in segments),
+            segments=segments,
+            segment_count=len(segments),
+            engine="manual-edit",
+            model_name=base.model_name,
+            processing_ms=None,
+            edited_from_id=base.id,
+            edited_by=editor.id,
+        )
+        self.session.add(edited)
+        await self.session.commit()
+        return await self.transcript(recording)
+
+    async def _supersede(self, summary: FeedbackSummary, actor: Profile, *, note: str) -> None:
+        """현재 첨삭(초안·검토 중)을 대체 처리 (원문이 바뀜). 이력에 남긴다."""
+        from_status = summary.status
+        summary.status = FeedbackStatus.SUPERSEDED
+        summary.version += 1
+        self.session.add(
+            FeedbackReviewHistory(
+                id=uuid.uuid4(),
+                summary_id=summary.id,
+                actor_id=actor.id,
+                actor_mode=None,
+                action=ReviewAction.SUPERSEDED,
+                from_status=from_status,
+                to_status=FeedbackStatus.SUPERSEDED,
+                version=summary.version,
+                note=note,
+            )
+        )
+        await self.session.flush()
+
+    async def _cancel_active(self, condition: Any, code: str) -> None:
+        """원문이 바뀐 요약 작업 취소 (RUNNING이면 Worker가 저장 직전에 확인하고 버린다)."""
+        now = clock.utc_now()
+        for job in (
+            await self.session.execute(
+                select(AiProcessingJob)
+                .where(
+                    condition,
+                    AiProcessingJob.job_type == AiJobType.SUMMARIZE,
+                    AiProcessingJob.status.in_(ACTIVE_JOB_STATUSES),
+                )
+                .with_for_update()
+            )
+        ).scalars():
+            job.status = AiJobStatus.CANCELLED
+            job.finished_at = now
+            job.locked_by = None
+            job.lease_expires_at = None
+            job.last_error_code = code
 
     # ================================================================ 요약 (Gemini)
 
@@ -542,6 +659,7 @@ class AiFeedbackService:
         dict[uuid.UUID, dict[int, Evidence]],
         dict[uuid.UUID, str],
     ]:
+        """항목·카테고리·근거 구간(첨삭 id → 구간 번호 → 근거)·승인자 이름."""
         ids = [s.id for s in summaries]
         items: dict[uuid.UUID, list[FeedbackItem]] = defaultdict(list)
         categories: dict[uuid.UUID, list[WeaknessCategory]] = defaultdict(list)
@@ -567,18 +685,36 @@ class AiFeedbackService:
             categories[summary_id].append(category)
         for summary_id in categories:
             categories[summary_id].sort(key=list(WeaknessCategory).index)
-        transcripts = (
-            await self.session.execute(
-                select(FeedbackTranscript.id, FeedbackTranscript.segments).where(
-                    FeedbackTranscript.id.in_({s.transcript_id for s in summaries})
+        by_source: dict[uuid.UUID, dict[int, Evidence]] = {}
+        transcript_ids = {s.transcript_id for s in summaries if s.transcript_id}
+        if transcript_ids:
+            for transcript_id, segs in (
+                await self.session.execute(
+                    select(FeedbackTranscript.id, FeedbackTranscript.segments).where(
+                        FeedbackTranscript.id.in_(transcript_ids)
+                    )
                 )
-            )
-        ).all()
-        for transcript_id, segs in transcripts:
-            segments[transcript_id] = {
-                s["index"]: Evidence(index=s["index"], start_ms=s["start_ms"], end_ms=s["end_ms"])
-                for s in segs
-            }
+            ).all():
+                by_source[transcript_id] = {
+                    s["index"]: Evidence(
+                        index=s["index"], start_ms=s["start_ms"], end_ms=s["end_ms"], text=s["text"]
+                    )
+                    for s in segs
+                }
+        note_ids = {s.note_id for s in summaries if s.note_id}
+        if note_ids:
+            for note_id, segs in (
+                await self.session.execute(
+                    select(FeedbackNote.id, FeedbackNote.segments).where(
+                        FeedbackNote.id.in_(note_ids)
+                    )
+                )
+            ).all():
+                by_source[note_id] = {
+                    s["index"]: Evidence(index=s["index"], text=s["text"]) for s in segs
+                }
+        for s in summaries:
+            segments[s.id] = by_source.get(s.transcript_id or s.note_id, {})  # type: ignore[arg-type]
         approvers = {s.approved_by for s in summaries if s.approved_by}
         if approvers:
             names = dict(
@@ -615,9 +751,11 @@ class AiFeedbackService:
         return {
             "id": summary.id,
             "recording_id": summary.recording_id,
+            "note_id": summary.note_id,
+            "source": summary.source,
             "artwork_id": summary.artwork_id,
             "status": summary.status,
-            "review_mode": review_mode_for(artwork),
+            "review_mode": review_mode_for(artwork, summary.source),
             "version": summary.version,
             "summary": summary.summary,
             **grouped,
@@ -635,7 +773,7 @@ class AiFeedbackService:
             artwork,
             items[summary.id],
             categories[summary.id],
-            segments.get(summary.transcript_id, {}),
+            segments.get(summary.id, {}),
             names,
         )
 
@@ -699,6 +837,8 @@ class AiFeedbackService:
             self._base(feedback_id).where(
                 Artwork.academy_id == actor.academy_id,
                 Artwork.student_membership_id.is_not(None),
+                # 자기 메모·다른 학생 의견은 학생 개인 기록 (강사에게 보이지 않음)
+                FeedbackSummary.source == FeedbackSource.INSTRUCTOR,
             ),
             for_update=for_update,
         )
@@ -712,7 +852,7 @@ class AiFeedbackService:
     async def owner_view(self, owner: Profile, feedback_id: uuid.UUID) -> FeedbackRead:
         """학생: 개인 작품이면 검토자 화면, 학원 연결 작품이면 승인된 첨삭만."""
         summary, artwork = await self.owner_feedback(owner, feedback_id)
-        if artwork.academy_id is None:
+        if review_mode_for(artwork, summary.source) == ReviewMode.SELF:
             return await self._reviewer_read(summary, artwork, None)
         if summary.status != FeedbackStatus.APPROVED:
             raise ForbiddenError(
@@ -750,7 +890,7 @@ class AiFeedbackService:
                     artwork,
                     items[s.id],
                     categories[s.id],
-                    segments.get(s.transcript_id, {}),
+                    segments.get(s.id, {}),
                     names,
                 )
             )
@@ -772,8 +912,9 @@ class AiFeedbackService:
             .join(Artwork, Artwork.id == FeedbackSummary.artwork_id)
             .join(AcademyMembership, AcademyMembership.id == Artwork.student_membership_id)
             .join(Profile, Profile.id == AcademyMembership.user_id)
-            .join(FeedbackRecording, FeedbackRecording.id == FeedbackSummary.recording_id)
+            .outerjoin(FeedbackRecording, FeedbackRecording.id == FeedbackSummary.recording_id)
             .where(
+                FeedbackSummary.source == FeedbackSource.INSTRUCTOR,
                 Artwork.academy_id == actor.academy_id,
                 Artwork.deleted_at.is_(None),
                 Artwork.student_membership_id.in_(managed_student_ids(actor)),
@@ -789,6 +930,7 @@ class AiFeedbackService:
             ReviewQueueItem(
                 id=s.id,
                 recording_id=s.recording_id,
+                note_id=s.note_id,
                 artwork_id=a.id,
                 artwork_title=a.title,
                 recording_title=title,
@@ -875,8 +1017,10 @@ class AiFeedbackService:
                 details={"current_version": summary.version},
             )
 
-    def _reviewer_for_owner(self, owner: Profile, artwork: Artwork) -> Reviewer:
-        if artwork.academy_id is not None:
+    def _reviewer_for_owner(
+        self, owner: Profile, artwork: Artwork, summary: FeedbackSummary
+    ) -> Reviewer:
+        if review_mode_for(artwork, summary.source) != ReviewMode.SELF:
             raise ForbiddenError("Your instructor reviews feedback for academy artworks")
         return Reviewer(owner, None)
 
@@ -887,7 +1031,7 @@ class AiFeedbackService:
             summary, artwork = await self.owner_feedback(
                 reviewer_profile, feedback_id, for_update=True
             )
-            return summary, artwork, self._reviewer_for_owner(reviewer_profile, artwork)
+            return summary, artwork, self._reviewer_for_owner(reviewer_profile, artwork, summary)
         summary, artwork = await self.staff_feedback(actor, feedback_id, for_update=True)
         return summary, artwork, Reviewer(reviewer_profile, actor)
 
@@ -905,6 +1049,8 @@ class AiFeedbackService:
                 select(FeedbackTranscript.segment_count).where(
                     FeedbackTranscript.id == summary.transcript_id
                 )
+                if summary.transcript_id
+                else select(FeedbackNote.segment_count).where(FeedbackNote.id == summary.note_id)
             )
         ).scalar_one()
         for item in data.items:
@@ -1111,7 +1257,7 @@ class AiFeedbackService:
         self, owner: Profile, feedback_id: uuid.UUID
     ) -> list[ReviewHistoryRead]:
         summary, artwork = await self.owner_feedback(owner, feedback_id)
-        self._reviewer_for_owner(owner, artwork)  # 학원 연결 작품의 이력은 강사만
+        self._reviewer_for_owner(owner, artwork, summary)  # 학원 작품의 강사 첨삭 이력은 강사만
         return await self.history(summary)
 
     async def staff_history(

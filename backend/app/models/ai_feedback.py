@@ -19,12 +19,13 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -44,6 +45,7 @@ from app.models.enums import (
     ConsentGrantor,
     FeedbackItemKind,
     FeedbackItemOrigin,
+    FeedbackSource,
     FeedbackStatus,
     ReviewAction,
     ReviewMode,
@@ -113,10 +115,23 @@ class AiProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             unique=True,
             postgresql_where=text("status IN ('QUEUED', 'RUNNING') AND dedupe_key IS NOT NULL"),
         ),
+        # v0.9: 텍스트 첨삭(note) 요약 작업의 중복 방지
+        Index(
+            "uq_ai_processing_jobs_active_note",
+            "note_id",
+            "job_type",
+            unique=True,
+            postgresql_where=text("status IN ('QUEUED', 'RUNNING') AND note_id IS NOT NULL"),
+        ),
+        # TRANSCRIBE는 녹음 필수. SUMMARIZE는 녹음 또는 텍스트 첨삭 중 정확히 하나 (v0.9)
         CheckConstraint(
-            "job_type NOT IN ('TRANSCRIBE', 'SUMMARIZE')"
-            " OR (recording_id IS NOT NULL AND artwork_id IS NOT NULL)",
+            "job_type <> 'TRANSCRIBE' OR (recording_id IS NOT NULL AND artwork_id IS NOT NULL)",
             name="recording_job_has_recording",
+        ),
+        CheckConstraint(
+            "job_type <> 'SUMMARIZE'"
+            " OR (artwork_id IS NOT NULL AND (recording_id IS NULL) <> (note_id IS NULL))",
+            name="summarize_has_source",
         ),
         CheckConstraint("attempts >= 0 AND attempts <= max_attempts", name="attempts_range"),
         CheckConstraint(
@@ -135,6 +150,10 @@ class AiProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     artwork_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("artworks.id", ondelete="CASCADE")
+    )
+    # v0.9 텍스트 첨삭 요약 작업의 대상 (SUMMARIZE)
+    note_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("feedback_notes.id", ondelete="CASCADE")
     )
     # v0.7 GROWTH_REPORT 작업의 대상 리포트
     report_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -171,8 +190,57 @@ class AiProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     output_tokens: Mapped[int] = mapped_column(Integer, server_default=text("0"), default=0)
 
 
+class FeedbackNote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """텍스트 첨삭 원문 (v0.9 F-3). 학생이 직접 입력한다 (녹음 없이).
+
+    - 출처(source): 강사 첨삭을 받아 적음 / 자기 메모 / 다른 학생 의견(커뮤니티 채택 포함).
+    - 원문은 문장 단위 segments로 나눠 저장하고, AI 요약 항목은 그 index를 근거로 가리킨다
+      (녹음 전사와 같은 근거 연결 방식 → 같은 SUMMARIZE 파이프라인을 쓴다).
+    - 원문 수정: version +1, segments 재계산. 확정(APPROVED)된 요약이 있으면 먼저 다시 열어야 한다.
+    - 삭제: 행 삭제 → 요약·항목·이력·작업 CASCADE (성장 분석에서 즉시 빠짐).
+    """
+
+    __tablename__ = "feedback_notes"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["artwork_id", "owner_id"], ["artworks.id", "artworks.owner_id"], ondelete="CASCADE"
+        ),
+        CheckConstraint("length(btrim(body)) > 0", name="body_not_blank"),
+        CheckConstraint("char_length(body) <= 5000", name="body_length"),
+        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint("segment_count >= 1", name="has_segments"),
+        Index("ix_feedback_notes_artwork", "artwork_id", "created_at"),
+        Index("ix_feedback_notes_owner", "owner_id", "created_at"),
+        # 커뮤니티 댓글 1개는 한 번만 채택
+        Index(
+            "uq_feedback_notes_comment",
+            "community_comment_id",
+            unique=True,
+            postgresql_where=text("community_comment_id IS NOT NULL"),
+        ),
+    )
+
+    artwork_id: Mapped[uuid.UUID]
+    owner_id: Mapped[uuid.UUID]
+    source: Mapped[FeedbackSource] = mapped_column(enum_column(FeedbackSource, "source"))
+    body: Mapped[str] = mapped_column(Text)
+    # [{"index": 0, "text": "..."}] — 문장 단위
+    segments: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    segment_count: Mapped[int] = mapped_column(Integer)
+    # 첨삭을 받은 날 (Asia/Seoul, 기본 오늘)
+    feedback_date: Mapped[date]
+    version: Mapped[int] = mapped_column(Integer, server_default=text("1"), default=1)
+    # 커뮤니티 작품 피드백 댓글을 채택해 만든 경우 (댓글이 지워져도 원문 사본은 남는다)
+    community_comment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("community_comments.id", ondelete="SET NULL")
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("profiles.id", ondelete="SET NULL")
+    )
+
+
 class FeedbackTranscript(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """STT 결과 (불변). 재전사하면 새 행이 생기고, 최신 행이 현재 전사다."""
+    """STT 결과 (불변). 재전사·학생 수정(v0.9)은 새 행을 만들고, 최신 행이 현재 전사다."""
 
     __tablename__ = "feedback_transcripts"
     __table_args__ = (Index("ix_feedback_transcripts_recording", "recording_id", "created_at"),)
@@ -194,10 +262,17 @@ class FeedbackTranscript(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     engine: Mapped[str] = mapped_column(String(30))
     model_name: Mapped[str] = mapped_column(String(200))
     processing_ms: Mapped[int | None] = mapped_column(Integer)
+    # v0.9 STT 결과 수정: 사람이 고친 버전이면 원본 전사와 수정자 (원본 행은 그대로 보존)
+    edited_from_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("feedback_transcripts.id", ondelete="SET NULL")
+    )
+    edited_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("profiles.id", ondelete="SET NULL")
+    )
 
 
 class FeedbackSummary(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """첨삭 1건 (녹음 1개 기준). AI 초안으로 생성되고 검토자가 수정·승인한다."""
+    """첨삭 1건 (녹음 1개 또는 텍스트 첨삭 1개 기준). AI 초안 → 검토자가 수정·승인."""
 
     __tablename__ = "feedback_summaries"
     __table_args__ = (
@@ -208,21 +283,45 @@ class FeedbackSummary(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             unique=True,
             postgresql_where=text("status IN ('DRAFT', 'IN_REVIEW', 'APPROVED')"),
         ),
+        # v0.9: 텍스트 첨삭당 '현재' 첨삭도 1개
+        Index(
+            "uq_feedback_summaries_current_note",
+            "note_id",
+            unique=True,
+            postgresql_where=text("status IN ('DRAFT', 'IN_REVIEW', 'APPROVED')"),
+        ),
         Index("ix_feedback_summaries_artwork_status", "artwork_id", "status"),
         Index("ix_feedback_summaries_owner_approved", "owner_id", "status", "approved_at"),
+        # 원문은 녹음 전사 또는 텍스트 첨삭 중 정확히 하나
+        CheckConstraint(
+            "(recording_id IS NOT NULL AND transcript_id IS NOT NULL AND note_id IS NULL)"
+            " OR (recording_id IS NULL AND transcript_id IS NULL AND note_id IS NOT NULL)",
+            name="one_source",
+        ),
         CheckConstraint(
             "(status = 'APPROVED') = (approved_at IS NOT NULL)", name="approved_has_time"
         ),
         CheckConstraint("version >= 1", name="version_positive"),
     )
 
-    recording_id: Mapped[uuid.UUID] = mapped_column(
+    # 녹음 첨삭 (v0.6). 텍스트 첨삭(v0.9)이면 NULL
+    recording_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("feedback_recordings.id", ondelete="CASCADE")
     )
     artwork_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artworks.id", ondelete="CASCADE"))
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"))
-    transcript_id: Mapped[uuid.UUID] = mapped_column(
+    transcript_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("feedback_transcripts.id", ondelete="CASCADE")
+    )
+    # v0.9 텍스트 첨삭 원문
+    note_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("feedback_notes.id", ondelete="CASCADE")
+    )
+    # v0.9 첨삭 출처. 기존(녹음) 첨삭은 INSTRUCTOR
+    source: Mapped[FeedbackSource] = mapped_column(
+        enum_column(FeedbackSource, "source"),
+        server_default=FeedbackSource.INSTRUCTOR.value,
+        default=FeedbackSource.INSTRUCTOR,
     )
     job_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ai_processing_jobs.id", ondelete="SET NULL")
@@ -279,7 +378,8 @@ class FeedbackItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     category: Mapped[WeaknessCategory | None] = mapped_column(
         enum_column(WeaknessCategory, "category")
     )
-    # feedback_transcripts.segments[].index (근거 구간). 사람이 추가한 항목은 빈 배열일 수 있다
+    # 근거 구간 번호: feedback_transcripts.segments[].index 또는 feedback_notes.segments[].index.
+    # 사람이 추가한 항목은 빈 배열일 수 있다
     evidence_segment_ids: Mapped[list[int]] = mapped_column(
         ARRAY(Integer), server_default=text("'{}'::integer[]"), default=list
     )

@@ -4,7 +4,13 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, BaseModel, Field, StringConstraints
 
-from app.models.enums import ConsentGrantor, ConsentType, RecordingStatus, TranscriptionStatus
+from app.models.enums import (
+    ConsentGrantor,
+    ConsentType,
+    RecordingStatus,
+    SpeakerConsentStatus,
+    TranscriptionStatus,
+)
 from app.schemas.artworks import UploadTarget
 from app.schemas.fields import InputModel
 
@@ -57,6 +63,13 @@ class RecordingUploadRequest(InputModel):
     speaker_notice_confirmed: Literal[True] = Field(
         description="녹음되는 강사에게 녹음 사실을 알렸음 (true만 허용)"
     )
+    speaker_consent_status: Literal[
+        SpeakerConsentStatus.NOTICE_GIVEN, SpeakerConsentStatus.CONSENT_REPORTED
+    ] = Field(
+        default=SpeakerConsentStatus.NOTICE_GIVEN,
+        description="v0.9: NOTICE_GIVEN(녹음 사실을 알림) / CONSENT_REPORTED(강사가 동의했다고 "
+        "학생이 기록). 학생의 기록일 뿐 강사의 동의를 법적으로 대신하지 않는다",
+    )
 
 
 class RecordingRead(BaseModel):
@@ -72,6 +85,18 @@ class RecordingRead(BaseModel):
     created_at: dt.datetime
     consent_id: uuid.UUID
     speaker_notice_confirmed: bool
+    speaker_consent_status: SpeakerConsentStatus = Field(
+        default=SpeakerConsentStatus.NOT_RECORDED,
+        description="강사 고지·동의 상태 (학생 기록, v0.9)",
+    )
+    speaker_consent_verified: bool = Field(
+        default=False,
+        description="항상 false: 서비스는 강사의 동의를 직접 확인하지 않는다 (학생 기록만 보관)",
+    )
+    audio_available: bool = Field(
+        default=True, description="음성 파일 재생 가능 (보관 기간이 지나면 false, 전사는 유지)"
+    )
+    audio_deleted_at: dt.datetime | None = Field(default=None, description="음성 원본 삭제 시각")
     transcription_status: TranscriptionStatus = Field(
         description="STT 상태 (v0.6, 현재 NOT_REQUESTED)"
     )

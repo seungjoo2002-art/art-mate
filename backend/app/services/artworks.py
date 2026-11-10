@@ -71,6 +71,7 @@ from app.models.enums import (
     PracticalType,
     RecordingStatus,
     SharingPurpose,
+    TimeSource,
 )
 from app.models.membership import AcademyMembership
 from app.models.profile import Profile
@@ -94,6 +95,7 @@ from app.schemas.common import PaginationParams
 from app.services.access import AccessService, managed_student_ids
 from app.services.ai_cleanup import purge_for_recordings
 from app.services.images import check_declared_file, inspect_image, storage_extension
+from app.services.practice_links import link_artwork
 from app.services.sharing import withdraw_artwork_sharing
 
 logger = logging.getLogger(__name__)
@@ -179,6 +181,12 @@ def photo_read(photo: ArtworkPhoto, url: str | None = None, expires: datetime | 
     )
 
 
+def over_time_limit(artwork: Artwork) -> bool | None:
+    if artwork.actual_minutes is None or artwork.time_limit_minutes is None:
+        return None
+    return artwork.actual_minutes > artwork.time_limit_minutes
+
+
 def artwork_read(  # type: ignore[type-arg]
     artwork: Artwork, photos: list[ArtworkPhoto], recording_count: int = 0
 ) -> dict:
@@ -204,6 +212,12 @@ def artwork_read(  # type: ignore[type-arg]
         "photo_count": sum(s.photo_count for s in summary.stages),
         "recording_count": recording_count,
         "cover_photo_id": cover,
+        "topic": artwork.topic,
+        "work_method": artwork.work_method,
+        "actual_minutes": artwork.actual_minutes,
+        "time_limit_minutes": artwork.time_limit_minutes,
+        "time_source": artwork.time_source,
+        "over_time_limit": over_time_limit(artwork),
         "created_at": artwork.created_at,
         "updated_at": artwork.updated_at,
         "stages": summary.stages,
@@ -419,9 +433,17 @@ class ArtworkService:
             practical_type=data.practical_type,
             work_category=data.work_category,
             work_status=ArtworkWorkStatus.IN_PROGRESS,
+            topic=data.topic,
+            work_method=data.work_method,
+            actual_minutes=data.actual_minutes,
+            time_limit_minutes=data.time_limit_minutes,
+            time_source=TimeSource.MANUAL if data.actual_minutes is not None else None,
             **links,
         )
         self.session.add(artwork)
+        if data.recommendation_id is not None:
+            await self.session.flush()
+            await link_artwork(self.session, owner, data.recommendation_id, artwork)
         await self.session.commit()
         await self.session.refresh(artwork)
         return ArtworkDetail(**artwork_read(artwork, []), photos=[])
@@ -459,9 +481,21 @@ class ArtworkService:
                 await self._resolve_links(owner, academy_id, class_id, task_id)
             ).items():
                 setattr(artwork, field, value)
-        for field in ("title", "description", "work_date", "practical_type", "work_category"):
+        for field in (
+            "title",
+            "description",
+            "work_date",
+            "practical_type",
+            "work_category",
+            "topic",
+            "work_method",
+            "time_limit_minutes",
+        ):
             if field in changes:
                 setattr(artwork, field, changes[field])
+        if "actual_minutes" in changes:
+            artwork.actual_minutes = changes["actual_minutes"]
+            artwork.time_source = TimeSource.MANUAL if artwork.actual_minutes else None
         await self.session.commit()
         await self.session.refresh(artwork)
         return ArtworkDetail(**await self._detail_dict(artwork, token, include_urls=False))

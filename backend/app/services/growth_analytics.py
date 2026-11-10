@@ -14,6 +14,14 @@
   두 구간이 모두 N개일 때만 비교하고, 차이가 0.2 미만이면 비슷함.
 - 신뢰도: 분석 대상 작품 수 기준 (min 미만 = 리포트 INSUFFICIENT_DATA, <8 = LOW/MEDIUM, ≥8 = HIGH).
 
+v0.9 (기능명세서 V2 F-7)
+- 출처 구분: 반복 약점·추세·근거는 **강사 첨삭(INSTRUCTOR)** 승인본만 쓴다.
+  자기 메모(SELF_NOTE)·다른 학생 의견(PEER)은 `unverified_mentions`에 참고로만 따로 센다
+  (같은 신뢰도로 섞지 않음).
+- 학습 시간: 작품의 실제 소요 시간(분)·제한 시간으로 기간별 학습 시간·모의시험 시간 초과를 집계한다.
+  시간 기록이 없는 작품은 시간 통계에서 빠진다 (0분으로 세지 않음).
+- 데이터가 부족하면 `guidance`로 다음에 무엇을 기록하면 되는지 안내한다.
+
 해석 원칙 (응답 notes로 함께 내려 보낸다)
 - 지적이 줄어든 것은 실력 향상의 증거가 아니다 (첨삭에서 언급되지 않았을 수 있음).
 - 강사마다 첨삭 방식이 달라 지표가 달라질 수 있다.
@@ -35,13 +43,14 @@ from app.models.enums import (
     ArtworkWorkStatus,
     Confidence,
     FeedbackItemKind,
+    FeedbackSource,
     PracticalType,
     ReportStatus,
     TrendDirection,
     WeaknessCategory,
 )
 
-ANALYSIS_VERSION = "growth-v1"
+ANALYSIS_VERSION = "growth-v2"
 TREND_THRESHOLD = 0.2
 HIGH_CONFIDENCE_ARTWORKS = 8
 MAX_EVIDENCE = 3
@@ -50,6 +59,8 @@ NOTES = [
     "이 통계는 강사가 승인한 첨삭 기록을 집계한 것이며, AI가 실기 능력을 채점한 결과가 아닙니다.",
     "첨삭에서 언급되지 않은 약점이 개선되었다는 뜻은 아닙니다.",
     "강사마다 첨삭 방식과 표현이 달라 지적 빈도가 달라질 수 있습니다.",
+    "자기 메모와 다른 학생 의견은 반복 약점 통계에 넣지 않고 참고로만 보여 줍니다.",
+    "과제를 완료했다는 것과 실력이 향상되었다는 것은 같은 뜻이 아닙니다.",
 ]
 INSUFFICIENT_MESSAGE = "분석에 필요한 기록이 부족합니다."
 
@@ -67,6 +78,9 @@ class ArtworkFact:
     completed_at: datetime | None
     practical_type: PracticalType | None
     work_category: ArtworkWorkCategory | None
+    # v0.9 시간 기록 (분)
+    actual_minutes: int | None = None
+    time_limit_minutes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +89,8 @@ class FeedbackFact:
     artwork_id: uuid.UUID
     approved_at: datetime
     version: int
+    # v0.9 출처. INSTRUCTOR만 반복 약점 통계에 집계
+    source: FeedbackSource = FeedbackSource.INSTRUCTOR
 
 
 @dataclass(frozen=True)
@@ -139,7 +155,10 @@ def analyze(
     bucket: Bucket = "month",
 ) -> dict[str, Any]:
     artworks = {a.id: a for a in dataset.artworks}
-    feedbacks = [f for f in dataset.feedbacks if f.artwork_id in artworks]
+    in_scope = [f for f in dataset.feedbacks if f.artwork_id in artworks]
+    # 반복 약점·추세·근거는 강사 첨삭만 (자기 메모·다른 학생 의견은 참고 통계로 분리)
+    feedbacks = [f for f in in_scope if f.source == FeedbackSource.INSTRUCTOR]
+    verified_ids = {f.id for f in feedbacks}
     by_artwork: dict[uuid.UUID, list[FeedbackFact]] = defaultdict(list)
     for f in feedbacks:
         by_artwork[f.artwork_id].append(f)
@@ -168,7 +187,7 @@ def analyze(
     items_by_category: dict[WeaknessCategory, list[ItemFact]] = defaultdict(list)
     strength_items: list[ItemFact] = []
     for item in sorted(dataset.items, key=lambda i: (i.work_date, i.approved_at), reverse=True):
-        if item.artwork_id not in artworks:
+        if item.artwork_id not in artworks or item.feedback_id not in verified_ids:
             continue
         if item.kind == FeedbackItemKind.STRENGTH:
             strength_items.append(item)
@@ -334,5 +353,112 @@ def analyze(
         "timeline": timeline,
         "next_goals": next_goals,
         "analyzed_artwork_ids": [str(a) for a in analyzed],
+        "time_stats": time_stats(list(artworks.values())),
+        "activity": activity(list(artworks.values()), bucket),
+        "source_breakdown": {
+            s.value: sum(1 for f in in_scope if f.source == s) for s in FeedbackSource
+        },
+        "unverified_mentions": unverified_mentions(in_scope, dataset.categories),
+        "guidance": guidance(
+            analyzed_count, min_artworks, list(artworks.values()), in_scope, status
+        ),
         "notes": NOTES,
     }
+
+
+# ---------------------------------------------------------------- v0.9 시간·출처·안내
+
+
+def time_stats(artworks: list[ArtworkFact]) -> dict[str, Any]:
+    """실제 소요 시간이 기록된 작품만 집계. 모의시험(MOCK_EXAM)은 제한 시간 대비 따로."""
+    timed = [a for a in artworks if a.actual_minutes is not None]
+    total = sum(a.actual_minutes or 0 for a in timed)
+    mock = [a for a in artworks if a.work_category == ArtworkWorkCategory.MOCK_EXAM]
+    mock_timed = [
+        a for a in mock if a.actual_minutes is not None and a.time_limit_minutes is not None
+    ]
+    ratios = [a.actual_minutes / a.time_limit_minutes for a in mock_timed]  # type: ignore[operator]
+    return {
+        "recorded_artwork_count": len(timed),
+        "unrecorded_artwork_count": len(artworks) - len(timed),
+        "total_minutes": total,
+        "average_minutes": round(total / len(timed), 1) if timed else None,
+        "mock_exam": {
+            "artwork_count": len(mock),
+            "timed_count": len(mock_timed),
+            "over_limit_count": sum(1 for r in ratios if r > 1),
+            "average_time_ratio": round(sum(ratios) / len(ratios), 3) if ratios else None,
+        },
+    }
+
+
+def activity(artworks: list[ArtworkFact], bucket: Bucket) -> list[dict[str, Any]]:
+    """기간(주/월)별 작품 수·학습 시간·모의시험 수 (첨삭 유무와 무관한 모든 작품)."""
+    buckets: dict[date, dict[str, Any]] = {}
+    for a in artworks:
+        start = _bucket_start(a.work_date, bucket)
+        entry = buckets.setdefault(
+            start,
+            {
+                "artwork_count": 0,
+                "timed_artwork_count": 0,
+                "study_minutes": 0,
+                "mock_exam_count": 0,
+            },
+        )
+        entry["artwork_count"] += 1
+        if a.actual_minutes is not None:
+            entry["timed_artwork_count"] += 1
+            entry["study_minutes"] += a.actual_minutes
+        if a.work_category == ArtworkWorkCategory.MOCK_EXAM:
+            entry["mock_exam_count"] += 1
+    return [{"bucket_start": s.isoformat(), **e} for s, e in sorted(buckets.items())]
+
+
+def unverified_mentions(
+    feedbacks: list[FeedbackFact], categories: dict[uuid.UUID, set[WeaknessCategory]]
+) -> list[dict[str, Any]]:
+    """자기 메모·다른 학생 의견에서 언급된 카테고리 (참고용, 반복 약점 판정에 쓰지 않음)."""
+    counts: dict[WeaknessCategory, Counter[str]] = defaultdict(Counter)
+    for f in feedbacks:
+        if f.source == FeedbackSource.INSTRUCTOR:
+            continue
+        for category in categories.get(f.id, set()):
+            counts[category][f.source.value] += 1
+    return sorted(
+        (
+            {
+                "category": c.value,
+                "label": WEAKNESS_CATEGORY_LABELS[c],
+                "mention_count": sum(n.values()),
+                "by_source": dict(n),
+            }
+            for c, n in counts.items()
+        ),
+        key=lambda m: (-m["mention_count"], m["category"]),
+    )
+
+
+def guidance(
+    analyzed: int,
+    min_artworks: int,
+    artworks: list[ArtworkFact],
+    feedbacks: list[FeedbackFact],
+    status: ReportStatus,
+) -> list[str]:
+    """신규·데이터 부족 사용자에게 다음 기록 안내 (단정적 평가 없음)."""
+    tips: list[str] = []
+    if not artworks:
+        tips.append("첫 작품을 등록하고 단계별 사진을 올려 보세요.")
+    if status == ReportStatus.INSUFFICIENT_DATA:
+        tips.append(
+            f"강사 첨삭을 기록하고 확정한 작품이 {min_artworks}개 이상이면 반복 약점을 분석합니다 "
+            f"(현재 {analyzed}개)."
+        )
+    if artworks and all(a.actual_minutes is None for a in artworks):
+        tips.append("작품마다 실제 작업 시간을 기록하면 학습 시간 변화를 함께 볼 수 있습니다.")
+    if any(f.source != FeedbackSource.INSTRUCTOR for f in feedbacks) and analyzed == 0:
+        tips.append(
+            "자기 메모·다른 학생 의견은 참고로만 보여 주며 반복 약점 분석에는 쓰지 않습니다."
+        )
+    return tips
