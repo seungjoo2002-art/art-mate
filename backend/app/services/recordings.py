@@ -38,7 +38,7 @@ from app.integrations.supabase.storage import (
     StorageObjectNotFound,
     StorageObjectTooLarge,
 )
-from app.models.enums import ConsentGrantor, ConsentType, RecordingStatus
+from app.models.enums import AiJobType, ConsentGrantor, ConsentType, RecordingStatus
 from app.models.membership import AcademyMembership
 from app.models.profile import Profile
 from app.models.recording import FeedbackRecording, RecordingConsent
@@ -52,6 +52,7 @@ from app.schemas.recordings import (
     RecordingUploadTicket,
     RecordingUrl,
 )
+from app.services.ai_cleanup import cancel_jobs_for_owner, purge_for_recordings
 from app.services.artworks import ArtworkService
 from app.services.audio import (
     check_declared_audio,
@@ -165,14 +166,22 @@ class RecordingService:
         except IntegrityError:
             # 동시에 동의 요청: 부분 유니크(uq_recording_consents_active) → 먼저 저장된 동의 사용
             await self.session.rollback()
+            # rollback으로 만료된 ORM 객체를 다시 읽는다 (지연 로드 시 MissingGreenlet 500 방지)
+            await self.session.refresh(user)
         return await self.consent_status(user)
 
     async def revoke_consent(self, user: Profile) -> None:
-        """동의 철회: 새 녹음 업로드가 막힌다. 이미 저장된 녹음은 학생이 직접 삭제할 수 있다."""
+        """동의 철회: 새 녹음 업로드가 막힌다. 이미 저장된 녹음은 학생이 직접 삭제할 수 있다.
+
+        v0.6: 대기·처리 중인 전사 작업도 취소하고, 이후 전사 요청을 막는다.
+        """
         consent = await self._active_consent(user)
         if consent is None:
             raise NotFoundError("No active recording consent")
         consent.revoked_at = clock.utc_now()
+        await cancel_jobs_for_owner(
+            self.session, user.id, AiJobType.TRANSCRIBE, "RECORDING_CONSENT_REVOKED"
+        )
         await self.session.commit()
 
     # ------------------------------------------------------------------ owner
@@ -430,6 +439,8 @@ class RecordingService:
     ) -> None:
         artwork = await self.artworks.owned(owner, artwork_id, for_update=True)
         recording = await self._recording(artwork.id, recording_id, for_update=True)
+        # v0.6: 이 녹음에서 나온 전사·첨삭도 삭제, 진행 중 AI 작업 취소 (같은 트랜잭션)
+        await purge_for_recordings(self.session, [recording.id])
         await self._discard(owner, recording, token)
 
     async def cleanup_storage(self, owner: Profile, token: str) -> None:

@@ -21,7 +21,6 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from app.main import create_app
-from app.services.help_events import RecordingHelpQueuePublisher
 from tests.auth_utils import TEST_SUPABASE_URL, TokenFactory, make_verifier
 from tests.conftest import make_settings, running_client
 from tests.fake_storage import FakeStorage
@@ -34,7 +33,13 @@ APP_TABLES = (
     "attendance_records, attendance_audit_logs, lesson_topics, tasks, task_assignments, "
     "personal_todos, artworks, artwork_photos, exam_templates, exam_stage_targets, "
     "exam_sessions, exam_session_stages, exam_participants, "
-    "help_requests, help_queue_events, feedback_recordings, recording_consents"
+    "help_requests, help_queue_events, feedback_recordings, recording_consents, "
+    "ai_processing_consents, ai_processing_jobs, feedback_transcripts, feedback_summaries, "
+    "feedback_items, feedback_categories, feedback_review_history, "
+    "growth_reports, practice_recommendations, practice_recommendation_history, "
+    "artwork_sharing_consents, shared_artwork_images, reference_artwork_reviews, "
+    "reference_recommendations, community_posts, community_comments, community_likes, "
+    "community_bookmarks, community_reports, community_moderation_logs"
 )
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -95,13 +100,20 @@ def tokens() -> TokenFactory:
 @pytest.fixture
 async def app(migrated_database: str, tokens: TokenFactory):  # type: ignore[no-untyped-def]
     application = create_app(
-        make_settings(database_url=migrated_database, supabase_url=TEST_SUPABASE_URL)
+        make_settings(
+            database_url=migrated_database,
+            supabase_url=TEST_SUPABASE_URL,
+            # v0.6: 큐 등록 API를 켠다 (실제 처리는 테스트가 가짜 STT·LLM으로 Worker를 직접 실행)
+            stt_enabled=True,
+            ai_summary_enabled=True,
+            growth_ai_enabled=True,
+        )
     )
     application.state.token_verifier = make_verifier(tokens)
     # 외부 Storage 대신 메모리 구현 (lifespan은 storage를 다시 만들지 않는다)
     application.state.storage = FakeStorage()
     application.state.audio_storage = FakeStorage(bucket="feedback-audio")
-    application.state.help_publisher = RecordingHelpQueuePublisher()
+    application.state.shared_storage = FakeStorage(bucket="shared-artworks")
     yield application
 
 

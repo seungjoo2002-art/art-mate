@@ -13,8 +13,29 @@ from app.models.academy_class import (
     ClassSchedule,
     ScheduleException,
 )
+from app.models.ai_feedback import (
+    AiProcessingConsent,
+    AiProcessingJob,
+    FeedbackCategory,
+    FeedbackItem,
+    FeedbackReviewHistory,
+    FeedbackSummary,
+    FeedbackTranscript,
+)
 from app.models.artwork import Artwork, ArtworkPhoto
 from app.models.attendance import AttendanceAuditLog, AttendanceRecord
+from app.models.community import (
+    ArtworkSharingConsent,
+    CommunityBookmark,
+    CommunityComment,
+    CommunityLike,
+    CommunityModerationLog,
+    CommunityPost,
+    CommunityReport,
+    ReferenceArtworkReview,
+    ReferenceRecommendation,
+    SharedArtworkImage,
+)
 from app.models.exam import (
     ExamParticipant,
     ExamSession,
@@ -22,6 +43,7 @@ from app.models.exam import (
     ExamStageTarget,
     ExamTemplate,
 )
+from app.models.growth import GrowthReport, PracticeRecommendation, PracticeRecommendationHistory
 from app.models.help import HelpQueueEvent, HelpRequest
 from app.models.membership import AcademyJoinRequest, AcademyMembership
 from app.models.personal_todo import PersonalTodo
@@ -34,26 +56,46 @@ __all__ = [
     "AcademyClass",
     "AcademyJoinRequest",
     "AcademyMembership",
+    "AiProcessingConsent",
+    "AiProcessingJob",
     "Artwork",
     "ArtworkPhoto",
+    "ArtworkSharingConsent",
     "AttendanceAuditLog",
     "AttendanceRecord",
     "Base",
     "ClassMembership",
     "ClassSchedule",
+    "CommunityBookmark",
+    "CommunityComment",
+    "CommunityLike",
+    "CommunityModerationLog",
+    "CommunityPost",
+    "CommunityReport",
     "ExamParticipant",
     "ExamSession",
     "ExamSessionStage",
     "ExamStageTarget",
     "ExamTemplate",
+    "FeedbackCategory",
+    "FeedbackItem",
     "FeedbackRecording",
+    "FeedbackReviewHistory",
+    "FeedbackSummary",
+    "FeedbackTranscript",
+    "GrowthReport",
     "HelpQueueEvent",
     "HelpRequest",
     "LessonTopic",
     "PersonalTodo",
+    "PracticeRecommendation",
+    "PracticeRecommendationHistory",
     "Profile",
     "RecordingConsent",
+    "ReferenceArtworkReview",
+    "ReferenceRecommendation",
     "ScheduleException",
+    "SharedArtworkImage",
     "Task",
     "TaskAssignment",
 ]

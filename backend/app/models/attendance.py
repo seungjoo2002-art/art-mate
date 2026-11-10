@@ -1,4 +1,8 @@
-"""출석 기록과 수정 이력 (v0.3)."""
+"""출석 기록과 수정 이력 (v0.3).
+
+[v0.5.1 서비스 제외] 기획 변경으로 API·서비스는 제거했다. 테이블은 데이터 보존과 Alembic 모델 일치
+(`alembic check`)를 위해 남겨 두며, 물리 삭제는 별도 승인 후 새 리비전으로 진행한다
+(docs/v0.5.1-planning-changes.md)."""
 
 import uuid
 from datetime import date, datetime

@@ -8,6 +8,7 @@
 """
 
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import date
 
 from sqlalchemy import select
@@ -27,8 +28,8 @@ from app.models.membership import AcademyMembership
 from app.models.task import LessonTopic, Task, TaskAssignment
 from app.repositories.classes import ClassRepository
 from app.repositories.tasks import LessonTopicRepository, TaskRepository
-from app.schemas.attendance import StudentRef
 from app.schemas.common import PaginationParams
+from app.schemas.students import StudentRef
 from app.schemas.tasks import (
     LessonTopicCreate,
     LessonTopicUpdate,
@@ -178,7 +179,17 @@ class TaskService:
                 "lesson_topic_id does not belong to this class", code=ErrorCode.INVALID_TASK_TARGET
             )
 
-    async def create(self, actor: AcademyMembership, data: TaskCreate) -> TaskDetail:
+    async def create(
+        self,
+        actor: AcademyMembership,
+        data: TaskCreate,
+        *,
+        before_commit: Callable[[Task], Awaitable[None]] | None = None,
+    ) -> TaskDetail:
+        """과제 배포.
+
+        `before_commit`(v0.7): 같은 트랜잭션에서 함께 저장할 변경 (예: AI 추천 → 과제 연결).
+        """
         # 반 행 잠금: 배포 대상(반 학생 목록) 확정과 저장을 한 트랜잭션에서 일관되게 처리
         academy_class = await self.access.require_class_manager(
             actor, data.class_id, for_update=True
@@ -228,6 +239,9 @@ class TaskService:
                     student_membership_id=student_id,
                 )
             )
+        if before_commit is not None:
+            await self.session.flush()
+            await before_commit(task)
         await self.session.commit()
         return await self._detail(task.id)
 

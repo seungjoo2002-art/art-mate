@@ -5,9 +5,9 @@ from typing import ClassVar, Self
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from app.models.enums import TaskStatus, TaskTargetType
-from app.schemas.attendance import StudentRef
 from app.schemas.common import APIModel
 from app.schemas.fields import InputModel, LongText, PatchModel, Title
+from app.schemas.students import StudentRef
 
 MAX_TASK_STUDENTS = 200
 

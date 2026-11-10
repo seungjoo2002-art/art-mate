@@ -19,7 +19,6 @@ from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 from app.core.security import build_token_verifier
 from app.db.session import create_database
 from app.integrations.supabase.storage import build_storage
-from app.services.help_events import NullHelpQueuePublisher
 
 logger = logging.getLogger("app")
 
@@ -59,7 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="AI 기반 미술 실기교육·학생관리 플랫폼 ART MATE 백엔드 API",
+        description="AI 기반 미술 실기 학습·성장 관리 플랫폼 ART MATE 백엔드 API",
         debug=settings.debug,
         lifespan=lifespan,
         docs_url="/docs" if docs else None,
@@ -74,8 +73,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.storage = build_storage(settings)
     # 피드백 녹음 (v0.5): 별도 비공개 오디오 버킷
     app.state.audio_storage = build_storage(settings, settings.recording_bucket)
-    # 질문 대기열 변경 알림 (v0.5는 폴링이라 no-op, SSE/WebSocket 도입 시 교체)
-    app.state.help_publisher = NullHelpQueuePublisher()
+    # 공유용 파생 이미지 (v0.8): 원본과 분리된 비공개 버킷
+    app.state.shared_storage = build_storage(settings, settings.shared_bucket)
 
     register_exception_handlers(app)
 

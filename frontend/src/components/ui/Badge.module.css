@@ -1,0 +1,25 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+}
+
+.soft {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-ink);
+}
+
+.overlay {
+  background: rgba(31, 31, 31, 0.72);
+  color: var(--color-text-on-dark);
+  font-weight: var(--weight-medium);
+}
+
+.light {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--color-text);
+}

@@ -112,12 +112,83 @@ class Settings(BaseSettings):
         default="2026-11-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
     )
 
-    # --- 질문 콜 (v0.5) ------------------------------------------------------
-    # 최근 완료 기록이 부족할 때 쓰는 질문 1건 기본 처리 시간 (초)
-    help_default_handle_seconds: int = Field(default=180, ge=10, le=3600)
-    help_eta_sample_size: int = Field(default=20, ge=1, le=200)
-    help_eta_min_samples: int = Field(default=3, ge=1, le=50)
-    help_eta_window_days: int = Field(default=30, ge=1, le=365)
+    # --- AI 첨삭 처리 (v0.6) ------------------------------------------------
+    # 기본은 모두 꺼짐: 켜지 않으면 API가 전사·요약 요청을 503으로 거부한다 (비용·개인정보 보호).
+    # 실제 처리는 별도 Worker 프로세스(`python -m app.worker`)가 DB 작업 큐에서 가져가 실행한다.
+    stt_enabled: bool = False
+    # faster-whisper 모델 (tiny/base/small/medium/large-v3 또는 로컬 경로). CPU 기본 small + int8
+    stt_model: str = Field(default="small", min_length=1, max_length=200)
+    stt_device: Literal["cpu", "cuda", "auto"] = "cpu"
+    stt_compute_type: str = Field(default="int8", pattern=r"^[a-z0-9_]+$")
+    # 0이면 CTranslate2 기본값 (가용 코어 수)
+    stt_cpu_threads: int = Field(default=0, ge=0, le=64)
+    # 1 = greedy (CPU 비용 최소). 정확도가 부족하면 3~5로 올린다
+    stt_beam_size: int = Field(default=1, ge=1, le=10)
+    stt_language: str = Field(default="ko", pattern=r"^[a-z]{2}$")
+    # 모델 다운로드 위치 (Worker 디스크·볼륨). 비우면 HuggingFace 기본 캐시
+    stt_model_dir: str | None = None
+    # 녹음 길이 상한(RECORDING_MAX_DURATION_SECONDS)과 별도로 전사 처리 상한
+    stt_max_audio_seconds: int = Field(default=1200, ge=10, le=7200)
+    # 전사 1건 처리 제한 시간 (구간 단위로 확인해 넘으면 중단 → 재시도)
+    stt_timeout_seconds: int = Field(default=1800, ge=30, le=10800)
+    # Worker가 음성을 내려받을 Signed URL 유효시간.
+    # 요청한 사용자 토큰으로 발급한다 (service_role 미사용)
+    stt_source_url_seconds: int = Field(default=21600, ge=600, le=86400)
+
+    ai_summary_enabled: bool = False
+    # Gemini API 키 (Worker 전용).
+    # 무료 등급은 입력이 모델 개선에 쓰일 수 있으므로 유료 등급 키만 사용
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str = Field(default="gemini-3.1-flash-lite", pattern=r"^[a-z0-9.-]+$")
+    gemini_api_base: AnyHttpUrl = AnyHttpUrl("https://generativelanguage.googleapis.com/v1beta")
+    gemini_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    gemini_max_output_tokens: int = Field(default=4096, ge=256, le=32768)
+    # 한 번에 보내는 전사문 최대 글자 수 (넘으면 요약 실패 처리)
+    ai_max_transcript_chars: int = Field(default=30000, ge=1000, le=200000)
+    # 외부 AI 전송 동의서 버전. 바꾸면 학생은 새 버전에 다시 동의해야 AI 요약을 요청할 수 있다
+    ai_consent_version: str = Field(
+        default="2026-11-ai-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+    )
+
+    # --- 성장 코치 (v0.7) ----------------------------------------------------
+    # 성장 리포트 설명문·AI 연습 과제 (Gemini). 통계·규칙 기반 추천은 이 설정과 무관하게 동작
+    growth_ai_enabled: bool = False
+    # 성장 분석 목적의 외부 AI 전송 동의서 버전 (첨삭 요약 동의와 별개)
+    ai_growth_consent_version: str = Field(
+        default="2026-11-growth-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+    )
+    # 분석 대상(승인된 첨삭이 있는) 작품이 이보다 적으면 INSUFFICIENT_DATA
+    growth_min_artworks: int = Field(default=3, ge=1, le=50)
+    # '최근 N개 작품' 비교 구간 크기
+    growth_recent_window: int = Field(default=5, ge=2, le=50)
+    # 한 번에 만드는 추천 과제 수 (약점 카테고리당 1개)
+    growth_max_recommendations: int = Field(default=3, ge=1, le=10)
+
+    # --- 참고작·커뮤니티 (v0.8) ---------------------------------------------
+    # 공유용 파생 이미지 비공개 버킷 (원본 버킷과 분리). storage-setup.sql 과 같아야 한다
+    shared_bucket: str = Field(default="shared-artworks", pattern=r"^[a-z0-9][a-z0-9_-]{1,62}$")
+    # 파생 이미지 긴 변 최대 픽셀 (원본 해상도·EXIF를 공유하지 않는다)
+    shared_image_max_px: int = Field(default=1600, ge=320, le=4096)
+    shared_image_quality: int = Field(default=82, ge=50, le=95)
+    # 작품 공유 동의서 버전 (커뮤니티·참고작 공통)
+    sharing_consent_version: str = Field(
+        default="2026-11-share-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+    )
+    reference_per_weakness: int = Field(default=3, ge=1, le=10)
+    reference_max_results: int = Field(default=9, ge=1, le=30)
+    # 남용 방지 (사용자별, DB 기준이라 서버 여러 대에서도 동일)
+    community_posts_per_day: int = Field(default=10, ge=1, le=100)
+    community_comments_per_10min: int = Field(default=20, ge=1, le=200)
+    community_reports_per_day: int = Field(default=20, ge=1, le=200)
+    # 서로 다른 사용자의 미처리 신고가 이 수에 도달하면 자동 숨김 (관리자 검토 대기)
+    community_auto_hide_reports: int = Field(default=3, ge=2, le=100)
+
+    # 작업 큐·Worker
+    job_max_attempts: int = Field(default=3, ge=1, le=10)
+    # Worker가 작업을 잡고 있는 동안 주기적으로 연장. 만료되면 다른 Worker가 회수(서버 재시작 복구)
+    job_lease_seconds: int = Field(default=300, ge=30, le=3600)
+    job_retry_base_seconds: int = Field(default=30, ge=1, le=3600)
+    worker_poll_seconds: float = Field(default=5.0, gt=0, le=300)
 
     # --- HTTP --------------------------------------------------------------
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
@@ -282,6 +353,10 @@ class Settings(BaseSettings):
     def storage_api_url(self) -> str | None:
         base = self.supabase_base_url
         return f"{base}/storage/v1" if base else None
+
+    @property
+    def gemini_configured(self) -> bool:
+        return self.gemini_api_key is not None and bool(self.gemini_api_key.get_secret_value())
 
     @property
     def database_configured(self) -> bool:

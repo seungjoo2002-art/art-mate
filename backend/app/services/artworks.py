@@ -19,11 +19,21 @@ DB·Storage 일관성
 - 작품 생성·수정·삭제·업로드: 소유 학생 본인 (`/artworks`)
 - 조회: 소유자 본인, 또는 학원에 연결된 작품의 담당 강사·학원 관리자 (`/academies/{id}/artworks`)
 - 다른 사람의 작품 ID → 404 (존재 여부 비노출)
+
+분류·완료 (v0.5.1)
+- practical_type(실기 유형)과 work_category(작업 목적)는 독립 필터
+  (같이 주면 AND, 각각 여러 값은 OR)
+- work_status: 학생이 `POST /complete`로 완료, `POST /reopen`으로 작업 재개. 완료하려면 ACTIVE
+  FINAL 사진이 필요하다. 완료된 작품은 사진 업로드·교체·삭제·대표 변경이 막힌다(409
+  ARTWORK_COMPLETED). 제목·설명·분류·연결 수정과 피드백 녹음은 계속 가능하다.
+- recording_count: 작품별 ACTIVE 녹음 수를 목록 1페이지당 쿼리 1번(GROUP BY)으로 집계한다.
 """
 
 import logging
 import uuid
 from collections import defaultdict
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import Select, func, select, update
@@ -52,11 +62,15 @@ from app.models.enums import (
     ARTWORK_STAGE_ORDER,
     ArtworkProgress,
     ArtworkStage,
+    ArtworkWorkCategory,
+    ArtworkWorkStatus,
     ClassMemberRole,
     MembershipRole,
     MembershipStatus,
     PhotoStatus,
+    PracticalType,
     RecordingStatus,
+    SharingPurpose,
 )
 from app.models.membership import AcademyMembership
 from app.models.profile import Profile
@@ -78,7 +92,9 @@ from app.schemas.artworks import (
 )
 from app.schemas.common import PaginationParams
 from app.services.access import AccessService, managed_student_ids
+from app.services.ai_cleanup import purge_for_recordings
 from app.services.images import check_declared_file, inspect_image, storage_extension
+from app.services.sharing import withdraw_artwork_sharing
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +102,38 @@ CLEANUP_BATCH = 50
 _LIVE = (PhotoStatus.PENDING, PhotoStatus.ACTIVE)
 
 
+@dataclass(frozen=True)
+class ArtworkFilters:
+    """작품 목록 필터. 빈 값은 조건 없음. 시퀀스는 OR, 서로 다른 필드는 AND."""
+
+    academy_id: uuid.UUID | None = None
+    work_date_from: date | None = None
+    work_date_to: date | None = None
+    practical_types: Sequence[PracticalType] = ()
+    work_categories: Sequence[ArtworkWorkCategory] = ()
+    work_status: ArtworkWorkStatus | None = None
+
+    def apply(self, stmt: Select[tuple[Artwork]]) -> Select[tuple[Artwork]]:
+        if self.academy_id is not None:
+            stmt = stmt.where(Artwork.academy_id == self.academy_id)
+        if self.work_date_from is not None:
+            stmt = stmt.where(Artwork.work_date >= self.work_date_from)
+        if self.work_date_to is not None:
+            stmt = stmt.where(Artwork.work_date <= self.work_date_to)
+        if self.practical_types:
+            stmt = stmt.where(Artwork.practical_type.in_(self.practical_types))
+        if self.work_categories:
+            stmt = stmt.where(Artwork.work_category.in_(self.work_categories))
+        if self.work_status is not None:
+            stmt = stmt.where(Artwork.work_status == self.work_status)
+        return stmt
+
+
 def _stage_rank(stage: ArtworkStage) -> int:
     return ARTWORK_STAGE_ORDER.index(stage)
 
 
-def summarize(artwork_id: uuid.UUID, photos: list[ArtworkPhoto]) -> ArtworkProgressRead:
+def summarize(artwork: Artwork, photos: list[ArtworkPhoto]) -> ArtworkProgressRead:
     active = [p for p in photos if p.status == PhotoStatus.ACTIVE]
     stages = []
     for stage in ARTWORK_STAGE_ORDER:
@@ -107,10 +150,13 @@ def summarize(artwork_id: uuid.UUID, photos: list[ArtworkPhoto]) -> ArtworkProgr
         )
     reached = [s for s in stages if s.photo_count]
     progress = ArtworkProgress(reached[-1].stage) if reached else ArtworkProgress.NOT_STARTED
+    has_final = progress == ArtworkProgress.FINAL
     return ArtworkProgressRead(
-        artwork_id=artwork_id,
+        artwork_id=artwork.id,
         progress=progress,
-        completed=progress == ArtworkProgress.FINAL,
+        completed=has_final,
+        has_final_photo=has_final,
+        work_status=artwork.work_status,
         stages=stages,
     )
 
@@ -133,8 +179,10 @@ def photo_read(photo: ArtworkPhoto, url: str | None = None, expires: datetime | 
     )
 
 
-def artwork_read(artwork: Artwork, photos: list[ArtworkPhoto]) -> dict:  # type: ignore[type-arg]
-    summary = summarize(artwork.id, photos)
+def artwork_read(  # type: ignore[type-arg]
+    artwork: Artwork, photos: list[ArtworkPhoto], recording_count: int = 0
+) -> dict:
+    summary = summarize(artwork, photos)
     cover = next(
         (s.representative_photo_id for s in reversed(summary.stages) if s.representative_photo_id),
         None,
@@ -148,8 +196,13 @@ def artwork_read(artwork: Artwork, photos: list[ArtworkPhoto]) -> dict:  # type:
         "student_membership_id": artwork.student_membership_id,
         "class_id": artwork.class_id,
         "task_id": artwork.task_id,
+        "practical_type": artwork.practical_type,
+        "work_category": artwork.work_category,
+        "work_status": artwork.work_status,
+        "completed_at": artwork.completed_at,
         "progress": summary.progress,
         "photo_count": sum(s.photo_count for s in summary.stages),
+        "recording_count": recording_count,
         "cover_photo_id": cover,
         "created_at": artwork.created_at,
         "updated_at": artwork.updated_at,
@@ -178,6 +231,31 @@ class ArtworkService:
         for photo in (await self.session.execute(stmt)).scalars():
             result[photo.artwork_id].append(photo)
         return result
+
+    async def recording_counts(self, artwork_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+        """작품별 ACTIVE 녹음 수 (삭제·업로드 미완료 제외). 작품 수와 무관하게 쿼리 1번.
+
+        호출자가 이미 작품 접근 권한을 확인한 작품 ID만 넘긴다. 소유자와 담당 강사 모두 그 작품의
+        ACTIVE 녹음 전체를 볼 수 있으므로(RecordingService) 집계 범위도 같다.
+        """
+        if not artwork_ids:
+            return {}
+        stmt = (
+            select(FeedbackRecording.artwork_id, func.count())
+            .where(
+                FeedbackRecording.artwork_id.in_(artwork_ids),
+                FeedbackRecording.status == RecordingStatus.ACTIVE,
+            )
+            .group_by(FeedbackRecording.artwork_id)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return {artwork_id: count for artwork_id, count in rows}
+
+    async def _reads(self, artworks: list[Artwork]) -> list[dict]:  # type: ignore[type-arg]
+        ids = [a.id for a in artworks]
+        photos = await self._photos(ids)
+        counts = await self.recording_counts(ids)
+        return [artwork_read(a, photos[a.id], counts.get(a.id, 0)) for a in artworks]
 
     async def owned(
         self, owner: Profile, artwork_id: uuid.UUID, *, for_update: bool = False
@@ -216,7 +294,8 @@ class ArtworkService:
 
     async def _detail_dict(self, artwork: Artwork, viewer_token: str, include_urls: bool) -> dict:  # type: ignore[type-arg]
         photos = (await self._photos([artwork.id]))[artwork.id]
-        data = artwork_read(artwork, photos)
+        counts = await self.recording_counts([artwork.id])
+        data = artwork_read(artwork, photos, counts.get(artwork.id, 0))
         data["photos"] = await self._photo_reads(photos, viewer_token, include_urls)
         return data
 
@@ -245,6 +324,15 @@ class ArtworkService:
         if self.storage is None:
             raise StorageNotConfiguredError()
         return self.storage
+
+    @staticmethod
+    def _ensure_photos_editable(artwork: Artwork) -> None:
+        """완료된 작품의 사진은 바꿀 수 없다 (작업 재개 후 가능)."""
+        if artwork.work_status == ArtworkWorkStatus.COMPLETED:
+            raise ConflictError(
+                "The artwork is completed; reopen it to change photos",
+                code=ErrorCode.ARTWORK_COMPLETED,
+            )
 
     # ------------------------------------------------------------------ links
 
@@ -328,6 +416,9 @@ class ArtworkService:
             title=data.title,
             description=data.description,
             work_date=data.work_date or clock.local_today(),
+            practical_type=data.practical_type,
+            work_category=data.work_category,
+            work_status=ArtworkWorkStatus.IN_PROGRESS,
             **links,
         )
         self.session.add(artwork)
@@ -336,24 +427,11 @@ class ArtworkService:
         return ArtworkDetail(**artwork_read(artwork, []), photos=[])
 
     async def list_mine(
-        self,
-        owner: Profile,
-        params: PaginationParams,
-        *,
-        academy_id: uuid.UUID | None,
-        work_date_from: date | None,
-        work_date_to: date | None,
+        self, owner: Profile, params: PaginationParams, filters: ArtworkFilters
     ) -> tuple[list[ArtworkRead], int]:
-        stmt = select(Artwork).where(Artwork.owner_id == owner.id)
-        if academy_id is not None:
-            stmt = stmt.where(Artwork.academy_id == academy_id)
-        if work_date_from is not None:
-            stmt = stmt.where(Artwork.work_date >= work_date_from)
-        if work_date_to is not None:
-            stmt = stmt.where(Artwork.work_date <= work_date_to)
+        stmt = filters.apply(select(Artwork).where(Artwork.owner_id == owner.id))
         artworks, total = await self._page(stmt, params)
-        photos = await self._photos([a.id for a in artworks])
-        return [ArtworkRead(**artwork_read(a, photos[a.id])) for a in artworks], total
+        return [ArtworkRead(**data) for data in await self._reads(artworks)], total
 
     async def get_mine(
         self, owner: Profile, artwork_id: uuid.UUID, token: str, include_urls: bool
@@ -363,7 +441,7 @@ class ArtworkService:
 
     async def progress(self, owner: Profile, artwork_id: uuid.UUID) -> ArtworkProgressRead:
         artwork = await self.owned(owner, artwork_id)
-        return summarize(artwork.id, (await self._photos([artwork.id]))[artwork.id])
+        return summarize(artwork, (await self._photos([artwork.id]))[artwork.id])
 
     async def update(
         self, owner: Profile, artwork_id: uuid.UUID, data: ArtworkUpdate, token: str
@@ -381,11 +459,65 @@ class ArtworkService:
                 await self._resolve_links(owner, academy_id, class_id, task_id)
             ).items():
                 setattr(artwork, field, value)
-        for field in ("title", "description", "work_date"):
+        for field in ("title", "description", "work_date", "practical_type", "work_category"):
             if field in changes:
                 setattr(artwork, field, changes[field])
         await self.session.commit()
         await self.session.refresh(artwork)
+        return ArtworkDetail(**await self._detail_dict(artwork, token, include_urls=False))
+
+    async def complete(self, owner: Profile, artwork_id: uuid.UUID, token: str) -> ArtworkDetail:
+        """작품 완료. ACTIVE FINAL 사진이 있어야 한다. 이미 완료면 그대로 반환 (멱등, 시각 유지).
+
+        완료 시점에 업로드 중(PENDING)인 사진은 취소한다 (완료 후 사진이 추가되지 않도록).
+        """
+        artwork = await self.owned(owner, artwork_id, for_update=True)
+        if artwork.work_status != ArtworkWorkStatus.COMPLETED:
+            has_final = (
+                await self.session.execute(
+                    select(ArtworkPhoto.id)
+                    .where(
+                        ArtworkPhoto.artwork_id == artwork.id,
+                        ArtworkPhoto.stage == ArtworkStage.FINAL,
+                        ArtworkPhoto.status == PhotoStatus.ACTIVE,
+                    )
+                    .limit(1)
+                )
+            ).first() is not None
+            if not has_final:
+                raise ConflictError(
+                    "Upload a FINAL stage photo before completing the artwork",
+                    code=ErrorCode.FINAL_PHOTO_REQUIRED,
+                )
+            now = clock.utc_now()
+            artwork.work_status = ArtworkWorkStatus.COMPLETED
+            artwork.completed_at = now
+            await self.session.execute(
+                update(ArtworkPhoto)
+                .where(
+                    ArtworkPhoto.artwork_id == artwork.id,
+                    ArtworkPhoto.status == PhotoStatus.PENDING,
+                )
+                .values(
+                    status=PhotoStatus.DELETED,
+                    deleted_at=now,
+                    storage_cleanup_pending=True,
+                    updated_at=func.now(),
+                )
+            )
+            await self.session.commit()
+            await self.session.refresh(artwork)
+            await self.cleanup_storage(owner, token)
+        return ArtworkDetail(**await self._detail_dict(artwork, token, include_urls=False))
+
+    async def reopen(self, owner: Profile, artwork_id: uuid.UUID, token: str) -> ArtworkDetail:
+        """작업 재개 (완료 취소). 이미 작업 중이면 그대로 반환 (멱등)."""
+        artwork = await self.owned(owner, artwork_id, for_update=True)
+        if artwork.work_status != ArtworkWorkStatus.IN_PROGRESS:
+            artwork.work_status = ArtworkWorkStatus.IN_PROGRESS
+            artwork.completed_at = None
+            await self.session.commit()
+            await self.session.refresh(artwork)
         return ArtworkDetail(**await self._detail_dict(artwork, token, include_urls=False))
 
     async def delete(self, owner: Profile, artwork_id: uuid.UUID, token: str) -> None:
@@ -402,6 +534,19 @@ class ArtworkService:
                 storage_cleanup_pending=True,
                 updated_at=func.now(),
             )
+        )
+        # v0.6: 작품 녹음의 전사·첨삭 삭제, 진행 중 AI 작업 취소
+        recording_ids = list(
+            (
+                await self.session.execute(
+                    select(FeedbackRecording.id).where(FeedbackRecording.artwork_id == artwork.id)
+                )
+            ).scalars()
+        )
+        await purge_for_recordings(self.session, recording_ids)
+        # v0.8: 공유 동의 철회(ARTWORK_DELETED), 게시물·참고작 추천 정리, 파생 이미지 삭제 대기
+        await withdraw_artwork_sharing(
+            self.session, artwork.id, list(SharingPurpose), "ARTWORK_DELETED"
         )
         # v0.5: 작품의 피드백 녹음도 같은 트랜잭션에서 삭제 처리 (파일 정리는 RecordingService)
         await self.session.execute(
@@ -442,8 +587,9 @@ class ArtworkService:
             max_bytes=settings.artwork_max_upload_bytes,
         )
         content_type = data.content_type.lower()
-        # 작품 행 잠금: 단계별 장수 제한·대표 사진 지정을 직렬화
+        # 작품 행 잠금: 단계별 장수 제한·대표 사진 지정·완료 처리를 직렬화
         artwork = await self.owned(owner, artwork_id, for_update=True)
+        self._ensure_photos_editable(artwork)
         now = clock.utc_now()
         await self._expire_pending(artwork.id, now)
 
@@ -549,6 +695,7 @@ class ArtworkService:
         photo = await self._photo(artwork.id, photo_id, for_update=True)
         if photo.status == PhotoStatus.ACTIVE:
             return photo_read(photo)  # 재시도·중복 호출: 같은 결과 (멱등)
+        self._ensure_photos_editable(artwork)
 
         now = clock.utc_now()
         if photo.upload_expires_at <= now:
@@ -650,6 +797,7 @@ class ArtworkService:
         self, owner: Profile, artwork_id: uuid.UUID, photo_id: uuid.UUID, value: bool
     ) -> PhotoRead:
         artwork = await self.owned(owner, artwork_id, for_update=True)
+        self._ensure_photos_editable(artwork)
         photo = await self._photo(artwork.id, photo_id, for_update=True)
         if photo.status != PhotoStatus.ACTIVE:
             raise ConflictError("The photo is not uploaded yet", code=ErrorCode.PHOTO_NOT_ACTIVE)
@@ -676,6 +824,7 @@ class ArtworkService:
         self, owner: Profile, artwork_id: uuid.UUID, photo_id: uuid.UUID, token: str
     ) -> None:
         artwork = await self.owned(owner, artwork_id, for_update=True)
+        self._ensure_photos_editable(artwork)
         photo = await self._photo(artwork.id, photo_id, for_update=True)
         was_representative = photo.is_representative
         photo.status = PhotoStatus.DELETED
@@ -753,9 +902,10 @@ class ArtworkService:
         self,
         actor: AcademyMembership,
         params: PaginationParams,
+        filters: ArtworkFilters,
         *,
         student_membership_id: uuid.UUID | None,
-    ) -> tuple[list[tuple[Artwork, AcademyMembership, Profile, list[ArtworkPhoto]]], int]:
+    ) -> tuple[list[tuple[dict, AcademyMembership, Profile]], int]:  # type: ignore[type-arg]
         if student_membership_id is not None:
             await self.access.require_managed_student(actor, student_membership_id)
         stmt = select(Artwork).where(
@@ -764,10 +914,13 @@ class ArtworkService:
         )
         if student_membership_id is not None:
             stmt = stmt.where(Artwork.student_membership_id == student_membership_id)
-        artworks, total = await self._page(stmt, params)
-        photos = await self._photos([a.id for a in artworks])
+        artworks, total = await self._page(filters.apply(stmt), params)
+        reads = await self._reads(artworks)
         people = await self._students({a.student_membership_id for a in artworks})
-        return [(a, *people[a.student_membership_id], photos[a.id]) for a in artworks], total  # type: ignore[index]
+        return [
+            (data, *people[a.student_membership_id])  # type: ignore[index]
+            for a, data in zip(artworks, reads, strict=True)
+        ], total
 
     async def _students(
         self, membership_ids: set[uuid.UUID | None]

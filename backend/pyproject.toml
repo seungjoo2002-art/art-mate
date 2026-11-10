@@ -18,6 +18,14 @@ dependencies = [
     "httpx>=0.28",
 ]
 
+[project.optional-dependencies]
+# Worker 전용 (STT). API 이미지에는 설치하지 않는다: `uv sync --extra stt`
+stt = [
+    # faster-whisper 1.2.x가 av.open(metadata_errors=...)을 쓰는데 PyAV 18+에서 제거됨 → 17.x 고정
+    "av<18",
+    "faster-whisper>=1.1",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.2",
@@ -55,6 +63,11 @@ ignore = [
     "RUF002",
     "RUF003",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# AI 프롬프트 본문(한국어 자연어)은 줄바꿈하면 모델 입력이 바뀌므로 길이 제한에서 제외
+"app/services/ai_summary.py" = ["E501"]
+"app/services/growth_ai.py" = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

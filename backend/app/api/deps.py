@@ -38,7 +38,6 @@ from app.models.membership import AcademyMembership
 from app.models.profile import Profile
 from app.repositories.memberships import MembershipRepository
 from app.repositories.profiles import ProfileRepository
-from app.services.help_events import HelpQueuePublisher
 
 
 def get_app_settings(request: Request) -> Settings:
@@ -78,12 +77,14 @@ def get_optional_audio_storage(request: Request) -> StorageClient | None:
     return request.app.state.audio_storage
 
 
-def get_help_publisher(request: Request) -> HelpQueuePublisher:
-    return request.app.state.help_publisher
-
-
 AudioStorage = Annotated[StorageClient | None, Depends(get_optional_audio_storage)]
-HelpPublisher = Annotated[HelpQueuePublisher, Depends(get_help_publisher)]
+
+
+def get_optional_shared_storage(request: Request) -> StorageClient | None:
+    return request.app.state.shared_storage
+
+
+SharedStorage = Annotated[StorageClient | None, Depends(get_optional_shared_storage)]
 # Storage가 필요 없는 요청(작품 생성 등)도 있는 서비스용. 필요한 시점에 서비스가 503을 낸다.
 OptionalStorage = Annotated[StorageClient | None, Depends(get_optional_storage)]
 DatabaseDep = Annotated[Database, Depends(get_database)]

@@ -202,6 +202,28 @@ uv run alembic check                         # 4) 모델과 일치 확인 → "N
 3. 확인: Storage → `artworks`, `feedback-audio` 버킷이 **Private**, Policies에 `artmate_artworks_*` 3개 + `artmate_audio_*` 3개
 4. Settings → API → Exposed schemas에 `artmate_private`를 **추가하지 않습니다**
 5. 백엔드 환경변수 `SUPABASE_URL`, `SUPABASE_ANON_KEY`(공개 키) 설정. service_role 키는 넣지 않습니다
+6. 적용 결과 확인: `uv run python -m scripts.verify_dev_environment` (읽기 전용, [supabase-dev-verification.md](supabase-dev-verification.md))
+
+### 8.1b 리비전 순서와 v0.5.1 적용 규칙
+
+- 현재 head: `0008` (v0.8). 다음 리비전은 `--rev-id 0009`, `down_revision = "0008"`.
+- `0005`~`0008`은 팀 승인 후 개발 DB에 순서대로 적용합니다 (2026-11-09 기준 개발 DB는 `0004`). `0008` 이후 storage-setup.sql의 v0.8 블록(shared-artworks 버킷·정책)도 적용합니다.
+- 개발 DB에는 프론트엔드 담당자가 `0002~0004`와 storage-setup.sql을 적용합니다. 백엔드 담당자는 같은 작업을 반복하지 않고 검증 스크립트로 확인만 합니다.
+- `0005`는 팀 승인 후 한 사람만 개발 DB에 적용합니다. 운영 DB 적용은 별도 배포 절차로만 합니다.
+- v0.5.1에서 제외한 기능(출석·오늘 할 일·질문 콜·시험 타이머)의 테이블은 보존 중입니다. 물리 삭제는 데이터 확인·승인 후 별도 리비전으로 진행합니다 ([v0.5.1-planning-changes.md §5](v0.5.1-planning-changes.md)).
+
+### 8.1c AI Worker 실행 (v0.6)
+
+```bash
+cd backend
+uv sync --extra stt                     # faster-whisper 설치 (Worker 전용)
+STT_ENABLED=true AI_SUMMARY_ENABLED=true GEMINI_API_KEY=... uv run python -m app.worker
+docker build --target worker -t artmate-worker .   # 배포 이미지 (API 이미지는 기본 target)
+```
+
+- API 서버와 같은 `DATABASE_URL`을 사용합니다. `GEMINI_API_KEY`는 Worker에만 두고 유료 등급 키를 씁니다.
+- 실제 Gemini 호출·실제 학생 데이터 전송은 승인과 동의가 준비된 뒤에만 합니다. 자동 테스트는 가짜 STT·LLM을 씁니다.
+- 자세한 구조·자원·비용: [ai-feedback-v0.6.md](ai-feedback-v0.6.md)
 
 ### 8.2 시스템 관리자(ADMIN) 지정
 

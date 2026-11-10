@@ -1,6 +1,14 @@
 # ART MATE 데이터베이스 설계
 
-> 상태: **v0.5 구현 반영** (§3.10a 질문 콜, §3.10b 피드백 녹음·동의, 리비전 `0004`). v0.4: §3.9 작품·사진, §3.10 시험 타이머 (`0003`). §3.1~3.3a(`profiles`, `academies`, `academy_memberships`, `academy_join_requests`)는 리비전 `0001`, §3.6(반·일정·출석·주제·과제·개인 할 일 10개 테이블)은 리비전 `0002`로 구현했습니다. 나머지 엔티티는 설계안이며, 구현할 때 이 문서를 함께 수정합니다.
+> 상태: **v0.8 참고작·커뮤니티 반영** (리비전 `0008`: §3.22 공유 동의·파생 이미지·우수 사례·참고작 추천·커뮤니티).
+>
+> 이전: **v0.7 성장 코치 반영** (리비전 `0007`: §3.21 성장 리포트·맞춤 연습 과제·추천 이력, AI 동의 목적 분리).
+>
+> 이전: **v0.6 AI 첨삭 반영** (리비전 `0006`: §3.20 AI 전송 동의·작업 큐·전사·첨삭·항목·카테고리·검토 이력).
+>
+> 이전: **v0.5.1 기획 변경 반영** (리비전 `0005`: §3.1 `profiles.practical_type`, §3.9 작품 분류·완료 상태). 출석(§3.6 `attendance_*`)·개인 할 일(`personal_todos`)·시험 타이머(§3.10)·질문 콜(§3.10a)은 **서비스에서 제외되어 API가 없고 테이블만 보존** 중입니다 (§3.19, [v0.5.1-planning-changes.md](v0.5.1-planning-changes.md)).
+>
+> 이전 상태: **v0.5 구현 반영** (§3.10a 질문 콜, §3.10b 피드백 녹음·동의, 리비전 `0004`). v0.4: §3.9 작품·사진, §3.10 시험 타이머 (`0003`). §3.1~3.3a(`profiles`, `academies`, `academy_memberships`, `academy_join_requests`)는 리비전 `0001`, §3.6(반·일정·출석·주제·과제·개인 할 일 10개 테이블)은 리비전 `0002`로 구현했습니다. 나머지 엔티티는 설계안이며, 구현할 때 이 문서를 함께 수정합니다.
 
 ## 1. 공통 규칙
 
@@ -55,6 +63,7 @@ academy_memberships(student) 1─* assignments, growth_reports, ai_analyses
 | user_type | varchar(20) | `STUDENT` / `INSTRUCTOR` / `ADMIN` (CHECK). ADMIN은 API로 부여 불가 |
 | avatar_path? | varchar(512) | Storage 경로 `avatars/<id>/<파일>` (API에서 본인 경로만 허용) |
 | is_active | bool | 기본 true. false면 보호 API 403 `ACCOUNT_DISABLED` |
+| practical_type? | varchar(20) | **v0.5.1** 실기 유형 `BASIC_DESIGN`·`THINKING_SHIFT`·`IDEA_EXPRESSION`·`DRAWING`·`WATERCOLOR`·`OTHER` (CHECK `ck_profiles_practical_type`). NULL = 미선택(기존 회원). 가입 시 선택, `PATCH /users/me`로 변경 |
 | created_at, updated_at | timestamptz | |
 
 - 생성: 회원가입 후 프론트엔드가 `POST /api/v1/users/me` 호출. `INSERT ... ON CONFLICT DO NOTHING`이라 **중복·재시도에 안전**합니다. 생성이 실패해도 다음 로그인 때 `GET /users/me` → 404 → 다시 생성하면 복구됩니다. `auth.users` 트리거는 쓰지 않습니다(auth 스키마 변경을 피하고, 사용자 유형 선택을 명시적으로 받기 위해).
@@ -210,7 +219,7 @@ profiles 1─* personal_todos                                             (학�
 - **부분 유니크** `uq_schedule_exceptions_occurrence (schedule_id, original_date) WHERE is_active AND kind IN ('CANCELLATION','RESCHEDULE')`: 한 회차에 유효한 휴강/변경은 1개.
 - 인덱스: `ix(class_id, session_date)`, `ix(class_id, original_date)`
 
-#### `attendance_records` — 출석
+#### `attendance_records` — 출석 (⛔ v0.5.1 서비스 제외, 테이블 보존)
 | 필드 | 설명 |
 | --- | --- |
 | academy_id, student_membership_id | 복합 FK → academy_memberships |
@@ -222,7 +231,7 @@ profiles 1─* personal_todos                                             (학�
 - **중복 출석 방지**: `uq(student_membership_id, attendance_date)` + `INSERT … ON CONFLICT DO NOTHING RETURNING` → 동시 요청도 1건만 저장, 나머지는 409.
 - 인덱스: `uq(academy_id, id)`, `ix(academy_id, attendance_date)`
 
-#### `attendance_audit_logs` — 출석 수정 이력 (append-only)
+#### `attendance_audit_logs` — 출석 수정 이력 (append-only) (⛔ v0.5.1 서비스 제외, 테이블 보존)
 | 필드 | 설명 |
 | --- | --- |
 | academy_id, attendance_record_id | 복합 FK → attendance_records (CASCADE) |
@@ -257,7 +266,7 @@ academy_id, class_id(복합 FK), lesson_date, title(200), description?(2000), cr
 - 인덱스: `uq(academy_id, id)`, `ix(class_id, status, created_at)`, `ix(academy_id, created_at)`, `uq(task_id, student_membership_id)`, `ix(student_membership_id, completed_at)`
 - 3.13의 AI 추천 과제(`origin`, `ai_analysis_id`, 제출·검토 상태)는 이후 버전에서 이 테이블을 확장합니다.
 
-#### `personal_todos` — 학생 개인 할 일 (학원 데이터 아님)
+#### `personal_todos` — 학생 개인 할 일 (학원 데이터 아님) (⛔ v0.5.1 서비스 제외, 테이블 보존)
 user_id → profiles (CASCADE), title, note?, due_date?(date), completed_at?. 인덱스 `ix(user_id, due_date)`.
 `academy_id`가 없어 학원 API·강사 권한과 완전히 분리됩니다. 모든 쿼리에 `user_id = 토큰 사용자` 조건.
 
@@ -286,8 +295,14 @@ user_id → profiles (CASCADE), title, note?, due_date?(date), completed_at?. �
 | class_id?, task_id? | 복합 FK `(academy_id, class_id)`, `(academy_id, task_id)` → 다른 학원 반·과제 연결 불가 |
 | title, description?, work_date | work_date = Asia/Seoul 날짜 |
 | deleted_at? | soft delete |
+| practical_type? | **v0.5.1** 실기 유형 (프로필과 같은 값 집합). NULL = 미분류 |
+| work_category? | **v0.5.1** 작업 목적 `MOCK_EXAM`(모의시험)·`PERSONAL_PRACTICE`(개인 연습)·`CLASS_WORK`(수업 작품). 실기 유형과 독립 → "기초디자인 + 모의시험" 조합 가능. NULL = 미분류 |
+| work_status | **v0.5.1** `IN_PROGRESS`(기본) / `COMPLETED`. 학생이 `POST /complete`로 직접 완료 |
+| completed_at? | **v0.5.1** 완료 시각. CHECK `ck_artworks_completed_has_time`: `(work_status = 'COMPLETED') = (completed_at IS NOT NULL)` |
 
 - CHECK: `academy_id`와 `student_membership_id`는 함께 null/not null, 학원 없이 반·과제 연결 불가.
+- **v0.5.1 완료 정책**: 완료하려면 ACTIVE FINAL 사진 필요(서비스 검증, 409 `FINAL_PHOTO_REQUIRED`). 완료된 작품은 사진 업로드·교체·삭제·대표 변경 불가(409 `ARTWORK_COMPLETED`), 제목·설명·분류·연결 수정과 녹음은 가능. `POST /reopen`으로 작업 재개(완료 시각 삭제). 기존 작품은 FINAL 사진이 있어도 `IN_PROGRESS`로 두었습니다(자동 완료하지 않음).
+- `progress`(사진 단계)와 `work_status`(작업 상태)는 별개입니다. FINAL 사진이 있다고 완료가 아니고, 완료 상태는 FINAL 사진이 있다는 것을 보장합니다(재개 후 FINAL 삭제는 가능).
 - 학원 연결 FK는 NO ACTION: 학원·소속 행을 물리 삭제하려면 작품과 Storage 파일을 먼저 처리해야 합니다(고아 파일 방지).
 - 진행 상태(`NOT_STARTED/SKETCH/PROGRESS/FINAL`)는 저장하지 않고 ACTIVE 사진에서 계산합니다.
 - 인덱스: `ix(owner_id, work_date)`, `ix(academy_id, student_membership_id, work_date)`, `uq(id, owner_id)`(사진 복합 FK 대상)
@@ -314,7 +329,7 @@ user_id → profiles (CASCADE), title, note?, due_date?(date), completed_at?. �
 - write(업로드·삭제): 사진 행 소유자 + 경로 첫 폴더 = 본인. read: 소유자, 또는 학원 연결 작품의 담당 강사·학원 관리자(학생 소속 ACTIVE).
 - 백엔드는 service_role 키 없이 사용자 토큰으로 Storage를 호출하므로 이 정책이 2차 방어가 됩니다.
 
-### 3.10 v0.4 시험 타이머 ✅ v0.4 (리비전 `0003`)
+### 3.10 v0.4 시험 타이머 ✅ v0.4 (리비전 `0003`) — ⛔ v0.5.1 서비스 제외 (테이블 보존)
 
 | 테이블 | 주요 필드 · 제약 |
 | --- | --- |
@@ -328,7 +343,7 @@ user_id → profiles (CASCADE), title, note?, due_date?(date), completed_at?. �
 - `ends_at`이 지나면 응답은 ENDED(TIME_UP), DB 반영은 다음 쓰기 작업(종료·단계 변경·같은 반 새 시험 시작)에서 합니다.
 - 세션은 생성 시 템플릿을 복사하므로 템플릿을 수정해도 기존 세션에는 영향이 없습니다.
 
-### 3.10a v0.5 질문 콜·대기열 ✅ v0.5 (리비전 `0004`)
+### 3.10a v0.5 질문 콜·대기열 ✅ v0.5 (리비전 `0004`) — ⛔ v0.5.1 서비스 제외 (테이블 보존)
 
 > 기존 설계안 §3.12 `teacher_calls`(수업 회차 기준)를 반 기준 `help_requests`로 구현했습니다.
 
@@ -471,6 +486,78 @@ Storage 객체 메타데이터를 한 곳에서 관리 → 권한 확인·보존
 | retention_until? | 이 시각 이후 삭제 배치 대상 |
 | deleted_at? | |
 
+### 3.19 v0.5.1 제외 기능 테이블 (보존 중) ⛔
+
+| 테이블 | 기능 | 리비전 | 나가는 FK | 들어오는 FK |
+| --- | --- | --- | --- | --- |
+| `attendance_records` | 출석 | 0002 | academy_memberships (CASCADE, updated_by NO ACTION) | `attendance_audit_logs` |
+| `attendance_audit_logs` | 출석 수정 이력 | 0002 | attendance_records (CASCADE), academy_memberships (NO ACTION) | 없음 |
+| `personal_todos` | 오늘 할 일(개인) | 0002 | profiles (CASCADE) | 없음 |
+| `exam_templates` | 시험 타이머 | 0003 | academies (CASCADE), academy_memberships (NO ACTION) | `exam_stage_targets`, `exam_sessions` |
+| `exam_stage_targets` | 〃 | 0003 | exam_templates (CASCADE) | 없음 |
+| `exam_sessions` | 〃 | 0003 | classes (CASCADE), exam_templates·academy_memberships (NO ACTION) | `exam_session_stages`, `exam_participants` |
+| `exam_session_stages`, `exam_participants` | 〃 | 0003 | exam_sessions (CASCADE), academy_memberships (CASCADE) | 없음 |
+| `help_requests` | 질문 콜 | 0004 | classes·academy_memberships (CASCADE), **artworks (NO ACTION)**, academy_memberships(called/handled/closed_by, NO ACTION) | `help_queue_events` |
+| `help_queue_events` | 〃 | 0004 | help_requests·classes (CASCADE), academy_memberships (NO ACTION) | 없음 |
+
+- **유지 테이블에서 제외 테이블로 들어오는 FK는 없습니다** (모두 말단). 따라서 삭제해도 유지 기능에 영향이 없습니다.
+- 삭제 순서(승인 후 별도 리비전): `attendance_audit_logs` → `attendance_records`, `personal_todos`, `exam_participants`·`exam_session_stages` → `exam_sessions` → `exam_stage_targets` → `exam_templates`, `help_queue_events` → `help_requests`. Storage 객체·RLS 함수 의존은 없습니다.
+- 주의: 제외 테이블의 NO ACTION FK(`*_by → academy_memberships`, `help_requests.artwork_id → artworks`)는 보존 기간 동안 해당 멤버십·작품 행의 **물리 삭제**를 막을 수 있습니다. 현재 API는 소프트 삭제만 하므로 영향이 없습니다.
+- 2026-11-09 개발 DB 읽기 전용 점검: 10개 테이블 모두 0행.
+
+### 3.20 v0.6 AI 첨삭 기록 ✅ v0.6 (리비전 `0006`)
+
+> 이전 설계안 §3.11 `feedbacks`, §3.16 `ai_analyses`를 아래 7개 테이블로 구현했습니다 (AI 원본과 확정본 분리 원칙은 그대로). 운영 설명: [ai-feedback-v0.6.md](ai-feedback-v0.6.md)
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `ai_processing_consents` | user_id → profiles CASCADE, provider(`GOOGLE_GEMINI`), policy_version, granted_by(SELF/GUARDIAN), granted_at, revoked_at. **부분 유니크** (user_id, provider) WHERE revoked_at IS NULL. 녹음 동의와 별개, 이력 보존 |
+| `ai_processing_jobs` | job_type(TRANSCRIBE/SUMMARIZE), status(QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED), recording_id·artwork_id·owner_id CASCADE, requested_by SET NULL, attempts/max_attempts(CHECK), run_after, locked_by, lease_expires_at(CHECK: RUNNING이면 필수), last_error_code/message, source_url(음성 Signed URL, 내부 전용·완료 시 삭제), params(jsonb), api_call_count·input_tokens·output_tokens. **부분 유니크** (recording_id, job_type) WHERE status IN (QUEUED, RUNNING) → 중복 작업 방지. 큐 인덱스 `run_after WHERE QUEUED`, lease 인덱스 `lease_expires_at WHERE RUNNING` |
+| `feedback_transcripts` | recording·artwork·owner CASCADE, job_id SET NULL, language, duration_ms, text, segments(jsonb `[{index,start_ms,end_ms,text}]`), segment_count, engine, model_name, processing_ms. 불변, 재전사 시 새 행 |
+| `feedback_summaries` | recording·artwork·owner·transcript CASCADE, job_id SET NULL, status(DRAFT/IN_REVIEW/APPROVED/REJECTED/SUPERSEDED), review_mode(INSTRUCTOR/SELF), version(낙관적 잠금), summary(현재 값), **ai_output(jsonb, AI 원본·불변)**, model_name, prompt_version, input/output_tokens, dropped_item_count, approved_by(profiles SET NULL), approved_at(CHECK: APPROVED ⇔ NOT NULL), approver_membership_id(SET NULL), rejected_reason. **부분 유니크** recording_id WHERE status IN (DRAFT, IN_REVIEW, APPROVED) |
+| `feedback_items` | summary CASCADE, kind(STRENGTH/WEAKNESS/FIX/NEXT_TIP), position, content(CHECK 공백 불가), category(약점 카테고리, 선택), evidence_segment_ids(int[] — transcript segments.index), origin(AI/EDITED/ADDED). 인덱스 `category WHERE NOT NULL` |
+| `feedback_categories` | summary CASCADE, category, origin. **유니크** (summary_id, category). v0.7 반복 약점 집계 단위 |
+| `feedback_review_history` | summary CASCADE, actor_id(SET NULL, NULL=시스템), actor_mode, action(CREATED/EDITED/APPROVED/REJECTED/REOPENED/SUPERSEDED), from/to_status, version, changes(jsonb before/after), note. append-only |
+
+- 약점 카테고리 코드(값 변경 금지, 추가만): `COMPOSITION` 구도 · `FORM` 형태 · `PROPORTION` 비례 · `PERSPECTIVE` 투시 · `VALUE` 명암 · `COLOR` 색채 · `TEXTURE` 질감 · `RENDERING` 묘사 · `FINISH` 완성도 · `OTHER` 기타.
+- 기존 `feedback_recordings.transcription_status`(0004에서 준비)를 Worker가 갱신: NOT_REQUESTED → PENDING → PROCESSING → COMPLETED/FAILED.
+- 녹음은 소프트 삭제이므로 서비스가 파생 데이터를 직접 삭제·작업 취소한다(`app/services/ai_cleanup.py`). 물리 삭제 시에는 FK CASCADE.
+- 모든 테이블 RLS 활성화(정책 없음). 학원 격리는 작품의 `(academy_id, student_membership_id)`와 `managed_student_ids`로 서비스에서 판단(같은 정보를 중복 저장하지 않음).
+
+### 3.21 v0.7 성장 코치 ✅ v0.7 (리비전 `0007`)
+
+> 설명: [growth-coach-v0.7.md](growth-coach-v0.7.md). 약점 분석은 승인된 첨삭(`feedback_categories`, `feedback_items`)에서 매번 계산하며 별도 스냅샷 테이블을 두지 않는다 (리포트 생성 시점 통계만 `metrics`에 저장).
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `growth_reports` | owner_id → profiles CASCADE, scope(ALL/PERSONAL/ACADEMY)·academy_id(CHECK: ACADEMY ⇔ NOT NULL), period_type·period_start?·period_end, status(READY/INSUFFICIENT_DATA), **metrics(jsonb, 규칙 통계, 근거는 ID만)**, source_feedback_ids(varchar[], **GIN**), data_fingerprint, dedupe_key(**유니크** (owner_id, dedupe_key)), analysis_version, narrative_status·**narrative(jsonb, AI 설명문, 통계와 분리)**·narrative_error_code, model_name·prompt_version·tokens, generated_by |
+| `practice_recommendations` | owner·scope(PERSONAL/ACADEMY, CHECK ALL 불가)·academy_id·student_membership_id(복합 FK → academy_memberships), review_mode(SELF/INSTRUCTOR), source(RULE/AI), status(DRAFT/IN_REVIEW/APPROVED/DISTRIBUTED/ADOPTED/COMPLETED/REJECTED/SUPERSEDED), version, batch_key, weakness_category, practical_type, 현재 값(title·description·method_steps·estimated_minutes(5~480)·difficulty·reason), **origin_output(원본)**, evidence_item_ids/feedback_ids/artwork_ids, analysis_snapshot, report_id, approved_by·approved_at, rejected_reason, **task_id(복합 FK (academy_id, task_id) → tasks, SET NULL)**, completed_at. **부분 유니크** (owner_id, batch_key, weakness_category) WHERE status NOT IN (REJECTED, SUPERSEDED) |
+| `practice_recommendation_history` | recommendation CASCADE, actor·actor_mode, action(CREATED/EDITED/APPROVED/REJECTED/DISTRIBUTED/ADOPTED/COMPLETED/SUPERSEDED), from/to_status, version, changes(before/after), note. append-only |
+
+0007의 기존 테이블 변경
+- `ai_processing_consents.purpose` (`FEEDBACK_SUMMARY` 기본 / `GROWTH_COACHING`), 유효 동의 유니크를 (user_id, provider, purpose)로.
+- `ai_processing_jobs`: job_type에 `GROWTH_REPORT`·`PRACTICE_RECOMMEND` 추가, recording_id·artwork_id NULL 허용(녹음 작업은 CHECK `recording_job_has_recording`으로 여전히 필수), `report_id`(→ growth_reports CASCADE), `dedupe_key`(부분 유니크 (job_type, dedupe_key) WHERE 진행 중).
+- 학원 추천의 배포는 새 과제 테이블 없이 v0.3 `tasks`/`task_assignments`를 사용한다.
+
+### 3.22 v0.8 작품 공유·참고작·커뮤니티 ✅ v0.8 (리비전 `0008`)
+
+> 설명: [reference-community-v0.8.md](reference-community-v0.8.md)
+
+| 테이블 | 주요 필드 · 제약 |
+| --- | --- |
+| `artwork_sharing_consents` | artwork·owner CASCADE, purpose(COMMUNITY/REFERENCE), scope(ACADEMY/PLATFORM)·academy_id(CHECK), author_display(NAME/ANONYMOUS), policy_version, granted_by, granted_at, revoked_at·revoked_reason. **부분 유니크** (artwork_id, purpose) WHERE revoked_at IS NULL |
+| `shared_artwork_images` | 공유용 파생 이미지 (버킷 shared-artworks, 경로 무작위). status PENDING/ACTIVE/DELETED, width·height·size, storage_cleanup_pending. **부분 유니크** artwork_id WHERE PENDING/ACTIVE |
+| `reference_artwork_reviews` | 강사 우수 사례 확인: artwork·owner·academy, category, note(참고 포인트), reviewer, status ACTIVE/REVOKED. **부분 유니크** (artwork_id, category) WHERE ACTIVE |
+| `reference_recommendations` | 학생별 추천 스냅샷: set_id, status ACTIVE/SUPERSEDED, weakness_category·rank, reference_artwork_id, review_id(CASCADE), score, reasons·inputs(jsonb), data_fingerprint, saved_at. 유니크 (owner_id, set_id, reference_artwork_id) |
+| `community_posts` | artwork·author·image, title·body, practical_type·work_category, status ACTIVE/HIDDEN/DELETED, like_count·comment_count(CHECK ≥ 0), hidden_reason. **부분 유니크** artwork_id WHERE status <> DELETED |
+| `community_comments` | post·author, body(1~1000, CHECK), status ACTIVE/HIDDEN/DELETED |
+| `community_likes`, `community_bookmarks` | 유니크 (post_id, user_id) |
+| `community_reports` | target_type POST/COMMENT(CHECK), post·comment·reporter, reason, detail, status OPEN/RESOLVED/DISMISSED, handled_by·at. **부분 유니크** (reporter_id, post_id)·(reporter_id, comment_id) |
+| `community_moderation_logs` | actor(NULL=시스템), action, post·comment·report, note. append-only |
+
+- Storage 권한 함수 `artmate_private.can_access_shared_image(uid, path, mode)` (SECURITY DEFINER, PUBLIC 실행 회수). 버킷·정책은 storage-setup.sql.
+- 공개 판단은 항상 현재 유효한 동의를 조인한다. 기존 테이블 변경 없음.
+
 ## 4. 학원별 데이터 격리
 
 ### 4.1 원칙
@@ -561,4 +648,5 @@ Supabase는 `public` 스키마를 Data API(PostgREST)로 노출하며 anon key�
 2. `uv run alembic revision --autogenerate -m "..."` → **생성된 파일 직접 검토** (RLS 활성화, cross-schema FK, 부분 인덱스 등은 수동 추가)
 3. 개발 DB에서 `upgrade head` → `downgrade -1` → `upgrade head` 로 왕복 확인
 4. PR 리뷰 후 merge. 운영 적용은 사람이 명시적으로 (`ALLOW_PRODUCTION_MIGRATIONS=true`)
-5. 두 개발자가 동시에 리비전을 만들면 head가 2개가 됩니다 → 나중에 merge하는 쪽이 `down_revision`을 최신 head로 수정(또는 `alembic merge`) (→ development-guide.md)
+5. 리비전 순서 (2026-11-09 기준 head = `0008`): `0001` v0.2 → `0002` v0.3 → `0003` v0.4 → `0004` v0.5 → `0005` v0.5.1 → `0006` v0.6 → `0007` v0.7 → `0008` v0.8. 다음 리비전은 `down_revision = "0008"`, rev-id `0009`. 제외 테이블 물리 삭제 리비전은 승인 후 그 시점의 head 다음 번호로 별도로 만듭니다.
+6. 두 개발자가 동시에 리비전을 만들면 head가 2개가 됩니다 → 나중에 merge하는 쪽이 `down_revision`을 최신 head로 수정(또는 `alembic merge`) (→ development-guide.md)

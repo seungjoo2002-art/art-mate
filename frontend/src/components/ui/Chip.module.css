@@ -1,0 +1,17 @@
+.chip {
+  flex-shrink: 0;
+  height: 40px;
+  padding: 0 var(--space-5);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.selected {
+  background: var(--color-dark);
+  border-color: var(--color-dark);
+  color: var(--color-text-on-dark);
+  font-weight: var(--weight-semibold);
+}

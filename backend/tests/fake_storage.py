@@ -59,6 +59,10 @@ class FakeStorage:
             if p in self.objects
         }
 
+    async def upload(self, path: str, data: bytes, *, content_type: str, access_token: str) -> None:
+        self._check("upload", (path,), access_token)
+        self.objects[path] = data
+
     async def delete(self, paths: list[str], *, access_token: str) -> None:
         self._check("delete", tuple(paths), access_token)
         for path in paths:
