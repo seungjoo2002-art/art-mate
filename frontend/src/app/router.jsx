@@ -10,17 +10,16 @@ import CheckEmailPage from '../features/auth/pages/CheckEmailPage'
 import LandingPage from '../features/auth/pages/LandingPage'
 import LoginPage from '../features/auth/pages/LoginPage'
 import OnboardingPage from '../features/auth/pages/OnboardingPage'
-import RoleSelectPage from '../features/auth/pages/RoleSelectPage'
 import SignupPage from '../features/auth/pages/SignupPage'
 import NotFoundPage from '../pages/NotFoundPage'
 import UiPreviewPage from '../pages/UiPreviewPage'
 import ArchivePage from '../pages/student/ArchivePage'
 import CommunityPage from '../pages/student/CommunityPage'
+import HomePage from '../pages/student/HomePage'
 import MyPage from '../pages/student/MyPage'
 import PracticePage from '../pages/student/PracticePage'
 import ProtectedRoute from './ProtectedRoute'
 import PublicOnlyRoute from './PublicOnlyRoute'
-import RoleHome from './RoleHome'
 
 const renderArtworkTimeline = (props) => <FeedbackTimeline {...props} />
 
@@ -31,7 +30,6 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <LandingPage /> },
       { path: '/login', element: <LoginPage /> },
-      { path: '/signup/role', element: <RoleSelectPage /> },
       { path: '/signup', element: <SignupPage /> },
       { path: '/signup/check-email', element: <CheckEmailPage /> },
     ],
@@ -46,7 +44,7 @@ export const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { path: '/home', element: <RoleHome /> },
+          { path: '/home', element: <HomePage /> },
           { path: '/practice', element: <PracticePage /> },
           { path: '/archive', element: <ArchivePage /> },
           { path: '/community', element: <CommunityPage /> },
@@ -69,5 +67,6 @@ export const router = createBrowserRouter([
 
   ...(import.meta.env.DEV ? [{ path: '/dev/ui', element: <UiPreviewPage /> }] : []),
   { path: '/index.html', element: <Navigate to="/" replace /> },
+  { path: '/signup/role', element: <Navigate to="/signup" replace /> }, // 예전 유형 선택 주소
   { path: '*', element: <NotFoundPage /> },
 ])

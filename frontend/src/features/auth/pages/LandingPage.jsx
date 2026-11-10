@@ -33,7 +33,7 @@ export default function LandingPage() {
         <p className={styles.description}>
           학생의 작품 제작 과정과 선생님의 피드백을 연결하는 미술입시 성장 관리 플랫폼입니다.
         </p>
-        <Button withArrow onClick={() => navigate('/signup/role')}>
+        <Button withArrow onClick={() => navigate('/signup')}>
           시작하기
         </Button>
         <p className={styles.login}>

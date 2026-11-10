@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { Lock, Mail, User } from 'lucide-react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Lock, Mail, Palette, User } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import TopBar from '../../../components/layout/TopBar'
 import { Badge, Button, Checkbox, Input, PageIntro } from '../../../components/ui'
 import { supabase } from '../../../lib/supabase'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { clearPendingProfile, savePendingProfile } from '../pendingProfile'
-import { ROLES } from '../roles'
 import styles from './AuthForm.module.css'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -23,15 +22,10 @@ function validate({ displayName, email, password, agreed }) {
 
 export default function SignupPage() {
   const navigate = useNavigate()
-  const role = useLocation().state?.role
   const [form, setForm] = useState({ displayName: '', email: '', password: '', agreed: false })
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-
-  // 유형 선택을 건너뛰고 들어온 경우
-  if (!ROLES[role]) return <Navigate to="/signup/role" replace />
-  const { icon: RoleIcon, signupBadge } = ROLES[role]
 
   const update = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }))
   const onInput = (key) => (e) => update(key)(e.target.value)
@@ -46,7 +40,7 @@ export default function SignupPage() {
     setSubmitting(true)
     const email = form.email.trim()
     // 프로필은 로그인 상태가 된 뒤 AuthProvider가 이 값으로 생성
-    savePendingProfile({ email, displayName: form.displayName.trim(), userType: role })
+    savePendingProfile({ email, displayName: form.displayName.trim() })
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -72,11 +66,11 @@ export default function SignupPage() {
 
   return (
     <div className={styles.page}>
-      <TopBar title="회원가입" step="2 / 2" />
+      <TopBar title="회원가입" />
       <main className={styles.body}>
         <Badge className={styles.badge}>
-          <RoleIcon size={20} aria-hidden />
-          {signupBadge}
+          <Palette size={20} aria-hidden />
+          학생 계정 만들기
         </Badge>
         <PageIntro title="성장 기록을 시작해 볼까요?" />
 
