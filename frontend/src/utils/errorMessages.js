@@ -36,6 +36,18 @@ const API_MESSAGES = {
   INVALID_AUDIO: '녹음 파일을 읽을 수 없어요. 다시 녹음해 주세요.',
   DUPLICATE_RECORDING: '이미 올린 녹음이에요.',
   RECORDING_LIMIT_REACHED: '작품당 녹음은 20개까지 올릴 수 있어요.',
+  // AI 첨삭 (docs/frontend-integration-v0.6.md §7)
+  AI_CONSENT_REQUIRED: 'AI 정리 동의가 필요해요.',
+  TRANSCRIPT_NOT_READY: '녹음을 글로 바꾸는 중이에요. 끝난 뒤 다시 시도해 주세요.',
+  JOB_NOT_RETRYABLE: '지금은 다시 시도할 수 없어요. 화면을 새로고침해 주세요.',
+  FEEDBACK_ALREADY_APPROVED: '이미 확정된 정리예요. 확정을 취소한 뒤 수정해 주세요.',
+  FEEDBACK_INVALID_STATE: '지금 상태에서는 할 수 없는 작업이에요. 새로고침해 주세요.',
+  FEEDBACK_VERSION_CONFLICT: '다른 곳에서 먼저 수정됐어요. 최신 내용을 다시 불러왔어요.',
+  FEEDBACK_NOT_APPROVED: '선생님이 확인 중인 정리예요.',
+  RECORDING_TOO_LONG: '녹음이 너무 길어서 AI로 정리할 수 없어요.',
+  RECORDING_AUDIO_EXPIRED: '보관 기간이 지나 음성 파일이 삭제된 녹음이에요.',
+  STT_NOT_CONFIGURED: 'AI 정리 기능은 아직 준비 중이에요.',
+  AI_NOT_CONFIGURED: 'AI 정리 기능은 아직 준비 중이에요.',
   STORAGE_NOT_CONFIGURED: '서버 사진 저장소 설정이 필요해요. 백엔드 담당자에게 문의해 주세요.',
 }
 

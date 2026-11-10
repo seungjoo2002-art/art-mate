@@ -37,3 +37,33 @@
   padding: var(--space-4) 0;
   color: var(--color-danger);
 }
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.rowTitle {
+  font-weight: var(--weight-medium);
+}
+
+.rowSub {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.revoke {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+  text-decoration: underline;
+}
+
+.error {
+  padding-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}
