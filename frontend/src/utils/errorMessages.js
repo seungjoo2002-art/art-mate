@@ -50,6 +50,13 @@ const API_MESSAGES = {
   RECORDING_AUDIO_EXPIRED: '보관 기간이 지나 음성 파일이 삭제된 녹음이에요.',
   STT_NOT_CONFIGURED: 'AI 정리 기능은 아직 준비 중이에요.',
   AI_NOT_CONFIGURED: 'AI 정리 기능은 아직 준비 중이에요.',
+  // 커뮤니티 (docs/frontend-integration-v0.8.md, v0.9.md §8)
+  SHARING_CONSENT_REQUIRED: '커뮤니티 공유 동의가 필요해요.',
+  FINAL_PHOTO_REQUIRED: '완성 사진이 있는 작품만 공유할 수 있어요.',
+  POST_ALREADY_EXISTS: '이미 커뮤니티에 올린 작품이에요.',
+  SHARING_SCOPE_INVALID: '이 작품은 선택한 범위로 공유할 수 없어요.',
+  COMMENT_NOT_FEEDBACK: '작품 피드백 댓글만 채택할 수 있어요.',
+  COMMENT_ALREADY_ADOPTED: '이미 채택한 피드백이에요.',
   STORAGE_NOT_CONFIGURED: '서버 사진 저장소 설정이 필요해요. 백엔드 담당자에게 문의해 주세요.',
 }
 

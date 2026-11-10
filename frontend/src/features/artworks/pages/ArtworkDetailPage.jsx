@@ -123,6 +123,11 @@ export default function ArtworkDetailPage({ renderTimeline }) {
           작품 완료하기
         </Button>
         {!completed && <p className={styles.hint}>완성 사진을 올리면 작품을 완료할 수 있어요.</p>}
+        {completed && (
+          <Button variant="soft" onClick={() => navigate(`/community/write?artwork=${artwork.id}`)}>
+            커뮤니티에 공유하기
+          </Button>
+        )}
         <button
           type="button"
           className={styles.deleteArtwork}
