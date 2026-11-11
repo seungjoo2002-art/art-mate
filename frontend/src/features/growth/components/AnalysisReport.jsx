@@ -7,12 +7,11 @@ import { formatMonthDay } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getGrowthTimeline, getWeaknesses, listRecommendations } from '../api'
 import { TREND_LABELS } from '../labels'
+import { mockExamCount, pickNextPractice, summaryLine } from '../nextPractice'
 import EvidenceList from './EvidenceList'
 import MentionTrendChart from './MentionTrendChart'
 import Notes from './Notes'
 import styles from './AnalysisReport.module.css'
-
-const ACTIVE_RECOMMENDATION = ['ADOPTED', 'IN_REVIEW', 'DRAFT']
 
 async function loadReport() {
   const [analysis, timeline, recommendations] = await Promise.all([
@@ -46,9 +45,7 @@ export default function AnalysisReport() {
   const { analysis, timeline, recommendations } = data
   const { totals } = analysis
   const ready = analysis.status === 'READY'
-  const mockExams =
-    analysis.work_category_distribution?.find((d) => d.work_category === 'MOCK_EXAM')
-      ?.artwork_count ?? 0
+  const mockExams = mockExamCount(analysis)
   const repeated = analysis.weaknesses.filter((w) => w.repeated)
   const compared = analysis.weaknesses.filter((w) => w.previous && w.trend !== 'INSUFFICIENT_DATA')
   const recentImprovements = analysis.weaknesses
@@ -101,7 +98,7 @@ export default function AnalysisReport() {
 
       <Section title="핵심 한 줄 요약">
         <Card className={styles.card}>
-          <p className={styles.headline}>{summaryLine(analysis, ready)}</p>
+          <p className={styles.headline}>{summaryLine(analysis)}</p>
           <p className={styles.muted}>
             작품과 첨삭의 실제 문장을 근거로 분석하며, 사진만으로 작품 수준을 평가하지 않습니다.
           </p>
@@ -240,57 +237,10 @@ function Cheer({ totals, ready, required }) {
   )
 }
 
-/** 규칙 기반 한 줄 요약 (AI 아님) */
-function summaryLine(analysis, ready) {
-  if (!ready) return '피드백 기록이 쌓이면 반복되는 항목과 변화 흐름을 확인할 수 있습니다.'
-  const top = analysis.weaknesses.find((w) => w.category === analysis.top_weaknesses[0])
-  const strength = analysis.strengths?.[0]
-  if (!top && !strength) return '아직 반복해서 언급된 항목이 없어요.'
-  const parts = []
-  if (top) parts.push(`최근 첨삭에서 '${top.label}'이(가) 가장 자주 언급됐어요`)
-  if (strength) parts.push(`'${strength.label}'은(는) 긍정적으로 언급됐어요`)
-  return `${parts.join(', ')}.`
-}
-
 /** 진행 중인 맞춤 연습 과제 → 다음 연습 목표 → 첫 기록 안내 */
 function NextPriority({ analysis, recommendations }) {
   const navigate = useNavigate()
-  const rec = recommendations
-    .filter((r) => ACTIVE_RECOMMENDATION.includes(r.status))
-    .sort(
-      (a, b) => ACTIVE_RECOMMENDATION.indexOf(a.status) - ACTIVE_RECOMMENDATION.indexOf(b.status),
-    )[0]
-  const goal = analysis.next_goals?.[0]
-
-  let card
-  if (rec) {
-    card = {
-      label: `맞춤 연습 과제 · ${rec.status === 'ADOPTED' ? '진행 중' : '새 추천'}`,
-      title: rec.title,
-      goal: rec.learning_goal || rec.description,
-      method: rec.method_steps?.join(' → '),
-      action: '추천 연습 이어서 하기',
-      to: `/growth/recommendations/${rec.id}`,
-    }
-  } else if (goal) {
-    card = {
-      label: '기록 기반 제안',
-      title: goal.goal,
-      goal: '반복해서 지적된 항목을 다음 작품에서 의식적으로 점검해 보세요.',
-      method: '맞춤 연습 과제를 받아 짧게 연습한 뒤 작품에 적용해 보세요.',
-      action: '맞춤 연습 과제 받기',
-      to: '/growth/recommendations',
-    }
-  } else {
-    card = {
-      label: '첫 기록 · 기록 기반 제안',
-      title: '첫 작품의 제작 과정 기록하기',
-      goal: '단계별 사진과 간단한 첨삭부터 저장해 보세요.',
-      method: '사진 1장과 메모 1개부터 시작해도 괜찮습니다.',
-      action: '추천 연습 시작 · 새 작품 기록',
-      to: '/artworks/new',
-    }
-  }
+  const card = pickNextPractice(analysis, recommendations)
 
   return (
     <Card className={styles.card}>
