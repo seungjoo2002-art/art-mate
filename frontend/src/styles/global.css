@@ -15,7 +15,7 @@ body {
   font-size: var(--text-md);
   line-height: 1.5;
   color: var(--color-text);
-  background: #ebeae6;
+  background: #f0f0f0; /* 넓은 화면에서 앱 바깥 */
   -webkit-font-smoothing: antialiased;
   word-break: keep-all;
 }
