@@ -5,6 +5,9 @@ import { api } from '../../lib/api'
 export const getGrowthSummary = () => api('/growth/me/summary')
 export const getWeaknesses = () => api('/growth/me/weaknesses')
 
+/** 작품별 확정 첨삭 (최신순). feedbacks[].strengths / weaknesses는 문장 배열 */
+export const getGrowthTimeline = ({ limit = 50 } = {}) => api(`/growth/me/timeline?limit=${limit}`)
+
 /** period: WEEK | MONTH | ALL. 같은 데이터로 이미 만든 리포트면 기존 것을 돌려줌 */
 export const createReport = ({ period, includeAi }) =>
   api('/growth/me/reports', {
