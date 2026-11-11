@@ -1,0 +1,31 @@
+.card {
+  padding: var(--space-5) var(--space-5) var(--space-2);
+}
+
+.title {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 56px;
+}
+
+.row + .row {
+  border-top: 1px solid var(--color-border);
+}
+
+.select {
+  width: 140px;
+}
+
+.error {
+  padding-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}

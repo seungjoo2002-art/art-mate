@@ -127,3 +127,10 @@
 .statusDone {
   color: var(--color-success);
 }
+
+.transcriptLink {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+}

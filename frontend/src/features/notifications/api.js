@@ -11,6 +11,11 @@ export const markAllRead = () => api('/notifications/read-all', { method: 'POST'
 
 export const deleteNotification = (id) => api(`/notifications/${id}`, { method: 'DELETE' })
 
+/** 알림 설정: report_ready, task_recommended, task_reminder, goal_check, reminder_after_days(1~30) */
+export const getPreferences = () => api('/notifications/preferences')
+export const updatePreferences = (patch) =>
+  api('/notifications/preferences', { method: 'PATCH', body: patch })
+
 /** 알림 종류별 이동할 화면 */
 export function notificationLink(n) {
   if (n.type === 'REPORT_READY' && n.report_id) return `/growth/reports/${n.report_id}`

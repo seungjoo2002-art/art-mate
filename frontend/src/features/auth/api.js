@@ -8,6 +8,13 @@ export const updateMe = (patch) => api('/users/me', { method: 'PATCH', body: pat
 /** 목표 대학 목록 (1지망부터, 배열 그대로) */
 export const listTargetUniversities = () => api('/users/me/target-universities')
 
+/** 목표 대학 순서 변경: 내 목표 대학 전체 id를 1지망부터 */
+export const reorderTargetUniversities = (ids) =>
+  api('/users/me/target-universities/order', { method: 'PUT', body: { ids } })
+
+export const updateTargetUniversity = (id, patch) =>
+  api(`/users/me/target-universities/${id}`, { method: 'PATCH', body: patch })
+
 export const deleteTargetUniversity = (id) =>
   api(`/users/me/target-universities/${id}`, { method: 'DELETE' })
 

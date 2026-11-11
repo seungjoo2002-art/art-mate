@@ -3,6 +3,7 @@ import AppLayout from '../components/layout/AppLayout'
 import SubLayout from '../components/layout/SubLayout'
 import ArtworkCreatePage from '../features/artworks/pages/ArtworkCreatePage'
 import ArtworkDetailPage from '../features/artworks/pages/ArtworkDetailPage'
+import ArtworkEditPage from '../features/artworks/pages/ArtworkEditPage'
 import PostDetailPage from '../features/community/pages/PostDetailPage'
 import PostWritePage from '../features/community/pages/PostWritePage'
 import FeedbackTimeline from '../features/feedback/components/FeedbackTimeline'
@@ -14,6 +15,7 @@ import RecommendationsPage from '../features/growth/pages/RecommendationsPage'
 import FeedbackRecordPage from '../features/feedback/pages/FeedbackRecordPage'
 import FeedbackReviewPage from '../features/feedback/pages/FeedbackReviewPage'
 import NoteFormPage from '../features/feedback/pages/NoteFormPage'
+import TranscriptPage from '../features/feedback/pages/TranscriptPage'
 import AuthCallbackPage from '../features/auth/pages/AuthCallbackPage'
 import CheckEmailPage from '../features/auth/pages/CheckEmailPage'
 import LandingPage from '../features/auth/pages/LandingPage'
@@ -74,6 +76,7 @@ export const router = createBrowserRouter([
           { path: '/community/write', element: <PostWritePage /> },
           { path: '/community/posts/:postId', element: <PostDetailPage /> },
           { path: '/artworks/new', element: <ArtworkCreatePage /> },
+          { path: '/artworks/:artworkId/edit', element: <ArtworkEditPage /> },
           {
             path: '/artworks/:artworkId',
             element: <ArtworkDetailPage renderTimeline={renderArtworkTimeline} />,
@@ -82,6 +85,10 @@ export const router = createBrowserRouter([
           { path: '/artworks/:artworkId/exam', element: <ExamProgressPage /> },
           { path: '/artworks/:artworkId/exam/result', element: <ExamResultPage /> },
           { path: '/feedbacks/:feedbackId', element: <FeedbackReviewPage /> },
+          {
+            path: '/artworks/:artworkId/recordings/:recordingId/transcript',
+            element: <TranscriptPage />,
+          },
           { path: '/artworks/:artworkId/notes/new', element: <NoteFormPage /> },
           { path: '/feedback-notes/:noteId/edit', element: <NoteFormPage /> },
           { path: '/ai-consent', element: <AiConsentPage /> },
