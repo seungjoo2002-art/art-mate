@@ -53,7 +53,9 @@ export function aiPhase(transcription, summary) {
   if (sJob && ['FAILED', 'CANCELLED'].includes(sJob.status)) {
     return { phase: 'failed', message: jobMessage(sJob), retry: sJob.retryable ? 'summary' : null }
   }
-  if (tJob && ['FAILED', 'CANCELLED'].includes(tJob.status)) {
+  // 기기(브라우저) 전사가 저장되며 취소된 서버 작업은 실패가 아님 (v0.9.2)
+  const replacedByBrowser = tJob?.error_code === 'BROWSER_TRANSCRIBED'
+  if (tJob && !replacedByBrowser && ['FAILED', 'CANCELLED'].includes(tJob.status)) {
     return {
       phase: 'failed',
       message: jobMessage(tJob),

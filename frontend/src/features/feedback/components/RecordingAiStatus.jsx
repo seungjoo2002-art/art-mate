@@ -3,15 +3,21 @@ import { ChevronRight, Sparkles } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
+import { getRecordingUrl } from '../api'
 import {
+  getAiConsent,
   getSummaryStatus,
   getTranscriptionStatus,
   regenerateSummary,
   requestSummary,
   retryTranscription,
+  saveBrowserTranscript,
   startAiSummary,
 } from '../aiApi'
 import { aiPhase, pollDelay } from '../aiStatus'
+import { resolvePlan } from '../stt/browserStt'
+import { useBrowserStt } from '../stt/useBrowserStt'
+import BrowserSttStatus from './BrowserSttStatus'
 import styles from './RecordingAiStatus.module.css'
 
 const MAX_POLLS = 300 // 5초 간격 기준 약 25분 (문서 권장: 30분쯤에서 멈춤)
@@ -34,6 +40,8 @@ export default function RecordingAiStatus({ artworkId, recording }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [polls, setPolls] = useState(0)
+  const stt = useBrowserStt()
+  const sttBusy = ['preparing', 'transcribing'].includes(stt.state.phase)
 
   const state = data ? aiPhase(data.transcription, data.summary) : null
   const delay = state ? pollDelay(state) : null
@@ -75,7 +83,35 @@ export default function RecordingAiStatus({ artworkId, recording }) {
     }
   }
 
+  /** 기기에서 먼저 글로 바꾸고, 안 되면 기존 서버(GitHub Actions) 처리 */
+  async function transcribeOnDevice() {
+    if (recording.audio_available === false) return false
+    const plan = await resolvePlan()
+    if (!plan) return false
+    try {
+      const { url } = await getRecordingUrl(artworkId, recording.id)
+      const response = await fetch(url)
+      if (!response.ok) return false
+      const result = await stt.start(await response.blob())
+      if (!result) return false
+      await saveBrowserTranscript(artworkId, recording.id, result, { autoSummarize: true })
+      return true
+    } catch (err) {
+      if (err?.code === 'TRANSCRIPTION_ALREADY_DONE') {
+        await requestSummary(artworkId, recording.id)
+        return true
+      }
+      return false
+    }
+  }
+
   async function startAi() {
+    const consent = await getAiConsent()
+    if (!consent.is_valid) {
+      navigate('/ai-consent', { state: { from: location.pathname } })
+      return
+    }
+    if (await transcribeOnDevice()) return
     const { needsConsent } = await startAiSummary(artworkId, recording.id)
     if (needsConsent) navigate('/ai-consent', { state: { from: location.pathname } })
   }
@@ -95,7 +131,10 @@ export default function RecordingAiStatus({ artworkId, recording }) {
 
   return (
     <div className={styles.status}>
-      {state.phase === 'idle' && (
+      {/* 기기(브라우저) 음성 인식 진행 중: 진행 상태만 보이고 'AI로 정리하기' 버튼은 숨김 */}
+      {sttBusy && <BrowserSttStatus state={stt.state} onSkip={stt.skip} />}
+
+      {state.phase === 'idle' && !sttBusy && (
         <button
           type="button"
           className={styles.action}
@@ -125,7 +164,7 @@ export default function RecordingAiStatus({ artworkId, recording }) {
           {state.retrying
             ? '다시 시도하는 중…'
             : state.phase === 'transcribing'
-              ? '녹음을 글로 바꾸는 중… (몇 분 걸릴 수 있어요)'
+              ? '서버에서 녹음을 글로 바꾸는 중… (보통 15~60분)'
               : 'AI가 정리하는 중…'}
           {pollingStopped && (
             <button

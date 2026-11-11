@@ -98,6 +98,11 @@ class TranscriptMeta(BaseModel):
     segment_count: int
     engine: str
     model_name: str
+    origin: Literal["SERVER", "BROWSER", "EDITED"] = Field(
+        default="SERVER",
+        description="v0.9.2: SERVER(서버·GitHub Actions faster-whisper) / BROWSER(학생 기기에서 "
+        "전사) / EDITED(학생이 수정한 버전)",
+    )
     created_at: dt.datetime
 
 
@@ -361,3 +366,48 @@ class FeedbackNoteRead(BaseModel):
 
 class NoteSummaryRequest(InputModel):
     regenerate: bool = Field(default=False, description="초안이 있어도 다시 만든다")
+
+
+# ----------------------------------------------------------------------------- v0.9.2 브라우저 STT
+
+BROWSER_MODEL = r"^[A-Za-z0-9._/-]{1,100}$"
+
+
+class BrowserSegment(InputModel):
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(ge=0)
+    text: SegmentText
+
+
+class BrowserTranscriptCreate(InputModel):
+    """학생 기기(브라우저)에서 Whisper로 전사한 결과. 음성은 기기 밖으로 나가지 않는다."""
+
+    device: Literal["webgpu", "wasm"] = Field(description="실행 장치")
+    model_name: str = Field(
+        pattern=BROWSER_MODEL, examples=["onnx-community/whisper-base"], description="사용한 모델"
+    )
+    language: Literal["ko"] = "ko"
+    segments: list[BrowserSegment] = Field(min_length=1, max_length=2000)
+    processing_ms: int | None = Field(
+        default=None, ge=0, le=3_600_000, description="모델 로드를 뺀 실제 전사 시간 (통계용)"
+    )
+    auto_summarize: bool = Field(
+        default=False,
+        description="저장 후 AI 요약 요청 (AI 전송 동의·설정이 없으면 요약 없이 전사만 저장)",
+    )
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "BrowserTranscriptCreate":
+        previous = -1
+        for seg in self.segments:
+            if seg.end_ms < seg.start_ms:
+                raise ValueError("end_ms must be >= start_ms")
+            if seg.start_ms < previous:
+                raise ValueError("segments must be ordered by start_ms")
+            previous = seg.start_ms
+        return self
+
+
+class BrowserTranscriptResult(BaseModel):
+    transcript: TranscriptRead
+    summary_job: JobRead | None = Field(description="auto_summarize로 만든 요약 작업 (없으면 null)")

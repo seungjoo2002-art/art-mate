@@ -33,6 +33,8 @@ from app.models.profile import Profile
 from app.schemas.ai_feedback import (
     AiConsentCreate,
     AiConsentStatus,
+    BrowserTranscriptCreate,
+    BrowserTranscriptResult,
     FeedbackDecision,
     FeedbackNoteCreate,
     FeedbackNoteRead,
@@ -236,6 +238,33 @@ async def owner_transcript(
     svc = _svc(session, settings)
     _, recording = await svc.owner_target(owner, artwork_id, recording_id)
     return await svc.transcript(recording)
+
+
+@owner_processing.post(
+    "/transcript/browser",
+    summary="브라우저 전사 결과 저장 (학생 본인, v0.9.2)",
+    description=(
+        "학생 기기에서 Whisper(Transformers.js)로 만든 전사를 저장한다. 음성은 기기 밖으로 "
+        "보내지 않는다. 대기·진행 중인 서버(GitHub Actions) 전사 작업은 취소되고, 이미 전사가 "
+        "있으면 409 `TRANSCRIPTION_ALREADY_DONE`. 녹음 동의가 없으면 409 "
+        "`RECORDING_CONSENT_REQUIRED`, 타임스탬프가 녹음 길이를 넘으면 422. "
+        "auto_summarize=true면 AI 요약 작업도 만든다 (AI 전송 동의가 있을 때만). "
+        "브라우저 전사가 실패하면 기존 POST /transcription (서버 처리)으로 대신한다."
+    ),
+    status_code=status.HTTP_201_CREATED,
+    responses=WRITE,
+)
+async def owner_save_browser_transcript(
+    artwork_id: uuid.UUID,
+    recording_id: uuid.UUID,
+    data: BrowserTranscriptCreate,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> BrowserTranscriptResult:
+    svc = _svc(session, settings)
+    _, recording = await svc.owner_target(owner, artwork_id, recording_id)
+    return await svc.save_browser_transcript(owner, recording, data)
 
 
 @owner_processing.put(

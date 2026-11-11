@@ -15,6 +15,7 @@ import RecommendationsPage from '../features/growth/pages/RecommendationsPage'
 import FeedbackRecordPage from '../features/feedback/pages/FeedbackRecordPage'
 import FeedbackReviewPage from '../features/feedback/pages/FeedbackReviewPage'
 import NoteFormPage from '../features/feedback/pages/NoteFormPage'
+import SttBenchPage from '../features/feedback/stt/SttBenchPage'
 import TranscriptPage from '../features/feedback/pages/TranscriptPage'
 import AuthCallbackPage from '../features/auth/pages/AuthCallbackPage'
 import CheckEmailPage from '../features/auth/pages/CheckEmailPage'
@@ -51,6 +52,8 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/auth/callback', element: <AuthCallbackPage /> },
+  // 기기 음성 인식 성능 측정 (로그인 불필요, 서버로 아무것도 보내지 않음)
+  { path: '/tools/stt-bench', element: <SttBenchPage /> },
   { path: '/onboarding', element: <OnboardingPage /> },
 
   // 로그인 + 프로필 필요
