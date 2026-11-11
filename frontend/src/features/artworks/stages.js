@@ -13,4 +13,8 @@ export function stagesWithPhotos(artwork) {
   })
 }
 
-export const isCompleted = (artwork) => artwork.progress === 'FINAL'
+/** 학생이 직접 "작품 완료하기"를 누른 작품 (v0.5.1 work_status). 완성 사진이 있다고 완료는 아님 */
+export const isCompleted = (artwork) => artwork.work_status === 'COMPLETED'
+
+/** 완성 단계 사진이 있음 → 작품 완료·커뮤니티 공유 가능 */
+export const hasFinalPhoto = (artwork) => artwork.progress === 'FINAL'

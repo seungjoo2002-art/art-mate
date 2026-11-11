@@ -1,0 +1,169 @@
+import { useCallback } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import FullScreenStatus from '../../components/layout/FullScreenStatus'
+import { Button, Card } from '../../components/ui'
+import { getArtwork, getTimer, listArtworks } from '../../features/artworks/api'
+import {
+  formatDurationSeconds,
+  formatMinutes,
+  loadExamSession,
+  stageSeconds,
+} from '../../features/artworks/exam'
+import { listNotes } from '../../features/feedback/notesApi'
+import { useAsync } from '../../hooks/useAsync'
+import { useOptions } from '../../hooks/useOptions'
+import { labelOf } from '../../lib/options'
+import { toErrorMessage } from '../../utils/errorMessages'
+import styles from './Exam.module.css'
+
+async function loadResult(artworkId) {
+  const [artwork, timer, notes] = await Promise.all([
+    getArtwork(artworkId),
+    getTimer(artworkId),
+    listNotes(artworkId),
+  ])
+  // 직전 시험: 같은 실기 유형의 모의시험 중 이 작품 말고, 소요 시간이 기록된 가장 최근 것
+  // (유형이 다르면 제한 시간·작업 방식이 달라 비교 의미가 약함. 유형 미선택이면 미선택끼리)
+  const exams = await listArtworks({
+    limit: 20,
+    workCategory: 'MOCK_EXAM',
+    practicalType: artwork.practical_type ?? undefined,
+  })
+  const previous = exams.items.find(
+    (a) =>
+      a.id !== artworkId &&
+      a.actual_minutes &&
+      (a.practical_type ?? null) === (artwork.practical_type ?? null),
+  )
+  return { artwork, timer, notes, previous }
+}
+
+/** 실기시험 결과 (/artworks/:artworkId/exam/result) */
+export default function ExamResultPage() {
+  const { artworkId } = useParams()
+  const navigate = useNavigate()
+  const options = useOptions()
+  const load = useCallback(() => loadResult(artworkId), [artworkId])
+  const { data, error, reload } = useAsync(load)
+
+  if (error) {
+    return (
+      <FullScreenStatus title="결과를 불러오지 못했어요" description={toErrorMessage(error)}>
+        <Button onClick={reload}>다시 시도</Button>
+      </FullScreenStatus>
+    )
+  }
+  if (!data) return <FullScreenStatus />
+
+  const { artwork, timer, notes, previous } = data
+  const typeLabel =
+    artwork.practical_type && options
+      ? labelOf(options.practical_types, artwork.practical_type)
+      : null
+  const session = loadExamSession(artworkId)
+  // STOP 이벤트의 누적 초 (없으면 작품에 저장된 분)
+  const stop = [...timer.events].reverse().find((e) => e.event === 'STOP')
+  const totalSeconds =
+    session?.finishedElapsed ?? stop?.elapsed_seconds ?? (artwork.actual_minutes ?? 0) * 60
+  const limitMinutes = artwork.time_limit_minutes
+  const perStage = session ? stageSeconds(session, totalSeconds) : null
+  const noteById = Object.fromEntries(notes.map((n) => [n.id, n]))
+  const stagedIds = new Set(Object.values(session?.notes ?? {}).flat())
+  const otherNotes = notes.filter((n) => !stagedIds.has(n.id))
+
+  return (
+    <main className={styles.body}>
+      <div className={styles.resultHead}>
+        <span className={styles.eyebrow}>시험 기록 완료</span>
+        <h1 className={styles.resultTitle}>{artwork.title}</h1>
+        <p className={styles.lead}>
+          단계별 작업 시간과 사진·피드백을 하나의 기록으로 정리했습니다.
+        </p>
+      </div>
+
+      <div className={styles.stats}>
+        <Card className={styles.stat}>
+          <span className={styles.small}>전체 실제 시간</span>
+          <strong className={styles.statValue}>{formatDurationSeconds(totalSeconds)}</strong>
+        </Card>
+        <Card className={styles.stat}>
+          <span className={styles.small}>설정한 목표</span>
+          <strong className={styles.statValue}>
+            {limitMinutes ? formatMinutes(limitMinutes) : '-'}
+          </strong>
+        </Card>
+      </div>
+
+      <Card className={styles.section}>
+        <h2 className={styles.cardTitle}>직전 시험과 비교</h2>
+        {typeLabel && (
+          <span className={styles.small}>같은 실기 유형({typeLabel}) 시험끼리 비교해요</span>
+        )}
+        <p className={styles.muted}>
+          {previous
+            ? `${previous.title}: ${formatMinutes(previous.actual_minutes)} → 이번 ${formatDurationSeconds(totalSeconds)} (${compare(previous.actual_minutes * 60, totalSeconds)})`
+            : `${typeLabel ? `${typeLabel} ` : ''}첫 시험 기록입니다. 다음 시험을 완료하면 소요 시간 변화를 비교할 수 있습니다.`}
+        </p>
+      </Card>
+
+      <section className={styles.section}>
+        <h2 className={styles.heading}>단계별 진행 결과</h2>
+        {session ? (
+          session.targets.map((t, i) => {
+            const ids = session.notes[i] ?? []
+            return (
+              <Card key={t.key} className={styles.section}>
+                <div className={styles.stageHead}>
+                  <strong>
+                    {i + 1}. {t.label}
+                  </strong>
+                  <span className={styles.stageTime}>
+                    실제 {formatDurationSeconds(perStage[i])} / 목표 {formatMinutes(t.minutes)}
+                  </span>
+                </div>
+                {ids.length ? (
+                  ids.map((id) => (
+                    <p key={id} className={styles.noteText}>
+                      {noteById[id]?.body ?? '(삭제된 메모)'}
+                    </p>
+                  ))
+                ) : (
+                  <p className={styles.muted}>입력한 피드백·메모가 없습니다.</p>
+                )}
+              </Card>
+            )
+          })
+        ) : (
+          <Card variant="soft">
+            단계별 시간은 시험을 진행한 기기에서만 볼 수 있어요. 전체 시간과 메모는 그대로 저장돼
+            있어요.
+          </Card>
+        )}
+        {otherNotes.length > 0 && (
+          <Card className={styles.section}>
+            <strong>{session ? '그 밖의 메모' : '메모'}</strong>
+            {otherNotes.map((n) => (
+              <p key={n.id} className={styles.noteText}>
+                {n.body}
+              </p>
+            ))}
+          </Card>
+        )}
+      </section>
+
+      <div className={styles.buttons}>
+        <Button variant="soft" className={styles.outline} onClick={() => navigate('/practice')}>
+          실기 메인으로
+        </Button>
+        <Button onClick={() => navigate(`/artworks/${artwork.id}`)}>저장된 작품 상세</Button>
+      </div>
+    </main>
+  )
+}
+
+/** 이전·이번 소요 시간 차이 (빨라짐/늘어남은 시간만 비교, 실력 평가 아님) */
+function compare(prevSeconds, nowSeconds) {
+  const diff = nowSeconds - prevSeconds
+  if (Math.abs(diff) < 60) return '비슷해요'
+  return `${formatDurationSeconds(Math.abs(diff))} ${diff < 0 ? '단축' : '늘어남'}`
+}

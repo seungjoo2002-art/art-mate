@@ -117,7 +117,8 @@ export default function RecordingAiStatus({ artworkId, recording }) {
   }
 
   function retry() {
-    if (state.retry === 'transcription') return run(() => retryTranscription(artworkId, recording.id))
+    if (state.retry === 'transcription')
+      return run(() => retryTranscription(artworkId, recording.id))
     return run(() => regenerateSummary(artworkId, recording.id))
   }
 
@@ -130,10 +131,16 @@ export default function RecordingAiStatus({ artworkId, recording }) {
 
   return (
     <div className={styles.status}>
+      {/* 기기(브라우저) 음성 인식 진행 중: 진행 상태만 보이고 'AI로 정리하기' 버튼은 숨김 */}
       {sttBusy && <BrowserSttStatus state={stt.state} onSkip={stt.skip} />}
 
       {state.phase === 'idle' && !sttBusy && (
-        <button type="button" className={styles.action} onClick={() => run(startAi)} disabled={busy}>
+        <button
+          type="button"
+          className={styles.action}
+          onClick={() => run(startAi)}
+          disabled={busy}
+        >
           <Sparkles size={18} aria-hidden />
           {busy ? '요청하는 중…' : 'AI로 피드백 정리하기'}
         </button>
@@ -196,6 +203,14 @@ export default function RecordingAiStatus({ artworkId, recording }) {
         </Link>
       )}
 
+      {data.transcription?.transcription_status === 'COMPLETED' && (
+        <Link
+          to={`/artworks/${artworkId}/recordings/${recording.id}/transcript`}
+          className={styles.link}
+        >
+          녹음 원문 보기
+        </Link>
+      )}
       {error && <p className={styles.error}>{toErrorMessage(error)}</p>}
     </div>
   )

@@ -1,21 +1,23 @@
 import { useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Button, Card, PageIntro } from '../../components/ui'
-import GrowthOverview from '../../features/growth/components/GrowthOverview'
-import RecentFeedbacks from '../../features/growth/components/RecentFeedbacks'
+import { Button, Card, Chip, PageIntro, SegmentedTabs } from '../../components/ui'
 import { listArtworks } from '../../features/artworks/api'
 import ArtworkCard from '../../features/artworks/components/ArtworkCard'
-import { isCompleted } from '../../features/artworks/stages'
+import MyPostsFeed from '../../features/community/components/MyPostsFeed'
+import GrowthOverview from '../../features/growth/components/GrowthOverview'
+import RecentFeedbacks from '../../features/growth/components/RecentFeedbacks'
 import { useAsync } from '../../hooks/useAsync'
+import { useOptions } from '../../hooks/useOptions'
 import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './ArchivePage.module.css'
 
 const TABS = [
-  { key: 'artworks', label: '전체 작품' },
-  { key: 'feedbacks', label: '첨삭' },
-  { key: 'growth', label: '성장 분석' },
+  { key: 'artworks', label: '전체 기록' },
+  { key: 'feed', label: '공개 피드' },
+  { key: 'report', label: '분석 리포트' },
 ]
 
+// 선택한 탭·실기 유형은 주소(?tab=&type=)에 남겨서 뒤로가기·새로고침해도 유지
 export default function ArchivePage() {
   const [params, setParams] = useSearchParams()
   const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'artworks'
@@ -23,82 +25,84 @@ export default function ArchivePage() {
   return (
     <>
       <PageIntro
-        eyebrow="GROWTH ARCHIVE"
-        title="나의 성장 기록"
-        description="완성보다 과정에 집중해온 기록이에요."
+        title="아카이브"
+        description="나의 작품·공개 피드·학습 분석을 한 곳에서 확인하세요."
       />
-      <div className={styles.tabs} role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            className={`${styles.tab} ${tab === t.key ? styles.tabActive : ''}`}
-            onClick={() => setParams(t.key === 'artworks' ? {} : { tab: t.key }, { replace: true })}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {tab === 'artworks' && <ArtworkArchive />}
-      {tab === 'feedbacks' && <RecentFeedbacks />}
-      {tab === 'growth' && <GrowthOverview />}
-    </>
-  )
-}
-
-function ArtworkArchive() {
-  const navigate = useNavigate()
-  const load = useCallback(() => listArtworks(), [])
-  const { data, error, reload } = useAsync(load)
-
-  if (error) {
-    return (
-      <Card variant="soft" className={styles.message}>
-        {toErrorMessage(error)}
-        <Button variant="soft" size="md" onClick={reload}>
-          다시 시도
-        </Button>
-      </Card>
-    )
-  }
-  if (!data) return null
-
-  const artworks = data.items
-  const latest = artworks[0]?.work_date // 작업 날짜 최신순
-
-  return (
-    <>
-      <Card variant="dark" className={styles.stats}>
-        <Stat value={data.total} label="총 작품" />
-        <Stat value={artworks.filter(isCompleted).length} label="완성 작품" />
-        <Stat value={latest ? latest.slice(5).replace('-', '.') : '-'} label="최근 작업" />
-      </Card>
-
-      {artworks.length === 0 ? (
-        <Card className={styles.message}>
-          아직 기록한 작품이 없어요.
-          <Button size="md" onClick={() => navigate('/artworks/new')}>
-            첫 작품 기록하기
-          </Button>
-        </Card>
-      ) : (
-        <div className={styles.grid}>
-          {artworks.map((artwork) => (
-            <ArtworkCard key={artwork.id} artwork={artwork} />
-          ))}
-        </div>
+      <SegmentedTabs
+        label="아카이브"
+        tabs={TABS}
+        value={tab}
+        onChange={(key) => setParams(key === 'artworks' ? {} : { tab: key }, { replace: true })}
+      />
+      {tab === 'artworks' && (
+        <ArtworkArchive
+          practicalType={params.get('type') ?? ''}
+          onTypeChange={(type) => setParams(type ? { type } : {}, { replace: true })}
+        />
+      )}
+      {tab === 'feed' && <MyPostsFeed />}
+      {tab === 'report' && (
+        <>
+          <GrowthOverview />
+          <section className={styles.section}>
+            <h2 className={styles.heading}>최근 확정한 첨삭</h2>
+            <RecentFeedbacks />
+          </section>
+        </>
       )}
     </>
   )
 }
 
-function Stat({ value, label }) {
+/** 내 작품: 실기 유형 칩으로 거르기 (디자인의 "실기 유형 관리"는 백엔드가 없어 제외) */
+function ArtworkArchive({ practicalType, onTypeChange }) {
+  const navigate = useNavigate()
+  const options = useOptions()
+  const load = useCallback(() => listArtworks({ practicalType }), [practicalType])
+  const { data, error, reload } = useAsync(load)
+  const types = [{ code: '', label: '전체' }, ...(options?.practical_types ?? [])]
+
   return (
-    <div className={styles.stat}>
-      <span className={styles.statValue}>{value}</span>
-      <span className={styles.statLabel}>{label}</span>
-    </div>
+    <section className={styles.section}>
+      <h2 className={styles.heading}>내 작품</h2>
+      <div className={styles.chips}>
+        {types.map((t) => (
+          <Chip
+            key={t.code || 'all'}
+            selected={practicalType === t.code}
+            onClick={() => onTypeChange(t.code)}
+          >
+            {t.label}
+          </Chip>
+        ))}
+      </div>
+
+      {error ? (
+        <Card variant="soft" className={styles.message}>
+          {toErrorMessage(error)}
+          <Button variant="soft" size="md" onClick={reload}>
+            다시 시도
+          </Button>
+        </Card>
+      ) : !data ? null : data.items.length === 0 ? (
+        <div className={styles.empty}>
+          <p className={styles.emptyTitle}>
+            {practicalType
+              ? '이 실기 유형으로 기록한 작품이 없습니다.'
+              : '아직 등록된 작품이 없습니다.'}
+          </p>
+          <p className={styles.emptySub}>실기 메뉴에서 작품을 기록하면 이곳에 자동 정리됩니다.</p>
+          <Button size="md" fullWidth={false} onClick={() => navigate('/artworks/new')}>
+            새 작품 기록
+          </Button>
+        </div>
+      ) : (
+        <div className={styles.grid}>
+          {data.items.map((artwork) => (
+            <ArtworkCard key={artwork.id} artwork={artwork} />
+          ))}
+        </div>
+      )}
+    </section>
   )
 }

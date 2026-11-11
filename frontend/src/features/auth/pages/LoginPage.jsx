@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Lock, Mail } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import TopBar from '../../../components/layout/TopBar'
-import { Button, Input, PageIntro } from '../../../components/ui'
+import { Button, Input } from '../../../components/ui'
 import { supabase } from '../../../lib/supabase'
 import { toErrorMessage } from '../../../utils/errorMessages'
+import AuthHero from '../components/AuthHero'
 import styles from './AuthForm.module.css'
 
 export default function LoginPage() {
@@ -29,26 +29,23 @@ export default function LoginPage() {
 
   return (
     <div className={styles.page}>
-      <TopBar title="로그인" />
+      <TopBar title="로그인" plain />
       <main className={styles.body}>
-        <PageIntro
-          eyebrow="WELCOME BACK"
-          title="다시 만나서 반가워요"
-          description="오늘의 기록을 이어가 볼까요?"
+        <AuthHero
+          title="다시 만나서 반갑습니다"
+          description="미술 입시 학습 기록을 한곳에서 관리해 보세요."
         />
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
           <Input
             label="이메일"
-            icon={Mail}
             type="email"
-            placeholder="name@example.com"
+            placeholder="student@example.com"
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <Input
             label="비밀번호"
-            icon={Lock}
             type="password"
             placeholder="비밀번호 입력"
             autoComplete="current-password"
@@ -59,13 +56,10 @@ export default function LoginPage() {
           <Button type="submit" disabled={submitting}>
             {submitting ? '로그인 중…' : '로그인'}
           </Button>
-        </form>
-        <p className={styles.footer}>
-          아직 계정이 없으신가요?
-          <Link to="/signup" className={styles.link}>
-            회원가입
+          <Link to="/signup" className={styles.switch}>
+            처음 이용하시나요? 회원가입
           </Link>
-        </p>
+        </form>
       </main>
     </div>
   )

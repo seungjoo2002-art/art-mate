@@ -39,3 +39,24 @@
   font-weight: var(--weight-bold);
   color: var(--color-primary);
 }
+
+.plain {
+  grid-template-columns: 40px 1fr;
+  gap: var(--space-2);
+  background: transparent;
+  border-bottom: none;
+}
+
+.plain .title {
+  text-align: left;
+  font-size: var(--text-xl);
+}
+
+.plain .step {
+  display: none;
+}
+
+/* 헤더 아래에 붙는 plain 상단바: 스크롤 시 내용이 비치지 않도록 배경 유지 */
+.belowHeader.plain {
+  background: var(--color-bg);
+}

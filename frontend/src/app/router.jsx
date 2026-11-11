@@ -3,6 +3,9 @@ import AppLayout from '../components/layout/AppLayout'
 import SubLayout from '../components/layout/SubLayout'
 import ArtworkCreatePage from '../features/artworks/pages/ArtworkCreatePage'
 import ArtworkDetailPage from '../features/artworks/pages/ArtworkDetailPage'
+import ArtworkEditPage from '../features/artworks/pages/ArtworkEditPage'
+import PostDetailPage from '../features/community/pages/PostDetailPage'
+import PostWritePage from '../features/community/pages/PostWritePage'
 import FeedbackTimeline from '../features/feedback/components/FeedbackTimeline'
 import AiConsentPage from '../features/feedback/pages/AiConsentPage'
 import GrowthReportPage from '../features/growth/pages/GrowthReportPage'
@@ -13,13 +16,19 @@ import FeedbackRecordPage from '../features/feedback/pages/FeedbackRecordPage'
 import FeedbackReviewPage from '../features/feedback/pages/FeedbackReviewPage'
 import NoteFormPage from '../features/feedback/pages/NoteFormPage'
 import SttBenchPage from '../features/feedback/stt/SttBenchPage'
+import TranscriptPage from '../features/feedback/pages/TranscriptPage'
 import AuthCallbackPage from '../features/auth/pages/AuthCallbackPage'
 import CheckEmailPage from '../features/auth/pages/CheckEmailPage'
 import LandingPage from '../features/auth/pages/LandingPage'
 import LoginPage from '../features/auth/pages/LoginPage'
 import OnboardingPage from '../features/auth/pages/OnboardingPage'
+import ProfileEditPage from '../features/auth/pages/ProfileEditPage'
+import SetupPage from '../features/auth/pages/SetupPage'
 import SignupPage from '../features/auth/pages/SignupPage'
+import NotificationsPage from '../features/notifications/pages/NotificationsPage'
 import NotFoundPage from '../pages/NotFoundPage'
+import ExamProgressPage from '../pages/exam/ExamProgressPage'
+import ExamResultPage from '../pages/exam/ExamResultPage'
 import UiPreviewPage from '../pages/UiPreviewPage'
 import ArchivePage from '../pages/student/ArchivePage'
 import CommunityPage from '../pages/student/CommunityPage'
@@ -51,6 +60,7 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
+      { path: '/setup', element: <SetupPage /> },
       {
         element: <AppLayout />,
         children: [
@@ -64,13 +74,24 @@ export const router = createBrowserRouter([
       {
         element: <SubLayout />,
         children: [
+          { path: '/my/edit', element: <ProfileEditPage /> },
+          { path: '/notifications', element: <NotificationsPage /> },
+          { path: '/community/write', element: <PostWritePage /> },
+          { path: '/community/posts/:postId', element: <PostDetailPage /> },
           { path: '/artworks/new', element: <ArtworkCreatePage /> },
+          { path: '/artworks/:artworkId/edit', element: <ArtworkEditPage /> },
           {
             path: '/artworks/:artworkId',
             element: <ArtworkDetailPage renderTimeline={renderArtworkTimeline} />,
           },
           { path: '/artworks/:artworkId/recordings/new', element: <FeedbackRecordPage /> },
+          { path: '/artworks/:artworkId/exam', element: <ExamProgressPage /> },
+          { path: '/artworks/:artworkId/exam/result', element: <ExamResultPage /> },
           { path: '/feedbacks/:feedbackId', element: <FeedbackReviewPage /> },
+          {
+            path: '/artworks/:artworkId/recordings/:recordingId/transcript',
+            element: <TranscriptPage />,
+          },
           { path: '/artworks/:artworkId/notes/new', element: <NoteFormPage /> },
           { path: '/feedback-notes/:noteId/edit', element: <NoteFormPage /> },
           { path: '/ai-consent', element: <AiConsentPage /> },
