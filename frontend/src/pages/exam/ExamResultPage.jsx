@@ -11,18 +11,30 @@ import {
 } from '../../features/artworks/exam'
 import { listNotes } from '../../features/feedback/notesApi'
 import { useAsync } from '../../hooks/useAsync'
+import { useOptions } from '../../hooks/useOptions'
+import { labelOf } from '../../lib/options'
 import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './Exam.module.css'
 
 async function loadResult(artworkId) {
-  const [artwork, timer, notes, exams] = await Promise.all([
+  const [artwork, timer, notes] = await Promise.all([
     getArtwork(artworkId),
     getTimer(artworkId),
     listNotes(artworkId),
-    listArtworks({ limit: 10, workCategory: 'MOCK_EXAM' }),
   ])
-  // 직전 시험: 이 작품 말고, 소요 시간이 기록된 가장 최근 모의시험
-  const previous = exams.items.find((a) => a.id !== artworkId && a.actual_minutes)
+  // 직전 시험: 같은 실기 유형의 모의시험 중 이 작품 말고, 소요 시간이 기록된 가장 최근 것
+  // (유형이 다르면 제한 시간·작업 방식이 달라 비교 의미가 약함. 유형 미선택이면 미선택끼리)
+  const exams = await listArtworks({
+    limit: 20,
+    workCategory: 'MOCK_EXAM',
+    practicalType: artwork.practical_type ?? undefined,
+  })
+  const previous = exams.items.find(
+    (a) =>
+      a.id !== artworkId &&
+      a.actual_minutes &&
+      (a.practical_type ?? null) === (artwork.practical_type ?? null),
+  )
   return { artwork, timer, notes, previous }
 }
 
@@ -30,6 +42,7 @@ async function loadResult(artworkId) {
 export default function ExamResultPage() {
   const { artworkId } = useParams()
   const navigate = useNavigate()
+  const options = useOptions()
   const load = useCallback(() => loadResult(artworkId), [artworkId])
   const { data, error, reload } = useAsync(load)
 
@@ -43,6 +56,10 @@ export default function ExamResultPage() {
   if (!data) return <FullScreenStatus />
 
   const { artwork, timer, notes, previous } = data
+  const typeLabel =
+    artwork.practical_type && options
+      ? labelOf(options.practical_types, artwork.practical_type)
+      : null
   const session = loadExamSession(artworkId)
   // STOP 이벤트의 누적 초 (없으면 작품에 저장된 분)
   const stop = [...timer.events].reverse().find((e) => e.event === 'STOP')
@@ -79,10 +96,13 @@ export default function ExamResultPage() {
 
       <Card className={styles.section}>
         <h2 className={styles.cardTitle}>직전 시험과 비교</h2>
+        {typeLabel && (
+          <span className={styles.small}>같은 실기 유형({typeLabel}) 시험끼리 비교해요</span>
+        )}
         <p className={styles.muted}>
           {previous
             ? `${previous.title}: ${formatMinutes(previous.actual_minutes)} → 이번 ${formatDurationSeconds(totalSeconds)} (${compare(previous.actual_minutes * 60, totalSeconds)})`
-            : '첫 시험 기록입니다. 다음 시험을 완료하면 소요 시간 변화를 비교할 수 있습니다.'}
+            : `${typeLabel ? `${typeLabel} ` : ''}첫 시험 기록입니다. 다음 시험을 완료하면 소요 시간 변화를 비교할 수 있습니다.`}
         </p>
       </Card>
 
