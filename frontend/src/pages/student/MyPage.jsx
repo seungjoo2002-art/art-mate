@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { PencilLine } from 'lucide-react'
+import { ChevronRight, PencilLine } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../app/providers/AuthContext'
 import { Button, Card, PageIntro } from '../../components/ui'
@@ -13,7 +13,7 @@ import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './MyPage.module.css'
 
 // 디자인 중 백엔드가 없는 항목(학업 성적·모의고사, 실기 유형 관리, 실기시험 목표 시간,
-// 내 공개 작품 피드)은 API·화면이 생기면 추가
+// 시연 모드)은 API가 생기면 추가
 export default function MyPage() {
   const { profile, signOut } = useAuth()
   const options = useOptions()
@@ -62,6 +62,15 @@ export default function MyPage() {
       </section>
 
       <section className={styles.section}>
+        <h2 className={styles.heading}>기록 설정</h2>
+        <SettingLink
+          to="/archive?tab=feed"
+          title="내 공개 작품 피드"
+          description="커뮤니티에 공유한 작품 확인"
+        />
+      </section>
+
+      <section className={styles.section}>
         <h2 className={styles.heading}>녹음·AI 기능 동의</h2>
         <Card className={styles.list}>
           <ConsentRow
@@ -85,11 +94,27 @@ export default function MyPage() {
         </Card>
       </section>
 
-      <Button variant="soft" className={styles.logout} onClick={signOut}>
-        로그아웃
-      </Button>
+      <section className={styles.section}>
+        <h2 className={styles.heading}>설정</h2>
+        <Button variant="soft" className={styles.logout} onClick={signOut}>
+          로그아웃
+        </Button>
+      </section>
       <p className={styles.footnote}>지망 대학과 학습 목표는 커뮤니티에 공개하지 않습니다.</p>
     </>
+  )
+}
+
+/** 기록 설정의 이동 카드 (제목 + 설명 + >) */
+function SettingLink({ to, title, description }) {
+  return (
+    <Card as={Link} to={to} className={styles.setting}>
+      <span className={styles.settingText}>
+        <span className={styles.settingTitle}>{title}</span>
+        <span className={styles.settingDescription}>{description}</span>
+      </span>
+      <ChevronRight size={22} aria-hidden />
+    </Card>
   )
 }
 
