@@ -3,6 +3,9 @@ import { supabase } from '../../lib/supabase'
 
 export const getConsent = () => api('/recording-consents/me')
 
+/** 녹음 동의 철회 → 새 녹음·업로드 불가, 대기 중인 전사 취소 (이미 저장한 녹음은 유지) */
+export const revokeConsent = () => api('/recording-consents/me', { method: 'DELETE' })
+
 /** grantedBy: 'SELF' | 'GUARDIAN'(만 14세 미만) */
 export const saveConsent = ({ policyVersion, grantedBy }) =>
   api('/recording-consents', {

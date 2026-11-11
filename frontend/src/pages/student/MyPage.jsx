@@ -5,6 +5,7 @@ import { useAuth } from '../../app/providers/AuthContext'
 import { Button, Card, PageIntro } from '../../components/ui'
 import { listTargetUniversities } from '../../features/auth/api'
 import { getAiConsent, revokeAiConsent } from '../../features/feedback/aiApi'
+import { getConsent, revokeConsent } from '../../features/feedback/api'
 import { useAsync } from '../../hooks/useAsync'
 import { useOptions } from '../../hooks/useOptions'
 import { labelOf } from '../../lib/options'
@@ -61,10 +62,26 @@ export default function MyPage() {
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.heading}>AI 기능 동의</h2>
+        <h2 className={styles.heading}>녹음·AI 기능 동의</h2>
         <Card className={styles.list}>
-          <AiConsentRow purpose="FEEDBACK_SUMMARY" title="AI 피드백 정리" />
-          <AiConsentRow purpose="GROWTH_COACHING" title="AI 성장 코칭" />
+          <ConsentRow
+            title="피드백 녹음"
+            load={getConsent}
+            revoke={revokeConsent}
+            confirmMessage="녹음 동의를 철회할까요? 새로 녹음하거나 녹음 파일을 올릴 수 없고, 대기 중인 글자 변환은 취소돼요. 이미 저장한 녹음은 남아요."
+          />
+          <ConsentRow
+            title="AI 피드백 정리"
+            load={loadAiSummaryConsent}
+            revoke={revokeAiSummaryConsent}
+            confirmMessage={AI_REVOKE_MESSAGE}
+          />
+          <ConsentRow
+            title="AI 성장 코칭"
+            load={loadGrowthConsent}
+            revoke={revokeGrowthConsent}
+            confirmMessage={AI_REVOKE_MESSAGE}
+          />
         </Card>
       </section>
 
@@ -85,25 +102,26 @@ function InfoRow({ label, value }) {
   )
 }
 
-/** AI 동의 상태 + 철회 (동의서에 "마이페이지에서 철회 가능"으로 안내함) */
-function AiConsentRow({ purpose, title }) {
-  const load = useCallback(() => getAiConsent(purpose), [purpose])
+// 동의별 조회·철회 (모듈 상수라 렌더마다 새로 만들어지지 않음 → useAsync가 다시 부르지 않음)
+const loadAiSummaryConsent = () => getAiConsent('FEEDBACK_SUMMARY')
+const revokeAiSummaryConsent = () => revokeAiConsent('FEEDBACK_SUMMARY')
+const loadGrowthConsent = () => getAiConsent('GROWTH_COACHING')
+const revokeGrowthConsent = () => revokeAiConsent('GROWTH_COACHING')
+const AI_REVOKE_MESSAGE =
+  '동의를 철회할까요? 진행 중인 AI 작업은 취소되고, 이미 만든 결과는 남아요.'
+
+/** 동의 상태 + 철회 (각 동의서에 "마이페이지에서 언제든 철회 가능"으로 안내함) */
+function ConsentRow({ title, load, revoke, confirmMessage }) {
   const { data: consent, reload } = useAsync(load)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function handleRevoke() {
-    if (
-      !window.confirm(
-        `${title} 동의를 철회할까요? 진행 중인 AI 작업은 취소되고, 이미 만든 결과는 남아요.`,
-      )
-    ) {
-      return
-    }
+    if (!window.confirm(`[${title}] ${confirmMessage}`)) return
     setBusy(true)
     setError('')
     try {
-      await revokeAiConsent(purpose)
+      await revoke()
       reload()
     } catch (err) {
       setError(toErrorMessage(err))
