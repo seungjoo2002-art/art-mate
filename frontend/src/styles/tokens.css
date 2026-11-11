@@ -67,3 +67,24 @@
   --header-height: 64px;
   --bottom-nav-height: 72px;
 }
+
+/*
+ * 디자인(Figma)은 Display P3 색 공간 기준이라, 같은 hex를 sRGB로 쓰면 맥·아이폰 화면에서 더 탁하게 보임.
+ * P3를 지원하는 화면에서는 같은 값을 P3로 써서 디자인과 맞춤 (지원 안 하면 위의 sRGB 값 그대로)
+ * 회색 계열은 두 색 공간에서 같게 보여서 제외
+ */
+@supports (color: color(display-p3 1 1 1)) {
+  :root {
+    --color-primary: color(display-p3 0.949 0.576 0.227);
+    --color-primary-hover: color(display-p3 0.898 0.518 0.165);
+    --color-primary-disabled: color(display-p3 0.969 0.773 0.565);
+    --color-primary-soft: color(display-p3 0.992 0.953 0.882);
+    --color-primary-ink: color(display-p3 0.541 0.294 0.071);
+    --color-dark: color(display-p3 0.243 0.184 0.188);
+    --color-dark-2: color(display-p3 0.369 0.247 0.133);
+    --color-danger: color(display-p3 0.541 0.231 0.231);
+    --color-danger-soft: color(display-p3 0.984 0.933 0.933);
+    --color-success: color(display-p3 0.31 0.639 0.478);
+    --color-success-soft: color(display-p3 0.91 0.961 0.933);
+  }
+}
