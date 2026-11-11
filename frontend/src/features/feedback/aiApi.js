@@ -15,8 +15,7 @@ export const saveAiConsent = ({ purpose = 'FEEDBACK_SUMMARY', policyVersion, gra
     body: { purpose, policy_version: policyVersion, agreed: true, granted_by: grantedBy },
   })
 
-const recordingPath = (artworkId, recordingId) =>
-  `/artworks/${artworkId}/recordings/${recordingId}`
+const recordingPath = (artworkId, recordingId) => `/artworks/${artworkId}/recordings/${recordingId}`
 
 /** 전사(STT) 요청. autoSummarize면 전사가 끝난 뒤 AI 요약까지 자동으로 이어짐 */
 export const requestTranscription = (artworkId, recordingId, { autoSummarize = true } = {}) =>
@@ -30,6 +29,20 @@ export const retryTranscription = (artworkId, recordingId) =>
 
 export const getTranscriptionStatus = (artworkId, recordingId) =>
   api(`${recordingPath(artworkId, recordingId)}/transcription`)
+
+/** 전사 원문 (문장 구간 segments: index, start_ms, end_ms, text) */
+export const getTranscript = (artworkId, recordingId) =>
+  api(`${recordingPath(artworkId, recordingId)}/transcript`)
+
+/**
+ * 전사 수정 (v0.9 §3.2): 바꾼 구간 문장만. 원본은 보존되고 새 버전이 현재 전사가 됨.
+ * 초안 요약은 대체되므로 다시 요약 요청 필요. 확정된 첨삭이 있으면 409 TRANSCRIPT_LOCKED
+ */
+export const updateTranscript = (artworkId, recordingId, { baseTranscriptId, segments }) =>
+  api(`${recordingPath(artworkId, recordingId)}/transcript`, {
+    method: 'PUT',
+    body: { base_transcript_id: baseTranscriptId, segments },
+  })
 
 export const requestSummary = (artworkId, recordingId) =>
   api(`${recordingPath(artworkId, recordingId)}/summary`, { method: 'POST' })

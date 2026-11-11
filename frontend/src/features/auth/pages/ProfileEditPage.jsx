@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../app/providers/AuthContext'
 import TopBar from '../../../components/layout/TopBar'
@@ -7,7 +7,13 @@ import { Button, Card, Input, Select, Textarea } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { toErrorMessage } from '../../../utils/errorMessages'
-import { addTargetUniversity, deleteTargetUniversity, listTargetUniversities } from '../api'
+import {
+  addTargetUniversity,
+  deleteTargetUniversity,
+  listTargetUniversities,
+  reorderTargetUniversities,
+  updateTargetUniversity,
+} from '../api'
 import styles from './ProfileEditPage.module.css'
 
 const MAX_TARGETS = 10 // 서버 제한
@@ -97,6 +103,7 @@ function TargetUniversities() {
   const load = useCallback(() => listTargetUniversities(), [])
   const { data: targets, reload } = useAsync(load)
   const [name, setName] = useState('')
+  const [editing, setEditing] = useState(null) // { id, name } 수정 중인 대학
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const full = (targets?.length ?? 0) >= MAX_TARGETS
@@ -114,6 +121,22 @@ function TargetUniversities() {
     }
   }
 
+  /** index번째를 위(-1)·아래(+1)로 옮긴 순서를 서버에 저장 */
+  function move(index, delta) {
+    const ids = targets.map((t) => t.id)
+    ;[ids[index], ids[index + delta]] = [ids[index + delta], ids[index]]
+    run(() => reorderTargetUniversities(ids))
+  }
+
+  function handleRename(e) {
+    e.preventDefault()
+    if (!editing.name.trim()) return
+    run(async () => {
+      await updateTargetUniversity(editing.id, { university_name: editing.name.trim() })
+      setEditing(null)
+    })
+  }
+
   function handleAdd(e) {
     e.preventDefault()
     if (!name.trim()) return
@@ -128,24 +151,76 @@ function TargetUniversities() {
       <h2 className={styles.heading}>목표 대학</h2>
       {targets?.length > 0 ? (
         <Card className={styles.list}>
-          {targets.map((t) => (
-            <div key={t.id} className={styles.row}>
-              <span className={styles.priority}>{t.priority}지망</span>
-              <span className={styles.university}>
-                {t.university_name}
-                {t.department && ` ${t.department}`}
-              </span>
-              <button
-                type="button"
-                className={styles.remove}
-                onClick={() => run(() => deleteTargetUniversity(t.id))}
-                disabled={busy}
-                aria-label={`${t.university_name} 삭제`}
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-          ))}
+          {targets.map((t, i) =>
+            editing?.id === t.id ? (
+              <form key={t.id} className={styles.row} onSubmit={handleRename}>
+                <span className={styles.priority}>{t.priority}지망</span>
+                <Input
+                  aria-label="목표 대학·학과"
+                  maxLength={100}
+                  value={editing.name}
+                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  className={styles.addInput}
+                  autoFocus
+                />
+                <button type="submit" className={styles.textButton} disabled={busy}>
+                  저장
+                </button>
+                <button
+                  type="button"
+                  className={styles.textButton}
+                  onClick={() => setEditing(null)}
+                  disabled={busy}
+                >
+                  취소
+                </button>
+              </form>
+            ) : (
+              <div key={t.id} className={styles.row}>
+                <span className={styles.priority}>{t.priority}지망</span>
+                <span className={styles.university}>
+                  {t.university_name}
+                  {t.department && ` ${t.department}`}
+                </span>
+                <button
+                  type="button"
+                  className={styles.remove}
+                  onClick={() => move(i, -1)}
+                  disabled={busy || i === 0}
+                  aria-label={`${t.university_name} 한 칸 위로`}
+                >
+                  <ChevronUp size={18} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.remove}
+                  onClick={() => move(i, 1)}
+                  disabled={busy || i === targets.length - 1}
+                  aria-label={`${t.university_name} 한 칸 아래로`}
+                >
+                  <ChevronDown size={18} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.remove}
+                  onClick={() => setEditing({ id: t.id, name: t.university_name })}
+                  disabled={busy}
+                  aria-label={`${t.university_name} 수정`}
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.remove}
+                  onClick={() => run(() => deleteTargetUniversity(t.id))}
+                  disabled={busy}
+                  aria-label={`${t.university_name} 삭제`}
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            ),
+          )}
         </Card>
       ) : (
         <p className={styles.caption}>아직 목표 대학이 없어요.</p>

@@ -6,6 +6,7 @@ import { Button, Card, PageIntro } from '../../components/ui'
 import { listTargetUniversities } from '../../features/auth/api'
 import { getAiConsent, revokeAiConsent } from '../../features/feedback/aiApi'
 import { getConsent, revokeConsent } from '../../features/feedback/api'
+import NotificationSettings from '../../features/notifications/components/NotificationSettings'
 import { useAsync } from '../../hooks/useAsync'
 import { useOptions } from '../../hooks/useOptions'
 import { labelOf } from '../../lib/options'
@@ -96,6 +97,7 @@ export default function MyPage() {
 
       <section className={styles.section}>
         <h2 className={styles.heading}>설정</h2>
+        <NotificationSettings />
         <Button variant="soft" className={styles.logout} onClick={signOut}>
           로그아웃
         </Button>

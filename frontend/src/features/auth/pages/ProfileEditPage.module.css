@@ -76,3 +76,14 @@
   color: var(--color-danger);
   font-size: var(--text-sm);
 }
+
+.remove:disabled {
+  opacity: 0.3;
+}
+
+.textButton {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+}

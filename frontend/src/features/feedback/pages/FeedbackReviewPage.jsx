@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Pause, Play } from 'lucide-react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
 import { Badge, Button, Card } from '../../../components/ui'
@@ -14,7 +14,12 @@ import { KINDS, ORIGIN_LABELS } from '../feedbackKinds'
 import { useEvidencePlayer } from '../useEvidencePlayer'
 import styles from './FeedbackReviewPage.module.css'
 
-const STATUS_LABELS = { DRAFT: '확인 필요', IN_REVIEW: '확인 필요', APPROVED: '확정됨', REJECTED: '반려됨' }
+const STATUS_LABELS = {
+  DRAFT: '확인 필요',
+  IN_REVIEW: '확인 필요',
+  APPROVED: '확정됨',
+  REJECTED: '반려됨',
+}
 
 /** AI 정리 결과 보기·수정·확정 (개인 작품은 학생 본인이 확정: review_mode SELF) */
 export default function FeedbackReviewPage() {
@@ -89,8 +94,17 @@ export default function FeedbackReviewPage() {
           <>
             {!approved && canReview && (
               <Card variant="soft" className={styles.notice}>
-                AI가 녹음 내용을 정리한 초안이에요. 내용을 확인하고 틀린 부분은 고친 뒤 확정해 주세요.
+                AI가 녹음 내용을 정리한 초안이에요. 내용을 확인하고 틀린 부분은 고친 뒤 확정해
+                주세요.
               </Card>
+            )}
+            {feedback.recording_id && (
+              <Link
+                to={`/artworks/${feedback.artwork_id}/recordings/${feedback.recording_id}/transcript`}
+                className={styles.transcriptLink}
+              >
+                녹음 원문 보기 · 고치기 &gt;
+              </Link>
             )}
 
             <section className={styles.section}>
@@ -114,7 +128,9 @@ export default function FeedbackReviewPage() {
                       <li key={item.id} className={styles.item}>
                         <p>{item.content}</p>
                         <div className={styles.meta}>
-                          {item.category && <span className={styles.tag}>{categoryLabel(item.category)}</span>}
+                          {item.category && (
+                            <span className={styles.tag}>{categoryLabel(item.category)}</span>
+                          )}
                           {ORIGIN_LABELS[item.origin] && (
                             <span className={styles.origin}>{ORIGIN_LABELS[item.origin]}</span>
                           )}
@@ -123,17 +139,30 @@ export default function FeedbackReviewPage() {
                               type="button"
                               className={styles.listen}
                               onClick={() =>
-                                player.play(item.id, item.evidence[0].start_ms, item.evidence.at(-1).end_ms)
+                                player.play(
+                                  item.id,
+                                  item.evidence[0].start_ms,
+                                  item.evidence.at(-1).end_ms,
+                                )
                               }
                             >
-                              {player.playingKey === item.id ? <Pause size={14} /> : <Play size={14} />}
+                              {player.playingKey === item.id ? (
+                                <Pause size={14} />
+                              ) : (
+                                <Play size={14} />
+                              )}
                               근거 듣기
                             </button>
                           )}
                         </div>
                         {item.evidence.some((e) => e.text) && (
                           <p className={styles.evidence}>
-                            “{item.evidence.map((e) => e.text).filter(Boolean).join(' ')}”
+                            “
+                            {item.evidence
+                              .map((e) => e.text)
+                              .filter(Boolean)
+                              .join(' ')}
+                            ”
                           </p>
                         )}
                       </li>

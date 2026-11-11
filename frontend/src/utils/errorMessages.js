@@ -46,6 +46,7 @@ const API_MESSAGES = {
   FEEDBACK_NOT_APPROVED: '선생님이 확인 중인 정리예요.',
   FEEDBACK_NOTE_LOCKED: '확정된 AI 정리가 있어서 수정할 수 없어요. 정리 결과에서 확정을 취소한 뒤 수정해 주세요.',
   FEEDBACK_NOTE_LIMIT: '작품 하나에 글 첨삭은 50개까지 남길 수 있어요.',
+  TRANSCRIPT_LOCKED: '확정된 AI 정리가 있어서 원문을 고칠 수 없어요. 정리 결과에서 확정을 취소한 뒤 수정해 주세요.',
   RECORDING_TOO_LONG: '녹음이 너무 길어서 AI로 정리할 수 없어요.',
   RECORDING_AUDIO_EXPIRED: '보관 기간이 지나 음성 파일이 삭제된 녹음이에요.',
   STT_NOT_CONFIGURED: 'AI 정리 기능은 아직 준비 중이에요.',

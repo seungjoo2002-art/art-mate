@@ -42,6 +42,13 @@ export const deleteArtwork = (artworkId) => api(`/artworks/${artworkId}`, { meth
 export const deletePhoto = (artworkId, photoId) =>
   api(`/artworks/${artworkId}/photos/${photoId}`, { method: 'DELETE' })
 
+/**
+ * 작품 정보 수정: 보낸 필드만 바뀜. practical_type·work_category·actual_minutes·time_limit_minutes는
+ * null이면 지움. actual_minutes를 직접 넣으면 time_source=MANUAL (v0.9 F-2)
+ */
+export const updateArtwork = (artworkId, patch) =>
+  api(`/artworks/${artworkId}`, { method: 'PATCH', body: patch })
+
 /** 작품 완료 (v0.5.1): 완성 사진이 1장 이상 필요. 완료하면 사진 편집이 막힘 (409 ARTWORK_COMPLETED) */
 export const completeArtwork = (artworkId) =>
   api(`/artworks/${artworkId}/complete`, { method: 'POST' })

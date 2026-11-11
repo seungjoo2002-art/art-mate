@@ -4,6 +4,8 @@ import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
 import { Button, Card } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
+import { useOptions } from '../../../hooks/useOptions'
+import { labelOf } from '../../../lib/options'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import {
   completeArtwork,
@@ -16,6 +18,7 @@ import {
 import StagePhotoCard from '../components/StagePhotoCard'
 import StageStepper from '../components/StageStepper'
 import { hasFinalPhoto, isCompleted, stagesWithPhotos } from '../stages'
+import { formatMinutes } from '../exam'
 import styles from './ArtworkPage.module.css'
 
 /**
@@ -31,6 +34,7 @@ export default function ArtworkDetailPage({ renderTimeline }) {
   const [actionError, setActionError] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [statusBusy, setStatusBusy] = useState(false)
+  const options = useOptions()
 
   if (error) {
     return (
@@ -138,6 +142,7 @@ export default function ArtworkDetailPage({ renderTimeline }) {
               시험 이어서 하기
             </Button>
           ))}
+        <ArtworkMeta artwork={artwork} options={options} />
         {(artwork.topic || artwork.description) && (
           <Card variant="soft" className={styles.topic}>
             <span className={styles.topicLabel}>오늘의 주제</span>
@@ -178,6 +183,9 @@ export default function ArtworkDetailPage({ renderTimeline }) {
             커뮤니티에 공유하기
           </Button>
         )}
+        <Button variant="soft" onClick={() => navigate(`/artworks/${artwork.id}/edit`)}>
+          작품 정보 수정
+        </Button>
         <button
           type="button"
           className={styles.deleteArtwork}
@@ -189,4 +197,18 @@ export default function ArtworkDetailPage({ renderTimeline }) {
       </main>
     </>
   )
+}
+
+/** 실기 유형 · 분류 · 작업 방식 · 소요/제한 시간 한 줄 */
+function ArtworkMeta({ artwork, options }) {
+  const label = (list, code) => (code && options ? labelOf(options[list], code) : null)
+  const parts = [
+    label('practical_types', artwork.practical_type),
+    label('work_categories', artwork.work_category),
+    artwork.work_method,
+    artwork.actual_minutes && `소요 ${formatMinutes(artwork.actual_minutes)}`,
+    artwork.time_limit_minutes && `제한 ${formatMinutes(artwork.time_limit_minutes)}`,
+  ].filter(Boolean)
+  if (!parts.length) return null
+  return <p className={styles.meta}>{parts.join(' · ')}</p>
 }

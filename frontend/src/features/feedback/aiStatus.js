@@ -38,7 +38,11 @@ export function aiPhase(transcription, summary) {
   const sJob = summary?.job
 
   if (summary?.feedback_id) {
-    return { phase: 'ready', feedbackId: summary.feedback_id, feedbackStatus: summary.feedback_status }
+    return {
+      phase: 'ready',
+      feedbackId: summary.feedback_id,
+      feedbackStatus: summary.feedback_status,
+    }
   }
   if (sJob && ACTIVE.includes(sJob.status)) {
     return { phase: 'summarizing', retrying: sJob.attempts > 0 && Boolean(sJob.error_code) }

@@ -29,9 +29,14 @@ export default function FeedbackEditor({ feedback, options, saving, onSave, onCa
     setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)))
   const remove = (key) => setItems((prev) => prev.filter((item) => item.key !== key))
   const add = (kind) =>
-    setItems((prev) => [...prev, { key: newKey(), id: undefined, kind, content: '', category: null }])
+    setItems((prev) => [
+      ...prev,
+      { key: newKey(), id: undefined, kind, content: '', category: null },
+    ])
   const toggleCategory = (code) =>
-    setCategories((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]))
+    setCategories((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    )
 
   const filled = items.filter((item) => item.content.trim())
   const canSave = summary.trim() && !saving
@@ -112,7 +117,11 @@ export default function FeedbackEditor({ feedback, options, saving, onSave, onCa
         <h3 className={styles.heading}>약점 카테고리</h3>
         <div className={styles.chips}>
           {weaknessOptions.map((o) => (
-            <Chip key={o.code} selected={categories.includes(o.code)} onClick={() => toggleCategory(o.code)}>
+            <Chip
+              key={o.code}
+              selected={categories.includes(o.code)}
+              onClick={() => toggleCategory(o.code)}
+            >
               {o.label}
             </Chip>
           ))}
