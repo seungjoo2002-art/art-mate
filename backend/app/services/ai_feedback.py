@@ -85,6 +85,8 @@ from app.schemas.ai_feedback import (
     AiConsentCreate,
     AiConsentRead,
     AiConsentStatus,
+    BrowserTranscriptCreate,
+    BrowserTranscriptResult,
     Evidence,
     FeedbackDecision,
     FeedbackItemRead,
@@ -144,6 +146,17 @@ def job_read(job: AiProcessingJob) -> JobRead:
     )
 
 
+BROWSER_ENGINE_PREFIX = "browser-"
+# 기기 시계·디코딩 차이로 녹음 길이보다 조금 긴 타임스탬프 허용
+BROWSER_DURATION_SLACK_MS = 5_000
+
+
+def transcript_origin(t: FeedbackTranscript) -> str:
+    if t.edited_from_id is not None:
+        return "EDITED"
+    return "BROWSER" if t.engine.startswith(BROWSER_ENGINE_PREFIX) else "SERVER"
+
+
 def transcript_meta(t: FeedbackTranscript) -> dict[str, Any]:
     return {
         "id": t.id,
@@ -152,6 +165,7 @@ def transcript_meta(t: FeedbackTranscript) -> dict[str, Any]:
         "segment_count": t.segment_count,
         "engine": t.engine,
         "model_name": t.model_name,
+        "origin": transcript_origin(t),
         "created_at": t.created_at,
     }
 
@@ -476,6 +490,105 @@ class AiFeedbackService:
             edited=transcript.edited_from_id is not None,
             edited_from_id=transcript.edited_from_id,
         )
+
+    async def save_browser_transcript(
+        self, owner: Profile, recording: FeedbackRecording, data: BrowserTranscriptCreate
+    ) -> BrowserTranscriptResult:
+        """학생 기기에서 만든 전사 저장 (v0.9.2). 서버 전사와 같은 테이블·같은 이후 흐름.
+
+        중복 방지: 녹음 행 → 진행 중 전사 작업 순서로 잠근 뒤 전사가 없을 때만 저장하고,
+        대기·진행 중인 서버(GitHub Actions) 전사 작업은 취소한다. Worker는 결과 저장 직전에
+        작업 행을 다시 잠그고 RUNNING인지 확인하므로 취소된 작업의 결과는 버려진다.
+        Worker가 먼저 저장했으면 409.
+        """
+        recording_id = recording.id
+        await self.session.execute(
+            select(FeedbackRecording.id)
+            .where(FeedbackRecording.id == recording_id)
+            .with_for_update()
+        )
+        if not await self._owner_has_recording_consent(recording.owner_id):
+            raise ConflictError(
+                "The student's recording consent is required for transcription",
+                code=ErrorCode.RECORDING_CONSENT_REQUIRED,
+            )
+        last_end = max(s.end_ms for s in data.segments)
+        if last_end > recording.duration_ms + BROWSER_DURATION_SLACK_MS:
+            raise UnprocessableError(
+                "Segment timestamps exceed the recording length",
+                details={"duration_ms": recording.duration_ms},
+            )
+        text = " ".join(s.text for s in data.segments)
+        if len(text) > self.settings.ai_max_transcript_chars:
+            raise UnprocessableError(
+                "The transcript is too long",
+                details={"max_chars": self.settings.ai_max_transcript_chars},
+            )
+        active = list(
+            (
+                await self.session.execute(
+                    select(AiProcessingJob)
+                    .where(
+                        AiProcessingJob.recording_id == recording_id,
+                        AiProcessingJob.job_type == AiJobType.TRANSCRIBE,
+                        AiProcessingJob.status.in_(ACTIVE_JOB_STATUSES),
+                    )
+                    .with_for_update()
+                )
+            ).scalars()
+        )
+        if await self.latest_transcript(recording_id) is not None:
+            raise ConflictError(
+                "This recording is already transcribed", code=ErrorCode.TRANSCRIPTION_ALREADY_DONE
+            )
+        now = clock.utc_now()
+        for job in active:
+            job.status = AiJobStatus.CANCELLED
+            job.finished_at = now
+            job.locked_by = None
+            job.lease_expires_at = None
+            job.source_url = None
+            job.source_url_expires_at = None
+            job.last_error_code = "BROWSER_TRANSCRIBED"
+        self.session.add(
+            FeedbackTranscript(
+                id=uuid.uuid4(),
+                recording_id=recording_id,
+                artwork_id=recording.artwork_id,
+                owner_id=recording.owner_id,
+                job_id=None,
+                language=data.language,
+                duration_ms=recording.duration_ms,
+                text=text,
+                segments=[
+                    {"index": i, "start_ms": s.start_ms, "end_ms": s.end_ms, "text": s.text}
+                    for i, s in enumerate(data.segments)
+                ],
+                segment_count=len(data.segments),
+                engine=f"{BROWSER_ENGINE_PREFIX}{data.device}",
+                model_name=data.model_name,
+                processing_ms=data.processing_ms,
+            )
+        )
+        recording.transcription_status = TranscriptionStatus.COMPLETED
+        recording.transcription_updated_at = now
+        await self.session.commit()
+        summary_job = None
+        if (
+            data.auto_summarize
+            and self.settings.ai_summary_enabled
+            and await self.has_valid_ai_consent(recording.owner_id)
+        ):
+            summary_job, _ = await self.request_summary(recording, owner, regenerate=False)
+        recording = await self._recording_by_id(recording_id)
+        return BrowserTranscriptResult(
+            transcript=await self.transcript(recording), summary_job=summary_job
+        )
+
+    async def _recording_by_id(self, recording_id: uuid.UUID) -> FeedbackRecording:
+        recording = await self.session.get(FeedbackRecording, recording_id)
+        assert recording is not None
+        return recording
 
     async def edit_transcript(
         self, editor: Profile, recording: FeedbackRecording, data: TranscriptEdit

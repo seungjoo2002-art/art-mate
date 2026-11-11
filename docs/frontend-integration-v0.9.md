@@ -158,6 +158,8 @@ POST /feedback-notes/{id}/summary  → 202 JobRead (진행 중이면 200 같은 
 
 ### 3.2 녹음 → 전사 → 요약 처리 상태 (v0.9.1, GitHub Actions 처리)
 
+> **v0.9.2**: 녹음 직후 학생 기기에서 먼저 전사하고(`POST …/transcript/browser`, [browser-stt-v0.9.2.md](browser-stt-v0.9.2.md)), 실패·미지원일 때만 아래 서버 처리로 넘어갑니다. 전사 응답의 `origin`(SERVER/BROWSER/EDITED)으로 출처를 구분합니다.
+
 전사·요약은 서버가 즉시 처리하지 않고 **GitHub Actions가 약 15분마다(지연 가능)** 처리합니다 ([stt-worker-github-actions.md](stt-worker-github-actions.md)). 새 API는 없고 기존 API로 상태를 보여 주세요.
 
 | 단계 | API | 표시 |

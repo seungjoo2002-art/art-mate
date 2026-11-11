@@ -25,6 +25,23 @@ export const requestTranscription = (artworkId, recordingId, { autoSummarize = t
     body: { auto_summarize: autoSummarize },
   })
 
+/**
+ * 기기(브라우저)에서 만든 전사 저장 (v0.9.2). 대기 중인 서버 전사는 취소된다
+ * sttResult: browserStt.transcribeBlob 결과. autoSummarize면 AI 요약도 요청 (AI 동의가 있을 때만 생성)
+ */
+export const saveBrowserTranscript = (artworkId, recordingId, sttResult, { autoSummarize = false } = {}) =>
+  api(`${recordingPath(artworkId, recordingId)}/transcript/browser`, {
+    method: 'POST',
+    body: {
+      device: sttResult.device,
+      model_name: sttResult.model,
+      language: 'ko',
+      segments: sttResult.segments,
+      processing_ms: sttResult.timings.transcribeMs,
+      auto_summarize: autoSummarize,
+    },
+  })
+
 export const retryTranscription = (artworkId, recordingId) =>
   api(`${recordingPath(artworkId, recordingId)}/transcription/retry`, { method: 'POST' })
 

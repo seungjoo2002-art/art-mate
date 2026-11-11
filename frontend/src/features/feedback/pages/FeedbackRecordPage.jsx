@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { FileAudio, Mic, Sparkles, Square } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
@@ -7,14 +7,50 @@ import { Button } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getConsent, uploadRecording } from '../api'
-import { startAiSummary } from '../aiApi'
+import { getAiConsent, requestSummary, requestTranscription, saveBrowserTranscript } from '../aiApi'
 import { ACCEPT } from '../audioFile'
+import BrowserSttStatus from '../components/BrowserSttStatus'
 import ConsentForm from '../components/ConsentForm'
+import { getPreference, setPreference } from '../stt/browserStt'
+import { useBrowserStt, withTimeout } from '../stt/useBrowserStt'
 import { formatDuration } from '../format'
 import { useAudioRecorder } from '../useAudioRecorder'
 import styles from './FeedbackRecordPage.module.css'
 
 const WAVE = [14, 26, 18, 40, 22, 48, 30, 20, 38, 26, 16, 34, 28, 42, 20]
+// 저장 버튼을 누른 뒤 기기 변환을 기다리는 최대 시간. 넘으면 서버(GitHub Actions)로 처리
+const STT_WAIT_MS = 120_000
+
+/**
+ * 저장 후 전사·요약 요청. 기기 전사가 있으면 그것을 저장하고(대기 중 서버 작업은 취소됨),
+ * 없거나 실패하면 기존처럼 서버 전사를 요청한다. → { needsConsent }
+ */
+async function transcribeAfterUpload(artworkId, recordingId, sttResult) {
+  const consent = await getAiConsent()
+  if (sttResult) {
+    try {
+      // AI 동의가 없으면 전사만 저장 (기기 안에서 만든 글이라 외부 전송 없음)
+      await saveBrowserTranscript(artworkId, recordingId, sttResult, {
+        autoSummarize: consent.is_valid,
+      })
+      return { needsConsent: !consent.is_valid }
+    } catch (err) {
+      if (err.code === 'TRANSCRIPTION_ALREADY_DONE') {
+        if (consent.is_valid) await requestSummary(artworkId, recordingId).catch(() => {})
+        return { needsConsent: !consent.is_valid }
+      }
+      // 그 밖의 오류는 서버 전사로 대신
+    }
+  }
+  if (!consent.is_valid) return { needsConsent: true }
+  try {
+    await requestTranscription(artworkId, recordingId, { autoSummarize: true })
+  } catch (err) {
+    if (err.code !== 'TRANSCRIPTION_ALREADY_DONE') throw err
+    await requestSummary(artworkId, recordingId)
+  }
+  return { needsConsent: false }
+}
 
 export default function FeedbackRecordPage() {
   const { artworkId } = useParams()
@@ -47,10 +83,32 @@ export default function FeedbackRecordPage() {
 function Recorder({ artworkId }) {
   const navigate = useNavigate()
   const { status, elapsedMs, result, error, start, stop, reset, loadFile } = useAudioRecorder()
+  const stt = useBrowserStt()
+  const [preference, setPreferenceState] = useState(getPreference)
   const [uploading, setUploading] = useState(false)
+  const [waitingStt, setWaitingStt] = useState(false)
   const [loadingFile, setLoadingFile] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const recording = status === 'recording'
+  const { start: startStt, reset: resetStt, skip: skipStt } = stt
+
+  // 녹음이 끝나면(또는 파일을 고르면) 바로 기기에서 글로 바꾸기 시작
+  useEffect(() => {
+    if (status !== 'recorded' || !result || preference === 'off') return
+    startStt(result.blob)
+  }, [status, result, preference, startStt])
+
+  function changePreference(value) {
+    setPreference(value)
+    setPreferenceState(value)
+    resetStt()
+  }
+
+  function handleReset() {
+    skipStt()
+    resetStt()
+    reset()
+  }
 
   async function handleSave({ withAi = false } = {}) {
     setUploading(true)
@@ -68,7 +126,10 @@ function Recorder({ artworkId }) {
     const artworkPath = `/artworks/${artworkId}`
     if (withAi) {
       try {
-        const { needsConsent } = await startAiSummary(artworkId, saved.id)
+        setWaitingStt(true)
+        const sttResult = preference === 'off' ? null : await withTimeout(stt.wait(), STT_WAIT_MS)
+        setWaitingStt(false)
+        const { needsConsent } = await transcribeAfterUpload(artworkId, saved.id, sttResult)
         if (needsConsent) {
           // 동의 후 작품 화면에서 "AI로 피드백 정리하기"를 누르면 됨
           navigate('/ai-consent', { replace: true, state: { from: artworkPath } })
@@ -119,15 +180,22 @@ function Recorder({ artworkId }) {
       {status === 'recorded' ? (
         <div className={styles.review}>
           <audio controls src={result.url} className={styles.preview} />
+          <BrowserSttStatus
+            state={preference === 'off' ? { phase: 'skipped' } : stt.state}
+            onSkip={skipStt}
+            preference={preference}
+            onPreferenceChange={uploading ? undefined : changePreference}
+            artworkId={artworkId}
+          />
           {uploadError && <p className={styles.error}>{uploadError}</p>}
           <Button onClick={() => handleSave({ withAi: true })} disabled={uploading}>
             <Sparkles size={20} aria-hidden />
-            {uploading ? '저장하는 중…' : '저장하고 AI로 정리하기'}
+            {waitingStt ? '글로 바꾸기 마무리 중…' : uploading ? '저장하는 중…' : '저장하고 AI로 정리하기'}
           </Button>
           <Button variant="soft" onClick={() => handleSave()} disabled={uploading}>
             녹음만 저장하기
           </Button>
-          <Button variant="soft" onClick={reset} disabled={uploading}>
+          <Button variant="soft" onClick={handleReset} disabled={uploading}>
             {fromFile ? '다른 방법으로 올리기' : '다시 녹음'}
           </Button>
         </div>
