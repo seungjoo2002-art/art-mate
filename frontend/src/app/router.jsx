@@ -22,6 +22,7 @@ import OnboardingPage from '../features/auth/pages/OnboardingPage'
 import ProfileEditPage from '../features/auth/pages/ProfileEditPage'
 import SetupPage from '../features/auth/pages/SetupPage'
 import SignupPage from '../features/auth/pages/SignupPage'
+import NotificationsPage from '../features/notifications/pages/NotificationsPage'
 import NotFoundPage from '../pages/NotFoundPage'
 import ExamProgressPage from '../pages/exam/ExamProgressPage'
 import ExamResultPage from '../pages/exam/ExamResultPage'
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
         element: <SubLayout />,
         children: [
           { path: '/my/edit', element: <ProfileEditPage /> },
+          { path: '/notifications', element: <NotificationsPage /> },
           { path: '/community/write', element: <PostWritePage /> },
           { path: '/community/posts/:postId', element: <PostDetailPage /> },
           { path: '/artworks/new', element: <ArtworkCreatePage /> },
