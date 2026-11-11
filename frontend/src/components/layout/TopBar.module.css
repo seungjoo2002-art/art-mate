@@ -55,3 +55,8 @@
 .plain .step {
   display: none;
 }
+
+/* 헤더 아래에 붙는 plain 상단바: 스크롤 시 내용이 비치지 않도록 배경 유지 */
+.belowHeader.plain {
+  background: var(--color-bg);
+}

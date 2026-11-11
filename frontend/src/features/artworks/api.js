@@ -18,6 +18,7 @@ export const getArtwork = (artworkId) => api(`/artworks/${artworkId}?include_url
 export const createArtwork = ({
   title,
   description,
+  topic,
   recommendationId,
   practicalType,
   workCategory,
@@ -28,6 +29,7 @@ export const createArtwork = ({
     body: {
       title,
       description: description || null,
+      ...(topic ? { topic } : {}), // 주제·소재 (v0.9 F-2)
       ...(recommendationId ? { recommendation_id: recommendationId } : {}),
       ...(practicalType ? { practical_type: practicalType } : {}),
       ...(workCategory ? { work_category: workCategory } : {}),
