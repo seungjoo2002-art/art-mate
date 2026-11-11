@@ -16,11 +16,18 @@ export function useExamTimer(artworkId) {
     setTimer(next)
   }, [])
 
-  // 처음 열면 상태를 받고, 아직 시작 전이면 시작
+  // 처음 열면 상태를 받고, 아직 시작 전이면 시작.
+  // 동시에 두 번 시작하면(개발 모드 이중 실행, 탭 2개 등) 한쪽은 409 → 현재 상태를 다시 받음
   useEffect(() => {
     let cancelled = false
     getTimer(artworkId)
-      .then((current) => (current.state === 'IDLE' ? sendTimerEvent(artworkId, 'START') : current))
+      .then((current) =>
+        current.state === 'IDLE'
+          ? sendTimerEvent(artworkId, 'START').catch((err) =>
+              err.code === 'TIMER_INVALID_TRANSITION' ? getTimer(artworkId) : Promise.reject(err),
+            )
+          : current,
+      )
       .then(
         (next) => !cancelled && apply(next),
         (err) => !cancelled && setError(err),
