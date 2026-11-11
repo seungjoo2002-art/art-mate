@@ -5,10 +5,17 @@ import TopBar from '../../../components/layout/TopBar'
 import { Button, Card } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
-import { deleteArtwork, deletePhoto, getArtwork, uploadStagePhoto } from '../api'
+import {
+  completeArtwork,
+  deleteArtwork,
+  deletePhoto,
+  getArtwork,
+  reopenArtwork,
+  uploadStagePhoto,
+} from '../api'
 import StagePhotoCard from '../components/StagePhotoCard'
 import StageStepper from '../components/StageStepper'
-import { isCompleted, stagesWithPhotos } from '../stages'
+import { hasFinalPhoto, isCompleted, stagesWithPhotos } from '../stages'
 import styles from './ArtworkPage.module.css'
 
 /**
@@ -23,6 +30,7 @@ export default function ArtworkDetailPage({ renderTimeline }) {
   const [busyStage, setBusyStage] = useState(null) // 업로드·삭제 중인 단계
   const [actionError, setActionError] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [statusBusy, setStatusBusy] = useState(false)
 
   if (error) {
     return (
@@ -35,6 +43,7 @@ export default function ArtworkDetailPage({ renderTimeline }) {
 
   const stages = stagesWithPhotos(artwork)
   const completed = isCompleted(artwork)
+  const finalPhoto = hasFinalPhoto(artwork)
 
   async function runStageAction(stage, action) {
     if (busyStage) return
@@ -61,6 +70,20 @@ export default function ArtworkDetailPage({ renderTimeline }) {
     runStageAction(stage, () => deletePhoto(artwork.id, stage.photo.id))
   }
 
+  /** 작품 완료 / 작업 재개 */
+  async function setStatus(action) {
+    setStatusBusy(true)
+    setActionError('')
+    try {
+      await action(artwork.id)
+      reload()
+    } catch (err) {
+      setActionError(toErrorMessage(err))
+    } finally {
+      setStatusBusy(false)
+    }
+  }
+
   async function handleDeleteArtwork() {
     if (!window.confirm('작품을 삭제할까요? 사진과 녹음도 모두 삭제되고 되돌릴 수 없어요.')) return
     setDeleting(true)
@@ -85,6 +108,7 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         stage={stage}
         index={index}
         busy={busyStage === stage.key}
+        locked={completed}
         onSelectFile={(file) => handleSelectFile(stage, file)}
         onDelete={() => handleDeletePhoto(stage)}
       />
@@ -130,11 +154,26 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         )}
         {actionError && <p className={styles.error}>{actionError}</p>}
 
-        <Button disabled={!completed} onClick={() => navigate('/archive')}>
-          작품 완료하기
-        </Button>
-        {!completed && <p className={styles.hint}>완성 사진을 올리면 작품을 완료할 수 있어요.</p>}
-        {completed && (
+        {completed ? (
+          <>
+            <Button variant="soft" onClick={() => setStatus(reopenArtwork)} disabled={statusBusy}>
+              {statusBusy ? '처리하는 중…' : '작업 재개'}
+            </Button>
+            <p className={styles.hint}>
+              완료한 작품은 사진을 바꿀 수 없어요. 녹음과 첨삭은 계속 추가할 수 있어요.
+            </p>
+          </>
+        ) : (
+          <>
+            <Button onClick={() => setStatus(completeArtwork)} disabled={!finalPhoto || statusBusy}>
+              {statusBusy ? '처리하는 중…' : '작품 완료하기'}
+            </Button>
+            {!finalPhoto && (
+              <p className={styles.hint}>완성 사진을 올리면 작품을 완료할 수 있어요.</p>
+            )}
+          </>
+        )}
+        {finalPhoto && (
           <Button variant="soft" onClick={() => navigate(`/community/write?artwork=${artwork.id}`)}>
             커뮤니티에 공유하기
           </Button>
