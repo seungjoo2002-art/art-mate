@@ -103,10 +103,10 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         }
       />
       <main className={styles.body}>
-        {artwork.description && (
+        {(artwork.topic || artwork.description) && (
           <Card variant="soft" className={styles.topic}>
             <span className={styles.topicLabel}>오늘의 주제</span>
-            <span className={styles.topicText}>{artwork.description}</span>
+            <span className={styles.topicText}>{artwork.topic || artwork.description}</span>
           </Card>
         )}
 
