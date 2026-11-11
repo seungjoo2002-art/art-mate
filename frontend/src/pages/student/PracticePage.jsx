@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { Card, PageIntro } from '../../components/ui'
 import { listArtworks } from '../../features/artworks/api'
 import ArtworkCard from '../../features/artworks/components/ArtworkCard'
-import { DEFAULT_EXAM_MINUTES, formatMinutes } from '../../features/artworks/exam'
+import { formatMinutes, loadStageTargets, totalMinutes } from '../../features/artworks/exam'
 import { useAsync } from '../../hooks/useAsync'
 import { formatMonthDay } from '../../utils/date'
 import styles from './PracticePage.module.css'
@@ -20,8 +20,8 @@ export default function PracticePage() {
       <ModeCard
         to="/artworks/new?mode=exam"
         title="실기시험 모드"
-        description="제한 시간을 정하고 단계별 사진, 메모와 녹음을 남깁니다."
-        action={`목표 ${formatMinutes(DEFAULT_EXAM_MINUTES)} · 시험 시작하기`}
+        description="아이디어·스케치·채색 목표 시간을 설정하고 단계별 사진, 메모와 녹음을 남깁니다."
+        action={`목표 ${formatMinutes(totalMinutes(loadStageTargets()))} · 시험 시작하기`}
       />
       <ModeCard
         to="/artworks/new"
