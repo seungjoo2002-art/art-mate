@@ -330,6 +330,14 @@ async def review_candidates(
 
 PracticalQ = Annotated[list[PracticalType] | None, Query()]
 CategoryQ = Annotated[list[ArtworkWorkCategory] | None, Query()]
+SearchQ = Annotated[
+    str | None,
+    Query(
+        min_length=2,
+        max_length=50,
+        description="VER.2 검색어 (제목·본문·질문, 2~50자). 카테고리·실기 유형 필터와 함께 사용",
+    ),
+]
 PostCategoryQ = Annotated[
     list[PostCategory] | None,
     Query(
@@ -356,6 +364,7 @@ async def feed(
     work_category: CategoryQ = None,
     academy_id: uuid.UUID | None = None,
     category: PostCategoryQ = None,
+    q: SearchQ = None,
 ) -> Page[PostRead]:
     items, total = await _community(session, settings, shared).feed(
         viewer,
@@ -365,6 +374,7 @@ async def feed(
         work_categories=work_category or [],
         academy_id=academy_id,
         categories=category or [],
+        query=q,
     )
     return Page(items=items, total=total, limit=pagination.limit, offset=pagination.offset)
 
