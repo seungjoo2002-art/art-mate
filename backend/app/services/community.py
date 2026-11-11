@@ -24,7 +24,7 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,11 +53,13 @@ from app.models.community import (
     SharedArtworkImage,
 )
 from app.models.enums import (
+    AuthorDisplay,
     CommentStatus,
     CommentType,
     CommunityReportStatus,
     FeedbackSource,
     ModerationAction,
+    PostCategory,
     PostStatus,
     PracticalType,
     ReportTarget,
@@ -89,7 +91,14 @@ from app.schemas.community import (
     VisibilityRead,
 )
 from app.services.feedback_notes import FeedbackNoteService
-from app.services.sharing import ANONYMOUS_NAME, author_name, sign_images, visible_consent
+from app.services.sharing import (
+    ANONYMOUS_NAME,
+    SharingService,
+    author_name,
+    retire_post_images,
+    sign_images,
+    visible_consent,
+)
 
 
 class CommunityService:
@@ -98,10 +107,20 @@ class CommunityService:
         session: AsyncSession,
         settings: Settings,
         shared_storage: StorageClient | None = None,
+        photo_storage: StorageClient | None = None,
     ) -> None:
         self.session = session
         self.settings = settings
         self.shared_storage = shared_storage
+        self.photo_storage = photo_storage
+
+    def _sharing(self) -> SharingService:
+        return SharingService(
+            self.session,
+            self.settings,
+            photo_storage=self.photo_storage,
+            shared_storage=self.shared_storage,
+        )
 
     # ================================================================ 공통
 
@@ -127,18 +146,27 @@ class CommunityService:
             )
 
     def _visible_posts(self, viewer: Profile) -> Any:
-        """보이는 게시물 + 그 동의 (게시물 ACTIVE, 유효 COMMUNITY 동의 범위 안, 작품 삭제 안 됨)."""
+        """보이는 게시물 + 그 동의 (게시물 ACTIVE).
+
+        작품 게시물: 유효 COMMUNITY 동의 범위 안 + 작품 삭제 안 됨.
+        사진 없는 글(VER.2): 로그인한 사용자 모두 (동의 행 없음 → consent는 None).
+        """
         return (
             select(CommunityPost, ArtworkSharingConsent)
-            .join(
+            .outerjoin(
                 ArtworkSharingConsent,
-                ArtworkSharingConsent.artwork_id == CommunityPost.artwork_id,
+                and_(
+                    ArtworkSharingConsent.artwork_id == CommunityPost.artwork_id,
+                    visible_consent(viewer.id, SharingPurpose.COMMUNITY),
+                ),
             )
-            .join(Artwork, Artwork.id == CommunityPost.artwork_id)
+            .outerjoin(Artwork, Artwork.id == CommunityPost.artwork_id)
             .where(
                 CommunityPost.status == PostStatus.ACTIVE,
-                Artwork.deleted_at.is_(None),
-                visible_consent(viewer.id, SharingPurpose.COMMUNITY),
+                or_(
+                    CommunityPost.artwork_id.is_(None),
+                    and_(ArtworkSharingConsent.id.is_not(None), Artwork.deleted_at.is_(None)),
+                ),
             )
         )
 
@@ -193,8 +221,10 @@ class CommunityService:
         for post, consent in rows:
             author = authors[post.author_id]
             mine = post.author_id == viewer.id
-            display = consent.author_display if consent else None
-            name = author_name(author, display, viewer.id) if display else author.display_name
+            display = (
+                consent.author_display if consent else post.author_display or AuthorDisplay.NAME
+            )
+            name = author_name(author, display, viewer.id)
             result.append(
                 PostRead(
                     id=post.id,
@@ -202,6 +232,9 @@ class CommunityService:
                     title=post.title,
                     body=post.body,
                     question=post.question,
+                    category=post.category,
+                    has_artwork=post.artwork_id is not None,
+                    photo_id=post.photo_id if mine else None,
                     practical_type=post.practical_type,
                     work_category=post.work_category,
                     author=AuthorRead(
@@ -237,7 +270,36 @@ class CommunityService:
 
     # ================================================================ 게시물
 
+    async def _create_text_post(self, author: Profile, data: PostCreate, token: str) -> PostRead:
+        """사진 없는 글 (VER.2): 작품·공유 동의 없이 작성."""
+        await self._rate_limit(
+            CommunityPost,
+            CommunityPost.author_id,
+            author.id,
+            self.settings.community_posts_per_day,
+            timedelta(days=1),
+        )
+        post = CommunityPost(
+            id=uuid.uuid4(),
+            artwork_id=None,
+            author_id=author.id,
+            image_id=None,
+            title=data.title,
+            body=data.body,
+            question=data.question or None,
+            category=data.category or PostCategory.FREE,
+            author_display=data.author_display or AuthorDisplay.NAME,
+            practical_type=data.practical_type,
+            work_category=data.work_category,
+            status=PostStatus.ACTIVE,
+        )
+        self.session.add(post)
+        await self.session.commit()
+        return await self.get_post(author, post.id, token)
+
     async def create_post(self, author: Profile, data: PostCreate, token: str) -> PostRead:
+        if data.artwork_id is None:
+            return await self._create_text_post(author, data, token)
         artwork = (
             await self.session.execute(
                 select(Artwork)
@@ -260,20 +322,35 @@ class CommunityService:
                 )
             )
         ).scalar_one_or_none()
-        image = (
-            await self.session.execute(
-                select(SharedArtworkImage).where(
-                    SharedArtworkImage.artwork_id == artwork.id,
-                    SharedArtworkImage.status == SharedImageStatus.ACTIVE,
-                )
-            )
-        ).scalar_one_or_none()
-        if consent is None or image is None:
+        if consent is None:
             raise ConflictError(
                 "Agree to community sharing for this artwork first",
                 code=ErrorCode.SHARING_CONSENT_REQUIRED,
                 details={"purpose": SharingPurpose.COMMUNITY.value},
             )
+        existing = (
+            await self.session.execute(
+                select(CommunityPost.id).where(
+                    CommunityPost.artwork_id == artwork.id,
+                    CommunityPost.status != PostStatus.DELETED,
+                )
+            )
+        ).first()
+        if existing is not None:
+            raise ConflictError(
+                "This artwork is already posted", code=ErrorCode.POST_ALREADY_EXISTS
+            )
+        image = await self._post_image(author, artwork, data.photo_id, token)
+        # 이미지 만들기에서 커밋했을 수 있으므로 작품 행을 다시 잠근다
+        artwork = (
+            await self.session.execute(
+                select(Artwork)
+                .where(Artwork.id == artwork.id, Artwork.deleted_at.is_(None))
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if artwork is None:
+            raise NotFoundError("Artwork not found")
         await self._rate_limit(
             CommunityPost,
             CommunityPost.author_id,
@@ -286,9 +363,12 @@ class CommunityService:
             artwork_id=artwork.id,
             author_id=author.id,
             image_id=image.id,
+            photo_id=data.photo_id,
             title=data.title,
             body=data.body or None,
             question=data.question or None,
+            category=data.category
+            or (PostCategory.FEEDBACK_REQUEST if data.question else PostCategory.ARTWORK_SHARE),
             practical_type=data.practical_type or artwork.practical_type,
             work_category=data.work_category or artwork.work_category,
             status=PostStatus.ACTIVE,
@@ -312,8 +392,11 @@ class CommunityService:
         practical_types: list[PracticalType],
         work_categories: list[Any],
         academy_id: uuid.UUID | None,
+        categories: list[PostCategory] | None = None,
     ) -> tuple[list[PostRead], int]:
         stmt = self._visible_posts(viewer)
+        if categories:
+            stmt = stmt.where(CommunityPost.category.in_(categories))
         if practical_types:
             stmt = stmt.where(CommunityPost.practical_type.in_(practical_types))
         if work_categories:
@@ -391,6 +474,21 @@ class CommunityService:
             raise ForbiddenError("Only the author can change this post")
         return post
 
+    async def _post_image(
+        self, author: Profile, artwork: Artwork, photo_id: uuid.UUID | None, token: str
+    ) -> SharedArtworkImage:
+        """게시물 이미지: 고른 사진이 있으면 그 사진의 POST 이미지, 없으면 대표(PRIMARY) 이미지."""
+        sharing = self._sharing()
+        if photo_id is not None:
+            return await sharing.ensure_post_image(author, artwork, photo_id, token)
+        image = await sharing.live_image(artwork.id)
+        if image is None:
+            raise ConflictError(
+                "This artwork has no FINAL photo; choose a photo to share (photo_id)",
+                code=ErrorCode.PHOTO_SELECTION_REQUIRED,
+            )
+        return image
+
     async def update_post(
         self, author: Profile, post_id: uuid.UUID, data: PostUpdate, token: str
     ) -> PostRead:
@@ -398,18 +496,53 @@ class CommunityService:
         changes = data.model_dump(exclude_unset=True)
         if not changes:
             raise UnprocessableError("Nothing to update")
-        if "title" in changes and changes["title"] is None:
-            raise UnprocessableError("'title' cannot be null")
+        for field in ("title", "category"):
+            if field in changes and changes[field] is None:
+                raise UnprocessableError(f"'{field}' cannot be null")
+        if post.artwork_id is None:
+            if "photo_id" in changes:
+                raise UnprocessableError("Posts without an artwork have no photo")
+            if changes.get("category") == PostCategory.ARTWORK_SHARE:
+                raise UnprocessableError("ARTWORK_SHARE posts need an artwork")
+            if "body" in changes and not changes["body"]:
+                raise UnprocessableError("body is required for posts without an artwork")
+        elif "author_display" in changes:
+            raise UnprocessableError("Change the author display in the sharing consent")
+        if "photo_id" in changes:
+            post_id_value = post.id
+            artwork = (
+                await self.session.execute(
+                    select(Artwork).where(
+                        Artwork.id == post.artwork_id, Artwork.deleted_at.is_(None)
+                    )
+                )
+            ).scalar_one()
+            old_image_id = post.image_id
+            image = await self._post_image(author, artwork, changes.pop("photo_id"), token)
+            post = await self._own_post(author, post_id_value)  # 커밋 후 다시 잠금
+            post.image_id = image.id
+            post.photo_id = image.source_photo_id if image.kind.value == "POST" else None
+            if old_image_id and old_image_id != image.id:
+                await retire_post_images(self.session, SharedArtworkImage.id == old_image_id)
+                post.image_id = image.id  # retire가 같은 게시물을 비웠을 수 있음
         for field, value in changes.items():
             setattr(post, field, value or None if field in ("body", "question") else value)
         await self.session.commit()
+        await self._sharing().cleanup_storage(author, token)
         return await self.get_post(author, post.id, token)
 
-    async def delete_post(self, author: Profile, post_id: uuid.UUID) -> None:
+    async def delete_post(
+        self, author: Profile, post_id: uuid.UUID, token: str | None = None
+    ) -> None:
         post = await self._own_post(author, post_id)
         post.status = PostStatus.DELETED
         post.deleted_at = clock.utc_now()
+        if post.image_id is not None:
+            # 게시물용으로 고른 사진의 공유 이미지는 함께 삭제 (대표 이미지는 동의가 관리)
+            await retire_post_images(self.session, SharedArtworkImage.id == post.image_id)
         await self.session.commit()
+        if token:
+            await self._sharing().cleanup_storage(author, token)
 
     # ================================================================ 좋아요·저장
 

@@ -32,6 +32,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
 from app.models.enums import (
+    ArtworkExamStageCode,
     ArtworkStage,
     ArtworkWorkCategory,
     ArtworkWorkStatus,
@@ -145,6 +146,46 @@ class ArtworkTimerEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     occurred_at: Mapped[datetime]
     # 이 이벤트 직후 현재 세션의 누적 작업 시간 (감사·복원 확인용)
     elapsed_seconds: Mapped[int] = mapped_column(Integer)
+
+
+class ArtworkExamStage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """실기시험 단계 계획·진행 (VER.2). 작품 타이머의 누적 시간(일시정지 제외)을 기준으로 기록한다.
+
+    - 계획: 단계 순서(position)와 목표 시간(분). 시작 전에만 단계 구성을 바꿀 수 있다.
+    - 진행: 타이머 START → 첫 단계 시작, "다음 단계" → 현재 단계 종료 + 다음 단계 시작,
+      STOP → 현재 단계 종료, RESET·새 세션 START → 진행 기록 초기화.
+    - started/ended_elapsed는 타이머 누적 초 → 일시정지 시간이 단계 시간에 들어가지 않는다.
+    """
+
+    __tablename__ = "artwork_exam_stages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["artwork_id", "owner_id"], ["artworks.id", "artworks.owner_id"], ondelete="CASCADE"
+        ),
+        UniqueConstraint("artwork_id", "stage"),
+        UniqueConstraint("artwork_id", "position"),
+        CheckConstraint(
+            f"target_minutes BETWEEN 1 AND {MAX_WORK_MINUTES}", name="target_minutes_range"
+        ),
+        CheckConstraint("position >= 0", name="position_nonnegative"),
+        CheckConstraint(
+            "ended_elapsed IS NULL OR (started_elapsed IS NOT NULL"
+            " AND ended_elapsed >= started_elapsed)",
+            name="ended_after_started",
+        ),
+        CheckConstraint("(started_elapsed IS NULL) = (started_at IS NULL)", name="started_pair"),
+        CheckConstraint("(ended_elapsed IS NULL) = (ended_at IS NULL)", name="ended_pair"),
+    )
+
+    artwork_id: Mapped[uuid.UUID]
+    owner_id: Mapped[uuid.UUID]
+    stage: Mapped[ArtworkExamStageCode] = mapped_column(enum_column(ArtworkExamStageCode, "stage"))
+    position: Mapped[int] = mapped_column(Integer)
+    target_minutes: Mapped[int] = mapped_column(Integer)
+    started_elapsed: Mapped[int | None] = mapped_column(Integer)
+    ended_elapsed: Mapped[int | None] = mapped_column(Integer)
+    started_at: Mapped[datetime | None]
+    ended_at: Mapped[datetime | None]
 
 
 class ArtworkPhoto(UUIDPrimaryKeyMixin, TimestampMixin, Base):

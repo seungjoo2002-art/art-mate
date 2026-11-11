@@ -27,6 +27,7 @@ from app.models.enums import (
     ArtworkWorkCategory,
     CommunityReportStatus,
     ModerationAction,
+    PostCategory,
     PracticalType,
     ReferenceReviewStatus,
     ReportTarget,
@@ -81,8 +82,8 @@ WRITE = AUTH_ERRORS | error_responses(404, 409, 422)
 LIMITED = WRITE | error_responses(429)
 
 
-def _community(session, settings, shared) -> CommunityService:  # type: ignore[no-untyped-def]
-    return CommunityService(session, settings, shared)
+def _community(session, settings, shared, photos=None) -> CommunityService:  # type: ignore[no-untyped-def]
+    return CommunityService(session, settings, shared, photos)
 
 
 # ============================================================================ 공유 동의
@@ -329,6 +330,13 @@ async def review_candidates(
 
 PracticalQ = Annotated[list[PracticalType] | None, Query()]
 CategoryQ = Annotated[list[ArtworkWorkCategory] | None, Query()]
+PostCategoryQ = Annotated[
+    list[PostCategory] | None,
+    Query(
+        description="VER.2 게시판 분류 (여러 개 OR): PRACTICE_QUESTION / FEEDBACK_REQUEST / "
+        "ARTWORK_SHARE / FREE"
+    ),
+]
 
 
 @community.get(
@@ -347,6 +355,7 @@ async def feed(
     practical_type: PracticalQ = None,
     work_category: CategoryQ = None,
     academy_id: uuid.UUID | None = None,
+    category: PostCategoryQ = None,
 ) -> Page[PostRead]:
     items, total = await _community(session, settings, shared).feed(
         viewer,
@@ -355,15 +364,19 @@ async def feed(
         practical_types=practical_type or [],
         work_categories=work_category or [],
         academy_id=academy_id,
+        categories=category or [],
     )
     return Page(items=items, total=total, limit=pagination.limit, offset=pagination.offset)
 
 
 @community.post(
     "/posts",
-    summary="게시물 작성 (학생, 본인 작품)",
-    description="작품의 COMMUNITY 공유 동의가 있어야 한다 (409 SHARING_CONSENT_REQUIRED). "
-    "작품당 게시물 1개 (409 POST_ALREADY_EXISTS). 하루 작성 수 제한 (429).",
+    summary="게시물 작성 (학생)",
+    description="작품 게시물: 작품의 COMMUNITY 공유 동의 필요 (409 SHARING_CONSENT_REQUIRED), "
+    "작품당 1개 (409 POST_ALREADY_EXISTS), photo_id로 공유할 사진 선택 "
+    "(생략 시 완성 대표 사진, 없으면 409 PHOTO_SELECTION_REQUIRED). "
+    "VER.2 사진 없는 글: artwork_id 생략, 본문 필수, ARTWORK_SHARE 불가. "
+    "하루 작성 수 제한 (429).",
     status_code=status.HTTP_201_CREATED,
     responses=LIMITED,
 )
@@ -374,8 +387,11 @@ async def create_post(
     session: DbSession,
     settings: AppSettings,
     shared: SharedStorage,
+    photos: OptionalStorage,
 ) -> PostRead:
-    return await _community(session, settings, shared).create_post(author, data, user.access_token)
+    return await _community(session, settings, shared, photos).create_post(
+        author, data, user.access_token
+    )
 
 
 @community.get("/posts/me", summary="내 게시물 (숨김 포함)", responses=READ)
@@ -429,8 +445,9 @@ async def update_post(
     session: DbSession,
     settings: AppSettings,
     shared: SharedStorage,
+    photos: OptionalStorage,
 ) -> PostRead:
-    svc = _community(session, settings, shared)
+    svc = _community(session, settings, shared, photos)
     return await svc.update_post(author, post_id, data, user.access_token)
 
 
@@ -438,14 +455,20 @@ async def update_post(
     "/posts/{post_id}",
     summary="게시물 삭제 (작성자)",
     description="게시물만 삭제한다. "
-    "작품 공유 동의는 그대로이며 /artworks/{id}/sharing에서 철회한다.",
+    "작품 공유 동의는 그대로이며 /artworks/{id}/sharing에서 철회한다. "
+    "VER.2: 게시물용으로 고른 사진의 공유 이미지는 함께 삭제된다.",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=WRITE,
 )
 async def delete_post(
-    post_id: uuid.UUID, author: ActiveProfile, session: DbSession, settings: AppSettings
+    post_id: uuid.UUID,
+    author: ActiveProfile,
+    user: CurrentUser,
+    session: DbSession,
+    settings: AppSettings,
+    shared: SharedStorage,
 ) -> None:
-    await _community(session, settings, None).delete_post(author, post_id)
+    await _community(session, settings, shared).delete_post(author, post_id, user.access_token)
 
 
 @community.put("/posts/{post_id}/like", summary="좋아요", responses=READ)

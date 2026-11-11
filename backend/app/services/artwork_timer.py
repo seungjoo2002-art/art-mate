@@ -28,6 +28,7 @@ from app.models.enums import TimerEventType, TimerState, TimeSource
 from app.models.profile import Profile
 from app.schemas.artworks import TimerEventCreate, TimerEventRead, TimerRead
 from app.services.artworks import ArtworkService
+from app.services.exam_stages import latest_boundary, on_timer_event
 
 MAX_SECONDS = MAX_WORK_MINUTES * 60
 CLOCK_SKEW = timedelta(minutes=2)
@@ -129,6 +130,10 @@ class ArtworkTimerService:
             ],
         )
 
+    async def read(self, artwork: Artwork) -> TimerRead:
+        """이미 권한을 확인한 작품의 현재 타이머 상태."""
+        return self._read(artwork, replay(await self._events(artwork.id)), clock.utc_now())
+
     async def get(self, owner: Profile, artwork_id: uuid.UUID) -> TimerRead:
         artwork = await self.artworks.owned(owner, artwork_id)
         return self._read(artwork, replay(await self._events(artwork.id)), clock.utc_now())
@@ -155,6 +160,13 @@ class ArtworkTimerService:
                 code=ErrorCode.TIMER_INVALID_TIME,
             )
         at = min(at, now)
+        boundary = await latest_boundary(self.session, artwork.id)
+        if boundary is not None and at < boundary and data.event != TimerEventType.RESET:
+            # 단계 전환 뒤에 그보다 이른 시각의 이벤트(오프라인 큐 등)가 오면 시간 역전
+            raise UnprocessableError(
+                "occurred_at is earlier than the last exam stage change",
+                code=ErrorCode.TIMER_INVALID_TIME,
+            )
         r.apply(data.event, at)
         elapsed = r.elapsed_at(at)
         if data.event != TimerEventType.RESET and elapsed > MAX_SECONDS:
@@ -172,6 +184,8 @@ class ArtworkTimerService:
             elapsed_seconds=elapsed,
         )
         self.session.add(event)
+        # VER.2 실기시험 단계: START → 첫 단계 시작, STOP → 현재 단계 종료, RESET → 초기화
+        await on_timer_event(self.session, artwork.id, data.event, elapsed, at)
         if data.event == TimerEventType.STOP:
             artwork.actual_minutes = min(MAX_WORK_MINUTES, max(1, math.ceil(elapsed / 60)))
             artwork.time_source = TimeSource.TIMER

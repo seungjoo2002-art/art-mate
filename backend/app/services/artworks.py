@@ -58,6 +58,7 @@ from app.integrations.supabase.storage import (
 )
 from app.models.academy_class import AcademyClass
 from app.models.artwork import Artwork, ArtworkPhoto
+from app.models.community import SharedArtworkImage
 from app.models.enums import (
     ARTWORK_STAGE_ORDER,
     ArtworkProgress,
@@ -96,7 +97,7 @@ from app.services.access import AccessService, managed_student_ids
 from app.services.ai_cleanup import purge_for_recordings
 from app.services.images import check_declared_file, inspect_image, storage_extension
 from app.services.practice_links import link_artwork
-from app.services.sharing import withdraw_artwork_sharing
+from app.services.sharing import retire_post_images, withdraw_artwork_sharing
 
 logger = logging.getLogger(__name__)
 
@@ -804,6 +805,10 @@ class ArtworkService:
             replaced.is_representative = False
             replaced.storage_cleanup_pending = True
             await self.session.flush()
+            # VER.2: 교체된 사진으로 만든 게시물 이미지는 내림 (게시물은 남고 사진만 빠짐)
+            await retire_post_images(
+                self.session, SharedArtworkImage.source_photo_id == replaced.id
+            )
 
         has_representative = (
             await self.session.execute(
@@ -866,6 +871,8 @@ class ArtworkService:
         photo.is_representative = False
         photo.storage_cleanup_pending = True
         await self.session.flush()
+        # VER.2: 이 사진으로 만든 게시물 이미지는 내림 (게시물은 남고 사진만 빠짐)
+        await retire_post_images(self.session, SharedArtworkImage.source_photo_id == photo.id)
         if was_representative:
             # 같은 단계의 가장 먼저 올린 사진이 대표를 이어받는다
             successor = (

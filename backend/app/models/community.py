@@ -48,12 +48,14 @@ from app.models.enums import (
     CommunityReportStatus,
     ConsentGrantor,
     ModerationAction,
+    PostCategory,
     PostStatus,
     PracticalType,
     ReferenceReviewStatus,
     ReferenceSetStatus,
     ReportReason,
     ReportTarget,
+    SharedImageKind,
     SharedImageStatus,
     SharingPurpose,
     SharingScope,
@@ -103,7 +105,11 @@ class ArtworkSharingConsent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class SharedArtworkImage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """공유용 파생 이미지 (원본과 다른 비공개 버킷). 작품당 살아 있는 이미지 1개."""
+    """공유용 파생 이미지 (원본과 다른 비공개 버킷).
+
+    PRIMARY(작품 대표 FINAL 사진, 작품당 살아 있는 것 1개)와
+    POST(게시물에 고른 사진, 원본 사진당 1개).
+    """
 
     __tablename__ = "shared_artwork_images"
     __table_args__ = (
@@ -111,7 +117,14 @@ class SharedArtworkImage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "uq_shared_artwork_images_live",
             "artwork_id",
             unique=True,
-            postgresql_where=text("status IN ('PENDING', 'ACTIVE')"),
+            postgresql_where=text("status IN ('PENDING', 'ACTIVE') AND kind = 'PRIMARY'"),
+        ),
+        Index(
+            "uq_shared_artwork_images_live_post",
+            "artwork_id",
+            "source_photo_id",
+            unique=True,
+            postgresql_where=text("status IN ('PENDING', 'ACTIVE') AND kind = 'POST'"),
         ),
         Index(
             "ix_shared_artwork_images_owner_cleanup",
@@ -132,6 +145,11 @@ class SharedArtworkImage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     status: Mapped[SharedImageStatus] = mapped_column(
         enum_column(SharedImageStatus, "status"), default=SharedImageStatus.PENDING
+    )
+    kind: Mapped[SharedImageKind] = mapped_column(
+        enum_column(SharedImageKind, "kind"),
+        server_default=SharedImageKind.PRIMARY.value,
+        default=SharedImageKind.PRIMARY,
     )
     # "{random}/{image_id}.jpg" (서버 생성, 사용자·작품 ID 미포함 → URL로 작성자 식별 불가)
     storage_path: Mapped[str] = mapped_column(String(512), unique=True)
@@ -231,11 +249,25 @@ class CommunityPost(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
         Index("ix_community_posts_feed", "status", "created_at"),
         Index("ix_community_posts_author", "author_id", "created_at"),
+        # VER.2: 카테고리 필터
+        Index("ix_community_posts_category_feed", "category", "status", "created_at"),
         CheckConstraint("length(btrim(title)) > 0", name="title_not_blank"),
         CheckConstraint("like_count >= 0 AND comment_count >= 0", name="counts_nonnegative"),
+        # VER.2: 작품 공유 게시물은 작품 필수, 사진 없는 글은 본문 필수
+        CheckConstraint(
+            "category <> 'ARTWORK_SHARE' OR artwork_id IS NOT NULL", name="share_has_artwork"
+        ),
+        CheckConstraint(
+            "artwork_id IS NOT NULL OR (body IS NOT NULL AND length(btrim(body)) > 0)",
+            name="text_post_has_body",
+        ),
+        CheckConstraint("photo_id IS NULL OR artwork_id IS NOT NULL", name="photo_needs_artwork"),
     )
 
-    artwork_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artworks.id", ondelete="CASCADE"))
+    # VER.2: NULL = 사진 없는 글 (작품·공유 동의 없이 작성)
+    artwork_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artworks.id", ondelete="CASCADE")
+    )
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"))
     image_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("shared_artwork_images.id", ondelete="SET NULL")
@@ -258,6 +290,20 @@ class CommunityPost(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     deleted_at: Mapped[datetime | None]
     # v0.9 F-6: 작품에 대해 묻고 싶은 질문 (선택)
     question: Mapped[str | None] = mapped_column(String(1000))
+    # VER.2 게시판 분류 (기존 게시물: question 있으면 FEEDBACK_REQUEST, 없으면 ARTWORK_SHARE)
+    category: Mapped[PostCategory] = mapped_column(
+        enum_column(PostCategory, "category"),
+        server_default=PostCategory.ARTWORK_SHARE.value,
+        default=PostCategory.ARTWORK_SHARE,
+    )
+    # VER.2 작품에서 고른 사진 (NULL = 기본 대표 사진). 사진이 지워지면 NULL
+    photo_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artwork_photos.id", ondelete="SET NULL")
+    )
+    # VER.2 사진 없는 글의 작성자 표시 (작품 게시물은 공유 동의의 표시 방식을 따른다)
+    author_display: Mapped[AuthorDisplay | None] = mapped_column(
+        enum_column(AuthorDisplay, "author_display")
+    )
 
 
 class CommunityComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):

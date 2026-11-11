@@ -14,6 +14,7 @@ from app.models.enums import (
     CommunityReportStatus,
     ConsentGrantor,
     ModerationAction,
+    PostCategory,
     PostStatus,
     PracticalType,
     ReferenceReason,
@@ -172,14 +173,44 @@ class CandidateRead(BaseModel):
 
 
 class PostCreate(InputModel):
-    artwork_id: uuid.UUID
+    artwork_id: uuid.UUID | None = Field(
+        default=None,
+        description="VER.2: 생략하면 사진 없는 글 (공유 동의 불필요, 본문 필수, "
+        "작품 공유 분류 불가)",
+    )
     title: Text100
     body: Text2000 | None = None
     question: Text1000 | None = Field(
         default=None, description="작품에 대해 묻고 싶은 질문 (v0.9, 선택)"
     )
+    category: PostCategory | None = Field(
+        default=None,
+        description="VER.2 게시판 분류. 생략 시 작품 게시물은 question이 있으면 FEEDBACK_REQUEST, "
+        "없으면 ARTWORK_SHARE / 사진 없는 글은 FREE",
+    )
+    photo_id: uuid.UUID | None = Field(
+        default=None,
+        description="VER.2: 작품의 사진(스케치·중간·완성) 중 공유할 1장. 생략하면 완성 대표 사진",
+    )
+    author_display: AuthorDisplay | None = Field(
+        default=None,
+        description="사진 없는 글의 작성자 표시 (기본 NAME). 작품 게시물은 공유 동의 설정을 따른다",
+    )
     practical_type: PracticalType | None = Field(default=None, description="생략하면 작품 값")
     work_category: ArtworkWorkCategory | None = Field(default=None, description="생략하면 작품 값")
+
+    @model_validator(mode="after")
+    def _shape(self) -> "PostCreate":
+        if self.artwork_id is None:
+            if self.photo_id is not None:
+                raise ValueError("photo_id needs artwork_id")
+            if self.category == PostCategory.ARTWORK_SHARE:
+                raise ValueError("ARTWORK_SHARE posts need artwork_id")
+            if not self.body:
+                raise ValueError("body is required for posts without an artwork")
+        elif self.author_display is not None:
+            raise ValueError("author_display is only for posts without an artwork")
+        return self
 
 
 class PostUpdate(InputModel):
@@ -188,6 +219,13 @@ class PostUpdate(InputModel):
     question: Text1000 | None = None
     practical_type: PracticalType | None = None
     work_category: ArtworkWorkCategory | None = None
+    category: PostCategory | None = Field(default=None, description="VER.2 분류 변경")
+    photo_id: uuid.UUID | None = Field(
+        default=None, description="VER.2 공유 사진 변경 (작품 게시물). null이면 완성 대표 사진으로"
+    )
+    author_display: AuthorDisplay | None = Field(
+        default=None, description="사진 없는 글의 작성자 표시 변경"
+    )
 
 
 class VisibilityRead(BaseModel):
@@ -201,6 +239,13 @@ class PostRead(BaseModel):
     title: str
     body: str | None
     question: str | None = Field(default=None, description="작성자의 질문 (v0.9)")
+    category: PostCategory = Field(
+        default=PostCategory.ARTWORK_SHARE, description="VER.2 게시판 분류"
+    )
+    has_artwork: bool = Field(default=True, description="작품 게시물(사진 있음) 여부")
+    photo_id: uuid.UUID | None = Field(
+        default=None, description="고른 사진 (본인 게시물일 때만, null이면 대표 사진)"
+    )
     practical_type: PracticalType | None
     work_category: ArtworkWorkCategory | None
     author: AuthorRead

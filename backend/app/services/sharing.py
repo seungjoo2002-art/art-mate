@@ -55,6 +55,7 @@ from app.models.enums import (
     MembershipStatus,
     PhotoStatus,
     PostStatus,
+    SharedImageKind,
     SharedImageStatus,
     SharingPurpose,
     SharingScope,
@@ -189,6 +190,8 @@ async def withdraw_artwork_sharing(
             )
             .values(status=PostStatus.DELETED, deleted_at=now, updated_at=func.now())
         )
+        # VER.2: 게시물용으로 고른 사진의 공유 이미지는 커뮤니티 철회와 함께 삭제
+        await retire_post_images(session, SharedArtworkImage.artwork_id == artwork_id)
     if SharingPurpose.REFERENCE in purposes:
         await session.execute(
             delete(ReferenceRecommendation).where(
@@ -217,6 +220,40 @@ async def withdraw_artwork_sharing(
                 updated_at=func.now(),
             )
         )
+
+
+async def retire_post_images(session: AsyncSession, condition: Any) -> int:
+    """게시물용(POST) 공유 이미지 삭제 처리 (파일은 cleanup_storage가 정리). 호출자가 commit.
+
+    원본 사진이 지워지거나 교체됐을 때, 게시물을 지웠을 때, 커뮤니티 공유를 철회했을 때 쓴다.
+    그 이미지를 쓰던 게시물은 남고 이미지만 사라진다 (작성자가 다른 사진을 다시 고를 수 있음).
+    """
+    retired = list(
+        (
+            await session.execute(
+                update(SharedArtworkImage)
+                .where(
+                    condition,
+                    SharedArtworkImage.kind == SharedImageKind.POST,
+                    SharedArtworkImage.status != SharedImageStatus.DELETED,
+                )
+                .values(
+                    status=SharedImageStatus.DELETED,
+                    deleted_at=clock.utc_now(),
+                    storage_cleanup_pending=True,
+                    updated_at=func.now(),
+                )
+                .returning(SharedArtworkImage.id)
+            )
+        ).scalars()
+    )
+    if retired:
+        await session.execute(
+            update(CommunityPost)
+            .where(CommunityPost.image_id.in_(retired))
+            .values(image_id=None, photo_id=None, updated_at=func.now())
+        )
+    return len(retired)
 
 
 class SharingService:
@@ -258,10 +295,12 @@ class SharingService:
         return {c.purpose: c for c in rows}
 
     async def live_image(self, artwork_id: uuid.UUID) -> SharedArtworkImage | None:
+        """작품 대표(PRIMARY) 공유 이미지."""
         return (
             await self.session.execute(
                 select(SharedArtworkImage).where(
                     SharedArtworkImage.artwork_id == artwork_id,
+                    SharedArtworkImage.kind == SharedImageKind.PRIMARY,
                     SharedArtworkImage.status == SharedImageStatus.ACTIVE,
                 )
             )
@@ -307,7 +346,15 @@ class SharingService:
         return [consent_read(c) for c in rows]
 
     async def _source_photo(self, artwork: Artwork) -> ArtworkPhoto:
-        photo = (
+        photo = await self._final_photo(artwork)
+        if photo is None:
+            raise ConflictError(
+                "Upload a FINAL stage photo before sharing", code=ErrorCode.FINAL_PHOTO_REQUIRED
+            )
+        return photo
+
+    async def _final_photo(self, artwork: Artwork) -> ArtworkPhoto | None:
+        return (
             await self.session.execute(
                 select(ArtworkPhoto).where(
                     ArtworkPhoto.artwork_id == artwork.id,
@@ -317,11 +364,48 @@ class SharingService:
                 )
             )
         ).scalar_one_or_none()
-        if photo is None:
-            raise ConflictError(
-                "Upload a FINAL stage photo before sharing", code=ErrorCode.FINAL_PHOTO_REQUIRED
+
+    async def _live_post_image(
+        self, artwork_id: uuid.UUID, photo_id: uuid.UUID
+    ) -> SharedArtworkImage | None:
+        return (
+            await self.session.execute(
+                select(SharedArtworkImage).where(
+                    SharedArtworkImage.artwork_id == artwork_id,
+                    SharedArtworkImage.source_photo_id == photo_id,
+                    SharedArtworkImage.kind == SharedImageKind.POST,
+                    SharedArtworkImage.status == SharedImageStatus.ACTIVE,
+                )
             )
-        return photo
+        ).scalar_one_or_none()
+
+    async def ensure_post_image(
+        self, owner: Profile, artwork: Artwork, photo_id: uuid.UUID, token: str
+    ) -> SharedArtworkImage:
+        """게시물에 고른 사진(스케치·중간·완성)의 공유 이미지 (VER.2).
+
+        사진은 이 작품의 ACTIVE 사진이어야 한다.
+        대표 이미지의 원본과 같으면 대표 이미지를 그대로 쓴다.
+        """
+        photo = (
+            await self.session.execute(
+                select(ArtworkPhoto).where(
+                    ArtworkPhoto.id == photo_id,
+                    ArtworkPhoto.artwork_id == artwork.id,
+                    ArtworkPhoto.owner_id == owner.id,
+                    ArtworkPhoto.status == PhotoStatus.ACTIVE,
+                )
+            )
+        ).scalar_one_or_none()
+        if photo is None:
+            raise NotFoundError("Photo not found in this artwork")
+        primary = await self.live_image(artwork.id)
+        if primary is not None and primary.source_photo_id == photo.id:
+            return primary
+        existing = await self._live_post_image(artwork.id, photo.id)
+        if existing is not None:
+            return existing
+        return await self._create_image(owner, artwork, photo, SharedImageKind.POST, token)
 
     async def _ensure_image(
         self, owner: Profile, artwork: Artwork, token: str
@@ -329,15 +413,27 @@ class SharingService:
         existing = await self.live_image(artwork.id)
         if existing is not None:
             return existing
+        photo = await self._source_photo(artwork)
+        return await self._create_image(owner, artwork, photo, SharedImageKind.PRIMARY, token)
+
+    async def _create_image(
+        self,
+        owner: Profile,
+        artwork: Artwork,
+        photo: ArtworkPhoto,
+        kind: SharedImageKind,
+        token: str,
+    ) -> SharedArtworkImage:
+        """원본 사진 → 파생 이미지 (축소·메타데이터 제거) → 공유 버킷. 커밋한다."""
         if self.photo_storage is None or self.shared_storage is None:
             raise StorageNotConfiguredError()
-        photo = await self._source_photo(artwork)
         image_id = uuid.uuid4()
         image = SharedArtworkImage(
             id=image_id,
             artwork_id=artwork.id,
             owner_id=owner.id,
             source_photo_id=photo.id,
+            kind=kind,
             status=SharedImageStatus.PENDING,
             # 경로에 사용자·작품 ID를 넣지 않는다 (익명 공개 시 URL로 작성자를 알 수 없도록)
             storage_path=f"{uuid.uuid4().hex}/{image_id.hex}.jpg",
@@ -413,8 +509,25 @@ class SharingService:
                     code=ErrorCode.SHARING_SCOPE_INVALID,
                 )
             academy_id = artwork.academy_id
-        await self._source_photo(artwork)  # 공유 가능 조건을 이미지 작업 전에 확인
-        await self._ensure_image(owner, artwork, token)
+        # 공유 가능 조건을 이미지 작업 전에 확인. 참고작은 완성(FINAL) 대표 사진 필수.
+        # 커뮤니티는 VER.2부터 사진 아무거나 1장 이상이면 동의 가능 (게시물에서 사진을 고름)
+        final = await self._final_photo(artwork)
+        if purpose == SharingPurpose.REFERENCE or final is not None:
+            await self._source_photo(artwork)
+            await self._ensure_image(owner, artwork, token)
+        else:
+            any_photo = (
+                await self.session.execute(
+                    select(ArtworkPhoto.id).where(
+                        ArtworkPhoto.artwork_id == artwork.id,
+                        ArtworkPhoto.status == PhotoStatus.ACTIVE,
+                    )
+                )
+            ).first()
+            if any_photo is None:
+                raise ConflictError(
+                    "Upload a photo before sharing", code=ErrorCode.FINAL_PHOTO_REQUIRED
+                )
 
         artwork = await self._artwork(owner, artwork_id, lock=True)  # 동의 변경 직렬화
         current = (await self._consents(artwork.id)).get(purpose)
