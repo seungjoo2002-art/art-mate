@@ -103,6 +103,10 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         }
       />
       <main className={styles.body}>
+        {/* 진행 중인 실기시험 (끝나면 STOP으로 actual_minutes가 저장됨) */}
+        {artwork.work_category === 'MOCK_EXAM' && !artwork.actual_minutes && (
+          <Button onClick={() => navigate(`/artworks/${artwork.id}/exam`)}>시험 이어서 하기</Button>
+        )}
         {(artwork.topic || artwork.description) && (
           <Card variant="soft" className={styles.topic}>
             <span className={styles.topicLabel}>오늘의 주제</span>
