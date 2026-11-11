@@ -4,8 +4,7 @@ import { Button, Card, Chip, PageIntro, SegmentedTabs } from '../../components/u
 import { listArtworks } from '../../features/artworks/api'
 import ArtworkCard from '../../features/artworks/components/ArtworkCard'
 import MyPostsFeed from '../../features/community/components/MyPostsFeed'
-import GrowthOverview from '../../features/growth/components/GrowthOverview'
-import RecentFeedbacks from '../../features/growth/components/RecentFeedbacks'
+import AnalysisReport from '../../features/growth/components/AnalysisReport'
 import { useAsync } from '../../hooks/useAsync'
 import { useOptions } from '../../hooks/useOptions'
 import { toErrorMessage } from '../../utils/errorMessages'
@@ -41,15 +40,7 @@ export default function ArchivePage() {
         />
       )}
       {tab === 'feed' && <MyPostsFeed />}
-      {tab === 'report' && (
-        <>
-          <GrowthOverview />
-          <section className={styles.section}>
-            <h2 className={styles.heading}>최근 확정한 첨삭</h2>
-            <RecentFeedbacks />
-          </section>
-        </>
-      )}
+      {tab === 'report' && <AnalysisReport />}
     </>
   )
 }

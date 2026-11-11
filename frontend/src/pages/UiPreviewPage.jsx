@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { GraduationCap, House, Lock, Mail, Palette, Target, Timer, User } from 'lucide-react'
 import TopBar from '../components/layout/TopBar'
+import MentionTrendChart from '../features/growth/components/MentionTrendChart'
 import {
   Badge,
   Button,
@@ -29,6 +30,20 @@ export default function UiPreviewPage() {
           title={'어떤 목적으로\n이용하시나요?'}
           description="선택한 유형에 맞는 성장 경험을 준비해 드릴게요."
         />
+
+        <Section title="MentionTrendChart (분석 리포트 · 예시 데이터)">
+          <Card>
+            <MentionTrendChart
+              points={[
+                { label: '10/4', title: '정물 기초디자인 01', positive: 1, improve: 3 },
+                { label: '10/12', title: '정물 기초디자인 02', positive: 2, improve: 2 },
+                { label: '10/20', title: '모의시험 1', positive: 1, improve: 4 },
+                { label: '11/2', title: '정물 기초디자인 03', positive: 3, improve: 2 },
+                { label: '11/9', title: '모의시험 2', positive: 4, improve: 1 },
+              ]}
+            />
+          </Card>
+        </Section>
 
         <Section title="Button">
           <Button withArrow>시작하기</Button>

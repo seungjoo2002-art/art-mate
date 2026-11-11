@@ -1,0 +1,155 @@
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.eyebrow {
+  margin-bottom: calc(var(--space-5) * -1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.heading {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5);
+}
+
+.cheerLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+}
+
+.cheerTitle {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+}
+
+.cardTitle {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.headline {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  line-height: 1.5;
+}
+
+.muted {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--color-text-sub);
+}
+
+.muted strong {
+  color: var(--color-text);
+}
+
+.small {
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.statValue {
+  font-size: var(--text-2xl);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.emptyTitle {
+  font-weight: var(--weight-bold);
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row + .row {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.rowTitle {
+  font-weight: var(--weight-bold);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.source {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-primary-soft);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+}
