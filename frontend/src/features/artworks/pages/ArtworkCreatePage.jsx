@@ -8,7 +8,13 @@ import { labelOf } from '../../../lib/options'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { createArtwork } from '../api'
 import ExamTargetsCard from '../components/ExamTargetsCard'
-import { loadStageTargets, saveStageTargets, totalMinutes } from '../exam'
+import {
+  loadStageTargets,
+  newExamSession,
+  saveExamSession,
+  saveStageTargets,
+  totalMinutes,
+} from '../exam'
 import styles from './ArtworkPage.module.css'
 
 /** 작품명을 비우면 쓰는 임시 제목. 예: "기초디자인 · 11월 11일" */
@@ -52,7 +58,12 @@ export default function ArtworkCreatePage() {
         workCategory: exam ? 'MOCK_EXAM' : undefined,
         timeLimitMinutes: exam ? totalMinutes(stageTargets) : undefined,
       })
-      navigate(`/artworks/${artwork.id}`, { replace: true })
+      if (exam) {
+        saveExamSession(artwork.id, newExamSession(stageTargets))
+        navigate(`/artworks/${artwork.id}/exam`, { replace: true })
+      } else {
+        navigate(`/artworks/${artwork.id}`, { replace: true })
+      }
     } catch (error) {
       setFormError(toErrorMessage(error))
       setSubmitting(false)

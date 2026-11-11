@@ -57,6 +57,10 @@ const API_MESSAGES = {
   SHARING_SCOPE_INVALID: '이 작품은 선택한 범위로 공유할 수 없어요.',
   COMMENT_NOT_FEEDBACK: '작품 피드백 댓글만 채택할 수 있어요.',
   COMMENT_ALREADY_ADOPTED: '이미 채택한 피드백이에요.',
+  // 작품 타이머 (docs/frontend-integration-v0.9.md §2.1)
+  TIMER_INVALID_TRANSITION: '타이머 상태가 바뀌었어요. 화면을 새로고침해 주세요.',
+  TIMER_INVALID_TIME: '기기 시간이 맞지 않아요. 시간 설정을 확인해 주세요.',
+  TIMER_TOO_LONG: '24시간을 넘긴 시험은 이어서 기록할 수 없어요.',
   STORAGE_NOT_CONFIGURED: '서버 사진 저장소 설정이 필요해요. 백엔드 담당자에게 문의해 주세요.',
 }
 

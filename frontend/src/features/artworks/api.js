@@ -42,6 +42,13 @@ export const deleteArtwork = (artworkId) => api(`/artworks/${artworkId}`, { meth
 export const deletePhoto = (artworkId, photoId) =>
   api(`/artworks/${artworkId}/photos/${photoId}`, { method: 'DELETE' })
 
+/** 작품 타이머 (v0.9 F-2): 서버는 이벤트 기록·계산만, 화면이 초를 셈 */
+export const getTimer = (artworkId) => api(`/artworks/${artworkId}/timer`)
+
+/** event: START | PAUSE | RESUME | STOP | RESET. STOP하면 actual_minutes 저장 */
+export const sendTimerEvent = (artworkId, event) =>
+  api(`/artworks/${artworkId}/timer/events`, { method: 'POST', body: { event } })
+
 export const getPhotoUrl = (artworkId, photoId) =>
   api(`/artworks/${artworkId}/photos/${photoId}/url`)
 

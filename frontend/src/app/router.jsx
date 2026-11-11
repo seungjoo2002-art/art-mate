@@ -23,6 +23,8 @@ import ProfileEditPage from '../features/auth/pages/ProfileEditPage'
 import SetupPage from '../features/auth/pages/SetupPage'
 import SignupPage from '../features/auth/pages/SignupPage'
 import NotFoundPage from '../pages/NotFoundPage'
+import ExamProgressPage from '../pages/exam/ExamProgressPage'
+import ExamResultPage from '../pages/exam/ExamResultPage'
 import UiPreviewPage from '../pages/UiPreviewPage'
 import ArchivePage from '../pages/student/ArchivePage'
 import CommunityPage from '../pages/student/CommunityPage'
@@ -75,6 +77,8 @@ export const router = createBrowserRouter([
             element: <ArtworkDetailPage renderTimeline={renderArtworkTimeline} />,
           },
           { path: '/artworks/:artworkId/recordings/new', element: <FeedbackRecordPage /> },
+          { path: '/artworks/:artworkId/exam', element: <ExamProgressPage /> },
+          { path: '/artworks/:artworkId/exam/result', element: <ExamResultPage /> },
           { path: '/feedbacks/:feedbackId', element: <FeedbackReviewPage /> },
           { path: '/artworks/:artworkId/notes/new', element: <NoteFormPage /> },
           { path: '/feedback-notes/:noteId/edit', element: <NoteFormPage /> },
