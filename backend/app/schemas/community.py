@@ -274,6 +274,10 @@ class BookmarkState(BaseModel):
 
 class CommentCreate(InputModel):
     body: Text1000
+    is_anonymous: bool = Field(
+        default=False,
+        description="VER.2 익명 댓글: 다른 사람에게 '익명 학생'으로 보임 (본인은 is_me로 구분)",
+    )
     comment_type: CommentType = Field(
         default=CommentType.GENERAL,
         description="v0.9: GENERAL(일반 의견) / FEEDBACK(작품 피드백, 작성자가 채택 가능)",
@@ -299,6 +303,7 @@ class CommentUpdate(InputModel):
     body: Text1000
     comment_type: CommentType | None = None
     categories: list[WeaknessCategory] | None = Field(default=None, max_length=5)
+    is_anonymous: bool | None = None
 
 
 class CommentAdopt(InputModel):
@@ -347,6 +352,9 @@ class AdminReportRead(BaseModel):
     detail: str | None
     status: CommunityReportStatus
     reporter_id: uuid.UUID
+    target_author_id: uuid.UUID | None = Field(
+        default=None, description="VER.2 신고 대상 작성자 (익명 댓글·글 포함, 관리자에게만)"
+    )
     target_status: str
     target_preview: str = Field(description="게시물 제목 또는 댓글 앞부분")
     open_report_count: int = Field(description="같은 대상의 미처리 신고 수")

@@ -15,6 +15,7 @@ from app.core.security import CurrentUser
 from app.models.enums import UserType
 from app.models.profile import Profile
 from app.schemas.academy import JoinRequestRead, MyJoinRequest
+from app.schemas.artworks import ArtworkExamPlan
 from app.schemas.common import Page, PaginationQuery
 from app.schemas.goals import (
     LearningContext,
@@ -23,7 +24,7 @@ from app.schemas.goals import (
     TargetUniversityRead,
     TargetUniversityUpdate,
 )
-from app.schemas.user import MeRead, ProfileCreate, ProfileRead, ProfileUpdate
+from app.schemas.user import MeRead, ProfileCreate, ProfileRead, ProfileUpdate, UserExamDefaultsRead
 from app.services.goals import GoalService
 from app.services.memberships import MembershipService
 from app.services.profiles import ProfileService
@@ -34,7 +35,11 @@ Student = Annotated[Profile, Depends(require_user_types(UserType.STUDENT))]
 
 
 def _me(profile: Profile, email: str | None) -> MeRead:
-    return MeRead(**ProfileRead.model_validate(profile).model_dump(), email=email)
+    return MeRead(
+        **ProfileRead.model_validate(profile).model_dump(),
+        email=email,
+        real_name=profile.real_name,
+    )
 
 
 @router.get(
@@ -170,3 +175,45 @@ async def delete_target_university(
     target_id: uuid.UUID, owner: Student, session: DbSession
 ) -> None:
     await GoalService(session).delete(owner, target_id)
+
+
+# ============================================================================ VER.2 기본 시험 목표
+# 시간
+
+# 프론트 기존 기본값 (frontend/src/features/artworks/exam.js DEFAULT_STAGE_TARGETS)
+DEFAULT_EXAM_STAGES = [
+    {"stage": "IDEA", "target_minutes": 40},
+    {"stage": "SKETCH", "target_minutes": 80},
+    {"stage": "COLOR", "target_minutes": 180},
+]
+
+
+@router.get(
+    "/me/exam-defaults",
+    summary="내 기본 실기시험 단계 목표 시간 (모든 기기 공통)",
+    description="저장한 적이 없으면 source=DEFAULT와 앱 기본값. 실기 탭·마이페이지에서 같이 쓴다.",
+    responses=AUTH_ERRORS,
+)
+async def get_exam_defaults(owner: Student) -> UserExamDefaultsRead:
+    if owner.exam_stage_targets:
+        return UserExamDefaultsRead(stages=owner.exam_stage_targets, source="ACCOUNT")
+    return UserExamDefaultsRead(stages=DEFAULT_EXAM_STAGES, source="DEFAULT")
+
+
+@router.put(
+    "/me/exam-defaults",
+    summary="기본 실기시험 단계 목표 시간 저장",
+    description="단계 1~4개 (IDEA·SKETCH·COLOR·FINISH, 중복 불가), 단계별 1~1440분. "
+    "기존 localStorage 값(artmate.examStageTargets)은 처음 한 번 이 API로 옮기면 된다.",
+    responses=AUTH_ERRORS | error_responses(422),
+)
+async def put_exam_defaults(
+    data: ArtworkExamPlan, owner: Student, session: DbSession
+) -> UserExamDefaultsRead:
+    profile = await session.get(Profile, owner.id, with_for_update=True)
+    assert profile is not None
+    profile.exam_stage_targets = [
+        {"stage": s.stage.value, "target_minutes": s.target_minutes} for s in data.stages
+    ]
+    await session.commit()
+    return UserExamDefaultsRead(stages=profile.exam_stage_targets, source="ACCOUNT")

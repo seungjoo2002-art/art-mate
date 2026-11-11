@@ -342,6 +342,9 @@ class CommunityComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     categories: Mapped[list[str]] = mapped_column(
         ARRAY(String(20)), server_default=text("'{}'::varchar[]"), default=list
     )
+    # VER.2 익명 댓글: 다른 사람에게는 '익명 학생'으로 보이고 DB에는 작성자 ID를 그대로 둔다
+    # (본인 수정·삭제, 관리자 신고 처리용)
+    is_anonymous: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
 
 
 class CommunityLike(UUIDPrimaryKeyMixin, TimestampMixin, Base):

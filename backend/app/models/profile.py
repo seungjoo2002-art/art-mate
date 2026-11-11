@@ -11,6 +11,7 @@ from sqlalchemy import (
     UniqueConstraint,
     true,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
@@ -43,6 +44,11 @@ class Profile(TimestampMixin, Base):
     learning_goal: Mapped[str | None] = mapped_column(String(500))
     # 학습 목표를 마지막으로 바꾼 시각 (목표 확인 알림 기준)
     learning_goal_updated_at: Mapped[datetime | None]
+    # VER.2 실명 (본인 /users/me 응답에만, 공개 프로필·커뮤니티·강사 화면에는 display_name만)
+    real_name: Mapped[str | None] = mapped_column(String(50))
+    # VER.2 기본 실기시험 단계 목표 [{"stage": "IDEA", "target_minutes": 40}, ...] (NULL = 앱
+    # 기본값)
+    exam_stage_targets: Mapped[list[dict[str, object]] | None] = mapped_column(JSONB)
 
 
 class TargetUniversity(UUIDPrimaryKeyMixin, TimestampMixin, Base):

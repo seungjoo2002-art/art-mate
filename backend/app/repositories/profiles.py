@@ -21,6 +21,7 @@ class ProfileRepository:
         display_name: str,
         user_type: UserType,
         practical_type: PracticalType | None = None,
+        real_name: str | None = None,
     ) -> bool:
         """프로필이 없을 때만 생성한다 (동시·중복 요청에도 안전). 생성했으면 True."""
         stmt = (
@@ -30,6 +31,7 @@ class ProfileRepository:
                 display_name=display_name,
                 user_type=user_type,
                 practical_type=practical_type,
+                real_name=real_name,
             )
             .on_conflict_do_nothing(index_elements=[Profile.id])
             .returning(Profile.id)
