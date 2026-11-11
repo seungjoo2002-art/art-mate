@@ -27,7 +27,12 @@ from app.core.exceptions import ConflictError, ErrorCode, UnprocessableError
 from app.models.artwork import Artwork, ArtworkExamStage
 from app.models.enums import EXAM_STAGE_LABELS, TimerEventType, TimerState
 from app.models.profile import Profile
-from app.schemas.artworks import ExamNext, ExamPlan, ExamRead, ExamStageRead
+from app.schemas.artworks import (
+    ArtworkExamNext,
+    ArtworkExamPlan,
+    ArtworkExamRead,
+    ArtworkExamStageRead,
+)
 
 
 async def stages_of(session: AsyncSession, artwork_id: uuid.UUID) -> list[ArtworkExamStage]:
@@ -92,7 +97,7 @@ class ExamStageService:
         self.session = session
         self.timer = ArtworkTimerService(session, settings)
 
-    async def _read(self, artwork: Artwork, stages: list[ArtworkExamStage]) -> ExamRead:
+    async def _read(self, artwork: Artwork, stages: list[ArtworkExamStage]) -> ArtworkExamRead:
         timer = await self.timer.read(artwork)
         elapsed = timer.elapsed_seconds
         items = []
@@ -104,7 +109,7 @@ class ExamStageService:
             else:
                 spent, status = max(0, elapsed - s.started_elapsed), "ACTIVE"
             items.append(
-                ExamStageRead(
+                ArtworkExamStageRead(
                     stage=s.stage,
                     label=EXAM_STAGE_LABELS[s.stage],
                     position=s.position,
@@ -117,7 +122,7 @@ class ExamStageService:
                 )
             )
         active = current_stage(stages)
-        return ExamRead(
+        return ArtworkExamRead(
             artwork_id=artwork.id,
             stages=items,
             current_stage=active.stage if active else None,
@@ -125,11 +130,13 @@ class ExamStageService:
             timer=timer,
         )
 
-    async def get(self, owner: Profile, artwork_id: uuid.UUID) -> ExamRead:
+    async def get(self, owner: Profile, artwork_id: uuid.UUID) -> ArtworkExamRead:
         artwork = await self.timer.artworks.owned(owner, artwork_id)
         return await self._read(artwork, await stages_of(self.session, artwork.id))
 
-    async def save_plan(self, owner: Profile, artwork_id: uuid.UUID, data: ExamPlan) -> ExamRead:
+    async def save_plan(
+        self, owner: Profile, artwork_id: uuid.UUID, data: ArtworkExamPlan
+    ) -> ArtworkExamRead:
         artwork = await self.timer.artworks.owned(owner, artwork_id, for_update=True)
         stages = await stages_of(self.session, artwork.id)
         started = any(s.started_at is not None for s in stages)
@@ -164,7 +171,9 @@ class ExamStageService:
         await self.session.commit()
         return await self.get(owner, artwork.id)
 
-    async def next_stage(self, owner: Profile, artwork_id: uuid.UUID, data: ExamNext) -> ExamRead:
+    async def next_stage(
+        self, owner: Profile, artwork_id: uuid.UUID, data: ArtworkExamNext
+    ) -> ArtworkExamRead:
         artwork = await self.timer.artworks.owned(owner, artwork_id, for_update=True)
         stages = await stages_of(self.session, artwork.id)
         if not stages:

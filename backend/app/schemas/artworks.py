@@ -6,11 +6,11 @@ from pydantic import AwareDatetime, BaseModel, Field, StringConstraints, model_v
 
 from app.models.artwork import MAX_WORK_MINUTES
 from app.models.enums import (
+    ArtworkExamStageCode,
     ArtworkProgress,
     ArtworkStage,
     ArtworkWorkCategory,
     ArtworkWorkStatus,
-    ExamStage,
     PhotoStatus,
     PracticalType,
     TimerEventType,
@@ -236,33 +236,33 @@ class TimerRead(BaseModel):
 # ============================================================================ VER.2 실기시험 단계
 
 
-class ExamStageTarget(InputModel):
-    stage: ExamStage = Field(
+class ArtworkExamStageTarget(InputModel):
+    stage: ArtworkExamStageCode = Field(
         description="IDEA 아이디어 / SKETCH 스케치 / COLOR 채색 / FINISH 마무리"
     )
     target_minutes: Minutes = Field(description="단계 목표 시간 (분)")
 
 
-class ExamPlan(InputModel):
+class ArtworkExamPlan(InputModel):
     """단계 순서 = 배열 순서. 시작 후에는 같은 구성으로 목표 시간만 바꿀 수 있다."""
 
-    stages: list[ExamStageTarget] = Field(min_length=1, max_length=4)
+    stages: list[ArtworkExamStageTarget] = Field(min_length=1, max_length=4)
 
     @model_validator(mode="after")
-    def _unique(self) -> "ExamPlan":
+    def _unique(self) -> "ArtworkExamPlan":
         if len({s.stage for s in self.stages}) != len(self.stages):
             raise ValueError("duplicate stage")
         return self
 
 
-class ExamNext(InputModel):
-    current_stage: ExamStage = Field(
+class ArtworkExamNext(InputModel):
+    current_stage: ArtworkExamStageCode = Field(
         description="지금 화면의 단계 (서버의 현재 단계와 다르면 409 EXAM_STAGE_CONFLICT)"
     )
 
 
-class ExamStageRead(BaseModel):
-    stage: ExamStage
+class ArtworkExamStageRead(BaseModel):
+    stage: ArtworkExamStageCode
     label: str
     position: int
     target_minutes: int
@@ -273,9 +273,9 @@ class ExamStageRead(BaseModel):
     ended_at: dt.datetime | None
 
 
-class ExamRead(BaseModel):
+class ArtworkExamRead(BaseModel):
     artwork_id: uuid.UUID
-    stages: list[ExamStageRead] = Field(description="계획이 없으면 빈 배열")
-    current_stage: ExamStage | None
+    stages: list[ArtworkExamStageRead] = Field(description="계획이 없으면 빈 배열")
+    current_stage: ArtworkExamStageCode | None
     total_target_minutes: int
     timer: TimerRead = Field(description="기존 작품 타이머 상태 (같은 값)")

@@ -762,7 +762,7 @@ class SharedImageKind(StrEnum):
     POST = "POST"
 
 
-class ExamStage(StrEnum):
+class ArtworkExamStageCode(StrEnum):
     """실기시험 진행 단계 (순서는 계획에서 정한다)."""
 
     IDEA = "IDEA"  # 아이디어
@@ -771,9 +771,9 @@ class ExamStage(StrEnum):
     FINISH = "FINISH"  # 마무리
 
 
-EXAM_STAGE_LABELS: dict[ExamStage, str] = {
-    ExamStage.IDEA: "아이디어",
-    ExamStage.SKETCH: "스케치",
-    ExamStage.COLOR: "채색",
-    ExamStage.FINISH: "마무리",
+EXAM_STAGE_LABELS: dict[ArtworkExamStageCode, str] = {
+    ArtworkExamStageCode.IDEA: "아이디어",
+    ArtworkExamStageCode.SKETCH: "스케치",
+    ArtworkExamStageCode.COLOR: "채색",
+    ArtworkExamStageCode.FINISH: "마무리",
 }

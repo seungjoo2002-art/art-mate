@@ -32,10 +32,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
 from app.models.enums import (
+    ArtworkExamStageCode,
     ArtworkStage,
     ArtworkWorkCategory,
     ArtworkWorkStatus,
-    ExamStage,
     PhotoStatus,
     PracticalType,
     TimerEventType,
@@ -179,7 +179,7 @@ class ArtworkExamStage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     artwork_id: Mapped[uuid.UUID]
     owner_id: Mapped[uuid.UUID]
-    stage: Mapped[ExamStage] = mapped_column(enum_column(ExamStage, "stage"))
+    stage: Mapped[ArtworkExamStageCode] = mapped_column(enum_column(ArtworkExamStageCode, "stage"))
     position: Mapped[int] = mapped_column(Integer)
     target_minutes: Mapped[int] = mapped_column(Integer)
     started_elapsed: Mapped[int | None] = mapped_column(Integer)

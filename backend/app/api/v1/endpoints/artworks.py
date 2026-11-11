@@ -31,12 +31,12 @@ from app.models.profile import Profile
 from app.schemas.artworks import (
     ArtworkCreate,
     ArtworkDetail,
+    ArtworkExamNext,
+    ArtworkExamPlan,
+    ArtworkExamRead,
     ArtworkProgressRead,
     ArtworkRead,
     ArtworkUpdate,
-    ExamNext,
-    ExamPlan,
-    ExamRead,
     PhotoRead,
     PhotoUpdate,
     SignedUrl,
@@ -427,7 +427,7 @@ async def record_timer_event(
 )
 async def get_exam(
     artwork_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
-) -> ExamRead:
+) -> ArtworkExamRead:
     return await ExamStageService(session, settings).get(owner, artwork_id)
 
 
@@ -440,11 +440,11 @@ async def get_exam(
 )
 async def save_exam_plan(
     artwork_id: uuid.UUID,
-    data: ExamPlan,
+    data: ArtworkExamPlan,
     owner: Student,
     session: DbSession,
     settings: AppSettings,
-) -> ExamRead:
+) -> ArtworkExamRead:
     return await ExamStageService(session, settings).save_plan(owner, artwork_id, data)
 
 
@@ -458,11 +458,11 @@ async def save_exam_plan(
 )
 async def next_exam_stage(
     artwork_id: uuid.UUID,
-    data: ExamNext,
+    data: ArtworkExamNext,
     owner: Student,
     session: DbSession,
     settings: AppSettings,
-) -> ExamRead:
+) -> ArtworkExamRead:
     return await ExamStageService(session, settings).next_stage(owner, artwork_id, data)
 
 
