@@ -11,10 +11,10 @@
   --color-dark-2: #5e3f22; /* 보조 강조 카드 */
 
   /* Neutral */
-  --color-bg: #f8f7f5; /* 페이지 배경 */
+  --color-bg: #fcfcfc; /* 페이지 배경 (VER.2: 누런 기 없는 중립 회색) */
   --color-surface: #ffffff; /* 카드·헤더 */
-  --color-surface-muted: #f2f1ee; /* 세그먼트 탭 배경, 아이콘 버튼 */
-  --color-border: #e4e3e0;
+  --color-surface-muted: #f0f0f0; /* 세그먼트 탭 배경, 아이콘 버튼 */
+  --color-border: #e8e8e8;
   --color-text: #1f1f1f;
   --color-text-sub: #6b6b6b;
   --color-text-muted: #9a9a9a;
