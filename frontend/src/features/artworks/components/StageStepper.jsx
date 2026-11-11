@@ -9,7 +9,9 @@ export default function StageStepper({ stages }) {
         const done = Boolean(stage.photo)
         return (
           <li key={stage.key} className={`${styles.step} ${done ? styles.done : ''}`}>
-            <span className={styles.circle}>{done ? <Check size={20} strokeWidth={3} /> : index + 1}</span>
+            <span className={styles.circle}>
+              {done ? <Check size={20} strokeWidth={3} /> : index + 1}
+            </span>
             <span className={styles.label}>{stage.label}</span>
           </li>
         )

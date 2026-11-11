@@ -42,6 +42,13 @@ export const deleteArtwork = (artworkId) => api(`/artworks/${artworkId}`, { meth
 export const deletePhoto = (artworkId, photoId) =>
   api(`/artworks/${artworkId}/photos/${photoId}`, { method: 'DELETE' })
 
+/** 작품 완료 (v0.5.1): 완성 사진이 1장 이상 필요. 완료하면 사진 편집이 막힘 (409 ARTWORK_COMPLETED) */
+export const completeArtwork = (artworkId) =>
+  api(`/artworks/${artworkId}/complete`, { method: 'POST' })
+
+/** 작업 재개: 다시 사진을 올리거나 바꿀 수 있게 */
+export const reopenArtwork = (artworkId) => api(`/artworks/${artworkId}/reopen`, { method: 'POST' })
+
 /** 작품 타이머 (v0.9 F-2): 서버는 이벤트 기록·계산만, 화면이 초를 셈 */
 export const getTimer = (artworkId) => api(`/artworks/${artworkId}/timer`)
 

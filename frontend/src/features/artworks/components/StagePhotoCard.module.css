@@ -133,3 +133,7 @@
     transform: rotate(360deg);
   }
 }
+
+.locked {
+  cursor: default;
+}
