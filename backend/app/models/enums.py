@@ -732,3 +732,48 @@ class NotificationType(StrEnum):
     TASK_RECOMMENDED = "TASK_RECOMMENDED"  # 새 맞춤 과제 (개인 추천·학원 배포)
     TASK_REMINDER = "TASK_REMINDER"  # 채택 후 미완료 과제 안내
     GOAL_CHECK = "GOAL_CHECK"  # 학습 목표 확인 안내
+
+
+# --------------------------------------------------------------------------- VER.2 (v0.10)
+
+
+class PostCategory(StrEnum):
+    """커뮤니티 게시판 분류. ARTWORK_SHARE는 작품(공유 동의)이 필요하다."""
+
+    PRACTICE_QUESTION = "PRACTICE_QUESTION"  # 실기 질문
+    FEEDBACK_REQUEST = "FEEDBACK_REQUEST"  # 피드백 요청
+    ARTWORK_SHARE = "ARTWORK_SHARE"  # 작품 공유
+    FREE = "FREE"  # 자유게시판
+
+
+POST_CATEGORY_LABELS: dict[PostCategory, str] = {
+    PostCategory.PRACTICE_QUESTION: "실기 질문",
+    PostCategory.FEEDBACK_REQUEST: "피드백 요청",
+    PostCategory.ARTWORK_SHARE: "작품 공유",
+    PostCategory.FREE: "자유게시판",
+}
+
+
+class SharedImageKind(StrEnum):
+    """PRIMARY: 작품 대표(FINAL) 이미지 — 참고작·기본 커뮤니티 공유 (작품당 1개).
+    POST: 게시물에 고른 사진(스케치·중간·완성)에서 만든 이미지 — 그 게시물로만 공개."""
+
+    PRIMARY = "PRIMARY"
+    POST = "POST"
+
+
+class ExamStage(StrEnum):
+    """실기시험 진행 단계 (순서는 계획에서 정한다)."""
+
+    IDEA = "IDEA"  # 아이디어
+    SKETCH = "SKETCH"  # 스케치
+    COLOR = "COLOR"  # 채색
+    FINISH = "FINISH"  # 마무리
+
+
+EXAM_STAGE_LABELS: dict[ExamStage, str] = {
+    ExamStage.IDEA: "아이디어",
+    ExamStage.SKETCH: "스케치",
+    ExamStage.COLOR: "채색",
+    ExamStage.FINISH: "마무리",
+}

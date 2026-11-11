@@ -40,6 +40,7 @@ from app.models.enums import (
     PracticalType,
     ReferenceReason,
     ReferenceReviewStatus,
+    SharedImageKind,
     SharedImageStatus,
     SharingPurpose,
     WeaknessCategory,
@@ -109,7 +110,8 @@ class VerifiedExemplarSource:
                 .join(
                     SharedArtworkImage,
                     (SharedArtworkImage.artwork_id == ReferenceArtworkReview.artwork_id)
-                    & (SharedArtworkImage.status == SharedImageStatus.ACTIVE),
+                    & (SharedArtworkImage.status == SharedImageStatus.ACTIVE)
+                    & (SharedArtworkImage.kind == SharedImageKind.PRIMARY),
                 )
                 .where(
                     ReferenceArtworkReview.status == ReferenceReviewStatus.ACTIVE,

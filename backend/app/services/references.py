@@ -53,6 +53,7 @@ from app.models.enums import (
     ReferenceResultStatus,
     ReferenceReviewStatus,
     ReferenceSetStatus,
+    SharedImageKind,
     SharedImageStatus,
     SharingPurpose,
     WeaknessCategory,
@@ -506,7 +507,8 @@ class ReferenceService:
             .join(
                 SharedArtworkImage,
                 (SharedArtworkImage.artwork_id == ReferenceRecommendation.reference_artwork_id)
-                & (SharedArtworkImage.status == SharedImageStatus.ACTIVE),
+                & (SharedArtworkImage.status == SharedImageStatus.ACTIVE)
+                & (SharedArtworkImage.kind == SharedImageKind.PRIMARY),
             )
             .where(
                 ReferenceRecommendation.owner_id == student.id,

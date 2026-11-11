@@ -23,7 +23,7 @@ from app.models.ai_feedback import (
     FeedbackSummary,
     FeedbackTranscript,
 )
-from app.models.artwork import Artwork, ArtworkPhoto, ArtworkTimerEvent
+from app.models.artwork import Artwork, ArtworkExamStage, ArtworkPhoto, ArtworkTimerEvent
 from app.models.attendance import AttendanceAuditLog, AttendanceRecord
 from app.models.community import (
     ArtworkSharingConsent,
@@ -66,6 +66,7 @@ __all__ = [
     "AiProcessingConsent",
     "AiProcessingJob",
     "Artwork",
+    "ArtworkExamStage",
     "ArtworkPhoto",
     "ArtworkSharingConsent",
     "ArtworkTimerEvent",

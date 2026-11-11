@@ -34,6 +34,9 @@ from app.schemas.artworks import (
     ArtworkProgressRead,
     ArtworkRead,
     ArtworkUpdate,
+    ExamNext,
+    ExamPlan,
+    ExamRead,
     PhotoRead,
     PhotoUpdate,
     SignedUrl,
@@ -48,6 +51,7 @@ from app.schemas.common import Page, PaginationQuery
 from app.schemas.students import student_ref
 from app.services.artwork_timer import ArtworkTimerService
 from app.services.artworks import ArtworkFilters, ArtworkService
+from app.services.exam_stages import ExamStageService
 from app.services.recordings import RecordingService
 from app.services.sharing import SharingService
 
@@ -410,6 +414,56 @@ async def record_timer_event(
     settings: AppSettings,
 ) -> TimerRead:
     return await ArtworkTimerService(session, settings).record(owner, artwork_id, data)
+
+
+# ============================================================================ VER.2 실기시험 단계
+
+
+@router.get(
+    "/{artwork_id}/exam",
+    summary="실기시험 단계 진행 상태 (다른 기기에서도 같은 값)",
+    description="단계별 목표·작업 시간(일시정지 제외)·현재 단계와 작품 타이머 상태.",
+    responses=READ_ERRORS,
+)
+async def get_exam(
+    artwork_id: uuid.UUID, owner: Student, session: DbSession, settings: AppSettings
+) -> ExamRead:
+    return await ExamStageService(session, settings).get(owner, artwork_id)
+
+
+@router.put(
+    "/{artwork_id}/exam/plan",
+    summary="실기시험 단계 계획 저장 (순서·목표 시간)",
+    description="목표 합계가 작품의 제한 시간(time_limit_minutes)이 된다. 시작 후에는 단계 구성은 "
+    "바꿀 수 없고 목표 시간만 바꿀 수 있다 (409 EXAM_ALREADY_STARTED).",
+    responses=WRITE_ERRORS,
+)
+async def save_exam_plan(
+    artwork_id: uuid.UUID,
+    data: ExamPlan,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> ExamRead:
+    return await ExamStageService(session, settings).save_plan(owner, artwork_id, data)
+
+
+@router.post(
+    "/{artwork_id}/exam/next",
+    summary="다음 단계로 (현재 단계 종료 + 다음 단계 시작)",
+    description="타이머가 RUNNING·PAUSED일 때만 (409 EXAM_NOT_RUNNING). current_stage가 서버의 "
+    "현재 단계와 다르면 409 EXAM_STAGE_CONFLICT (중복 전환 방지), 마지막 단계면 409 "
+    "EXAM_LAST_STAGE (타이머 STOP으로 끝냄). 시작은 타이머 START, 종료는 STOP.",
+    responses=WRITE_ERRORS,
+)
+async def next_exam_stage(
+    artwork_id: uuid.UUID,
+    data: ExamNext,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> ExamRead:
+    return await ExamStageService(session, settings).next_stage(owner, artwork_id, data)
 
 
 @staff_router.get(
