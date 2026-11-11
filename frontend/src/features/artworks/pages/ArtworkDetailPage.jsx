@@ -103,10 +103,17 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         }
       />
       <main className={styles.body}>
-        {/* 진행 중인 실기시험 (끝나면 STOP으로 actual_minutes가 저장됨) */}
-        {artwork.work_category === 'MOCK_EXAM' && !artwork.actual_minutes && (
-          <Button onClick={() => navigate(`/artworks/${artwork.id}/exam`)}>시험 이어서 하기</Button>
-        )}
+        {/* 실기시험 작품: 진행 중이면 이어서 하기, 끝났으면(STOP으로 actual_minutes 저장) 결과 보기 */}
+        {artwork.work_category === 'MOCK_EXAM' &&
+          (artwork.actual_minutes ? (
+            <Button variant="soft" onClick={() => navigate(`/artworks/${artwork.id}/exam/result`)}>
+              시험 결과 보기
+            </Button>
+          ) : (
+            <Button onClick={() => navigate(`/artworks/${artwork.id}/exam`)}>
+              시험 이어서 하기
+            </Button>
+          ))}
         {(artwork.topic || artwork.description) && (
           <Card variant="soft" className={styles.topic}>
             <span className={styles.topicLabel}>오늘의 주제</span>
