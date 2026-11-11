@@ -21,6 +21,13 @@ export const createPost = ({ artworkId, title, body, question }) =>
 
 export const deletePost = (postId) => api(`/community/posts/${postId}`, { method: 'DELETE' })
 
+/**
+ * 커뮤니티 공유 철회: 게시물 삭제 + 공유 동의 철회 + 공유 이미지 삭제(참고작 동의가 없으면)
+ * 내 게시물 "삭제"는 이걸로 처리 → 동의서의 "철회하면 바로 내려가요"와 맞춤
+ */
+export const revokeCommunitySharing = (artworkId) =>
+  api(`/artworks/${artworkId}/sharing/COMMUNITY`, { method: 'DELETE' })
+
 export const setLiked = (postId, liked) =>
   api(`/community/posts/${postId}/like`, { method: liked ? 'PUT' : 'DELETE' })
 

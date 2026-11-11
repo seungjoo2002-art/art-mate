@@ -14,6 +14,7 @@ import {
   adoptComment,
   deleteComment,
   deletePost,
+  revokeCommunitySharing,
   getPost,
   listComments,
   reportComment,
@@ -57,9 +58,16 @@ export default function PostDetailPage() {
   }
 
   async function handleDelete() {
-    if (!window.confirm('게시물을 삭제할까요? 공유 동의는 남아 있어서 다시 올릴 수 있어요.')) return
+    if (
+      !window.confirm(
+        '게시물을 삭제할까요? 이 작품의 커뮤니티 공유도 함께 중단돼요. 다시 올리려면 공유 동의를 새로 해야 해요.',
+      )
+    )
+      return
     try {
-      await deletePost(post.id)
+      // 내 게시물엔 artwork_id가 있음 → 공유 철회(게시물도 삭제됨). 없으면 게시물만 삭제
+      if (post.artwork_id) await revokeCommunitySharing(post.artwork_id)
+      else await deletePost(post.id)
       navigate('/community', { replace: true })
     } catch (err) {
       setNotice(toErrorMessage(err))
