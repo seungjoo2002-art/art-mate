@@ -160,6 +160,23 @@ class Settings(BaseSettings):
     #  - 제공자 약관(연령 조항 포함)과 학생·보호자 동의 범위 검토 완료
     # false면 배포 환경에서는 AI_SUMMARY_ENABLED 등이 켜져 있어도 외부 AI로 보내지 않는다
     ai_provider_terms_confirmed: bool = False
+    # 요약을 만드는 외부 AI (v0.9.6). openai(기본) | gemini. 동의는 제공자별로 받는다
+    ai_provider: Literal["openai", "gemini"] = "openai"
+    # 운영자 승인: OpenAI 데이터 무보관(ZDR)이 이 조직에 승인·적용됨. false면 만 13세 미만 학생의
+    # 전사문은 보호자 동의가 있어도 보내지 않는다 (OpenAI Under-18 guidance)
+    ai_zdr_approved: bool = False
+
+    # --- OpenAI (Worker 전용, 키는 GitHub Actions Secret에만) -------------------
+    openai_api_key: SecretStr | None = None
+    # 공식 모델 페이지에서 확인한 ID만 (2026-11): gpt-6.1-terra(기본), gpt-6-luna(저비용)
+    openai_model: Literal["gpt-6.1-terra", "gpt-6-luna"] = "gpt-6.1-terra"
+    openai_api_base: AnyHttpUrl = AnyHttpUrl("https://api.openai.com/v1")
+    openai_timeout_seconds: float = Field(default=90.0, gt=0, le=300)
+    # 추론 토큰도 출력으로 과금 → 근거 있는 요약에는 낮게 (모델 기본값은 medium)
+    openai_reasoning_effort: Literal["none", "low", "medium", "high"] = "low"
+    # 추론 토큰 포함 출력 상한
+    openai_max_output_tokens: int = Field(default=8192, ge=512, le=32768)
+
     # Gemini API 키 (Worker 전용).
     # 무료 등급은 입력이 모델 개선에 쓰일 수 있으므로 유료 등급 키만 사용
     gemini_api_key: SecretStr | None = None
@@ -172,8 +189,9 @@ class Settings(BaseSettings):
     # 학생 1명이 하루(Asia/Seoul)에 요청할 수 있는 AI 요약 수 (무료 한도·남용 방지). 0 = 제한 없음
     ai_summary_daily_limit: int = Field(default=20, ge=0, le=1000)
     # 외부 AI 전송 동의서 버전. 바꾸면 학생은 새 버전에 다시 동의해야 AI 요약을 요청할 수 있다
+    # v2 (v0.9.6): 제공자 OpenAI, 연령 확인, 미성년자 보호자 동의
     ai_consent_version: str = Field(
-        default="2026-11-ai-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+        default="2026-12-ai-v2", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
     )
 
     # --- 성장 코치 (v0.7) ----------------------------------------------------
@@ -181,7 +199,7 @@ class Settings(BaseSettings):
     growth_ai_enabled: bool = False
     # 성장 분석 목적의 외부 AI 전송 동의서 버전 (첨삭 요약 동의와 별개)
     ai_growth_consent_version: str = Field(
-        default="2026-11-growth-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+        default="2026-12-growth-v2", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
     )
     # 분석 대상(승인된 첨삭이 있는) 작품이 이보다 적으면 INSUFFICIENT_DATA
     growth_min_artworks: int = Field(default=3, ge=1, le=50)
@@ -395,6 +413,12 @@ class Settings(BaseSettings):
     @property
     def growth_ai_active(self) -> bool:
         return self.growth_ai_enabled and not self.ai_terms_blocked
+
+    @property
+    def llm_configured(self) -> bool:
+        """선택한 제공자의 API 키가 있음 (Worker)."""
+        key = self.openai_api_key if self.ai_provider == "openai" else self.gemini_api_key
+        return key is not None and bool(key.get_secret_value())
 
     @property
     def gemini_configured(self) -> bool:

@@ -24,7 +24,7 @@ from tests.fake_ai import FakeFetcher, FakeLlm, FakeStt, ai_json
 from tests.fake_storage import FakeStorage
 
 API = "/api/v1"
-AI_VERSION = "2026-11-ai-v1"
+AI_VERSION = "2026-12-ai-v2"
 
 NOTE_TEXT = (
     "구도는 화면 중앙에 안정적으로 잘 잡았다. 오른쪽 컵의 명암이 너무 약해서 형태가 떠 보인다. "
@@ -106,7 +106,7 @@ async def _sql(app, sql: str, **params):  # type: ignore[no-untyped-def]
 async def _ai_consent(client: httpx.AsyncClient, student: Actor) -> None:
     granted = await client.post(
         f"{API}/ai-processing-consents",
-        json={"policy_version": AI_VERSION, "agreed": True},
+        json={"policy_version": AI_VERSION, "agreed": True, "birth_year_month": "2000-01"},
         headers=student.headers,
     )
     assert granted.status_code == 201, granted.text

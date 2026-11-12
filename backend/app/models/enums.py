@@ -331,7 +331,28 @@ ACTIVE_JOB_STATUSES: frozenset[AiJobStatus] = frozenset({AiJobStatus.QUEUED, AiJ
 
 
 class AiProvider(StrEnum):
+    """전사문을 받는 외부 AI 제공자. 동의는 제공자별로 받는다 (제공자가 바뀌면 다시 동의)."""
+
     GOOGLE_GEMINI = "GOOGLE_GEMINI"
+    OPENAI = "OPENAI"  # v0.9.6: OpenAI API (미성년자 대상 서비스 조건부 허용)
+
+
+class AiAgeBand(StrEnum):
+    """AI 전송 동의 시점의 연령 구간 (v0.9.6). 생년월은 저장하지 않고 구간만 저장한다.
+
+    - UNDER_13: 만 13세 미만 — 보호자 동의 + 운영자의 데이터 무보관(ZDR) 승인 전에는 전송 차단
+    - MINOR: 만 13~17세 — 보호자 동의 필요 (OpenAI 약관 + 만 14세 미만은 개인정보 보호법)
+    - ADULT: 만 18세 이상 — 본인 동의
+    """
+
+    UNDER_13 = "UNDER_13"
+    MINOR = "MINOR"
+    ADULT = "ADULT"
+
+
+class GuardianRelationship(StrEnum):
+    PARENT = "PARENT"  # 부모
+    LEGAL_GUARDIAN = "LEGAL_GUARDIAN"  # 그 밖의 법정대리인
 
 
 class AiConsentPurpose(StrEnum):
