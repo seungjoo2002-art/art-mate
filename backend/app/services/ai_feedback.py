@@ -300,25 +300,29 @@ class AiFeedbackService:
         if current is not None:
             current.revoked_at = now  # 이전 동의(버전·보호자 대기)는 철회 처리 (이력 보존)
             await self.session.flush()
-        guardian = consent_policy.needs_guardian(band)
-        token: str | None = None
-        token_hash = expires_at = None
-        if guardian:
-            token, token_hash, expires_at = consent_policy.new_guardian_token(now)
-        self.session.add(
-            AiProcessingConsent(
-                id=uuid.uuid4(),
-                user_id=user.id,
-                provider=consent_policy.provider_for(self.settings),
-                purpose=purpose,
-                policy_version=data.policy_version,
-                granted_by=ConsentGrantor.GUARDIAN if guardian else ConsentGrantor.SELF,
-                granted_at=now,
-                age_band=band,
-                guardian_token_hash=token_hash,
-                guardian_token_expires_at=expires_at,
-            )
+        guardian = consent_policy.needs_guardian(band, self.settings)
+        consent = AiProcessingConsent(
+            id=uuid.uuid4(),
+            user_id=user.id,
+            provider=consent_policy.provider_for(self.settings),
+            purpose=purpose,
+            policy_version=data.policy_version,
+            granted_by=ConsentGrantor.GUARDIAN if guardian else ConsentGrantor.SELF,
+            granted_at=now,
+            revoked_at=None,
+            age_band=band,
+            guardian_confirmed_at=None,
         )
+        # 보호자 링크는 보호자 확인만 남은 경우에만 (연령대가 닫혀 있으면 발급 안 함)
+        token: str | None = None
+        if (
+            consent_policy.evaluate(consent, self.settings, purpose).reason
+            == consent_policy.GUARDIAN_PENDING
+        ):
+            token, consent.guardian_token_hash, consent.guardian_token_expires_at = (
+                consent_policy.new_guardian_token(now)
+            )
+        self.session.add(consent)
         try:
             await self.session.commit()
         except IntegrityError:

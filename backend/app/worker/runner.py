@@ -77,10 +77,12 @@ from app.models.enums import (
     TranscriptionStatus,
 )
 from app.models.growth import GrowthReport
+from app.models.profile import Profile
 from app.models.recording import FeedbackRecording, RecordingConsent
 from app.schemas.growth import Evidence
 from app.services import ai_consent_policy as consent_policy
 from app.services.ai_feedback import review_mode_for
+from app.services.ai_redaction import redact_segments
 from app.services.ai_summary import (
     KIND_FIELDS,
     PROMPT_VERSION,
@@ -499,6 +501,17 @@ class JobRunner:
         if found is None:
             raise JobCancelled("RECORDING_CONSENT_REVOKED")
 
+    async def _redacted(
+        self, session: AsyncSession, owner_id: uuid.UUID, segments: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """외부 AI로 보낼 구간 사본: 학생 실명·닉네임, 전화·이메일 등 형식이 있는 정보를 가린다."""
+        owner = await session.get(Profile, owner_id)
+        names = (owner.real_name, owner.display_name) if owner else ()
+        result = redact_segments(segments, names)
+        if result.replaced:
+            logger.info("transcript redacted before AI", extra={"replaced": result.replaced})
+        return result.segments
+
     async def _check_ai_consent(
         self,
         session: AsyncSession,
@@ -695,9 +708,10 @@ class JobRunner:
                 )
             if self.llm is None:
                 raise JobFailure("AI_NOT_CONFIGURED", "AI summary is not enabled", retryable=False)
-            segments = list(transcript.segments)
             segment_count = transcript.segment_count
             transcript_pk = transcript.id
+            # v0.9.6 개인정보 최소화: 보낼 사본에서 학생 이름·연락처 형식을 가림 (원문은 그대로)
+            segments = await self._redacted(session, job.owner_id, list(transcript.segments))
 
         # 외부 전송: 구간 번호·시각·문장만 (이름·학원·작품 정보·ID 미포함)
         usage = _Usage()
@@ -895,7 +909,7 @@ class JobRunner:
                 raise JobCancelled("FEEDBACK_ALREADY_APPROVED")
             if self.llm is None:
                 raise JobFailure("AI_NOT_CONFIGURED", "AI summary is not enabled", retryable=False)
-            segments = list(note.segments)
+            segments = await self._redacted(session, job.owner_id, list(note.segments))
             segment_count = note.segment_count
 
         # 외부 전송: 문장 번호와 문장만 (출처·이름·학원·작품 정보·ID 미포함)

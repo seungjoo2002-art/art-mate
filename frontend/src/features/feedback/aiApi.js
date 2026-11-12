@@ -13,7 +13,7 @@ export const revokeAiConsent = (purpose = 'FEEDBACK_SUMMARY') => {
 
 /**
  * AI 전송 동의 (v0.9.6). birthYearMonth 'YYYY-MM'은 서버가 나이 구간 계산에만 쓰고 저장하지 않는다.
- * 만 18세 미만이면 응답에 guardian_token(한 번만) → 보호자 확인 링크로 보낸다
+ * 보호자 확인이 필요하면(만 14세 미만 등) 응답에 guardian_token(한 번만) → 보호자 확인 링크로 보낸다
  */
 export const saveAiConsent = ({ purpose = 'FEEDBACK_SUMMARY', policyVersion, birthYearMonth }) => {
   consentCache = null
@@ -28,12 +28,14 @@ export const renewGuardianLink = (purpose = 'FEEDBACK_SUMMARY') =>
   api(`/ai-processing-consents/me/guardian-link?purpose=${purpose}`, { method: 'POST' })
 
 // 보호자 확인 (로그인 없이 링크 토큰으로)
-export const getGuardianConsent = (token) => api(`/guardian-consents/${encodeURIComponent(token)}`)
+// 토큰은 요청 본문으로만 (URL에 넣으면 서버 접근 로그에 남을 수 있음)
+export const getGuardianConsent = (token) =>
+  api('/guardian-consents/view', { method: 'POST', body: { token } })
 
 export const confirmGuardianConsent = (token, { guardianName, relationship }) =>
-  api(`/guardian-consents/${encodeURIComponent(token)}`, {
+  api('/guardian-consents/confirm', {
     method: 'POST',
-    body: { guardian_name: guardianName, relationship, agreed: true },
+    body: { token, guardian_name: guardianName, relationship, agreed: true },
   })
 
 let consentCache = null // { at, promise } — 녹음 카드 여러 개가 같은 요청을 반복하지 않도록

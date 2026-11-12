@@ -13,10 +13,12 @@
 - 동의:       /ai-processing-consents
 """
 
+import time
 import uuid
+from collections import deque
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Path, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
 
 from app.api.deps import (
     AcademyStaff,
@@ -28,6 +30,7 @@ from app.api.deps import (
 )
 from app.api.responses import AUTH_ERRORS, error_responses
 from app.core import timezone as clock
+from app.core.exceptions import RateLimitedError
 from app.core.security import CurrentUser
 from app.models.enums import AiConsentPurpose, AiJobStatus, FeedbackStatus, UserType
 from app.models.profile import Profile
@@ -45,6 +48,7 @@ from app.schemas.ai_feedback import (
     FeedbackUpdate,
     GuardianConsentConfirm,
     GuardianConsentView,
+    GuardianToken,
     JobRead,
     NoteSummaryRequest,
     ReviewerFeedbackRead,
@@ -153,11 +157,11 @@ async def my_ai_consent(
     description=(
         "첨삭 전사문을 외부 AI(AI_PROVIDER, 기본 OpenAI)로 보내 요약하는 것에 대한 동의. "
         "녹음 동의와 별개다. `policy_version`은 GET /me 의 `required_version`. "
-        "(v0.9.6) `birth_year_month`(YYYY-MM) 필수 — 연령 구간만 저장한다. 만 18세 미만이면 "
-        "응답의 `guardian_token`으로 보호자 확인 링크를 만들어 보호자에게 보낸다. "
-        "보호자가 확인해야 "
-        "`is_valid`가 true가 된다 (`reason: GUARDIAN_PENDING`). 만 13세 미만은 운영자의 데이터 "
-        "무보관 승인 전까지 `UNDER_13_BLOCKED`."
+        "(v0.9.6) `birth_year_month`(YYYY-MM) 필수 — 연령 구간(UNDER_14 / TEEN / ADULT)만 "
+        "저장한다. 성인은 바로 유효. 만 14~17세는 운영자가 AI_TEENS_ENABLED를 켜야 유효 "
+        "(`TEEN_NOT_ENABLED`), 보호자 확인을 요구하도록 설정했으면 `guardian_token`을 준다. "
+        "만 14세 미만은 운영자 허용·데이터 무보관 승인 전까지 `UNDER_14_BLOCKED`, 그 뒤에는 "
+        "법정대리인 확인(`GUARDIAN_PENDING`)."
     ),
     status_code=status.HTTP_201_CREATED,
     responses=WRITE,
@@ -183,34 +187,60 @@ async def renew_guardian_link(
     return await _svc(session, settings).new_guardian_link(owner, purpose)
 
 
-@guardian_consents.get(
-    "/{token}",
-    summary="보호자 확인 화면 정보 (로그인 불필요, v0.9.6)",
-    description="링크 토큰으로 동의 내용(제공자·목적·버전·연령 구간)만 보여 준다. 학생 이름·작품·"
-    "전사 내용은 포함하지 않는다. 없거나 만료·사용된 링크는 404 `GUARDIAN_LINK_INVALID`.",
-    responses=error_responses(404),
-)
-async def guardian_consent_view(
-    token: Annotated[str, Path(min_length=20, max_length=100)],
-    session: DbSession,
-    settings: AppSettings,
-) -> GuardianConsentView:
-    return await _svc(session, settings).guardian_consent_view(token)
+_GUARDIAN_WINDOW_SECONDS = 60
+_GUARDIAN_MAX_REQUESTS = 20
+_guardian_hits: dict[str, deque[float]] = {}
+
+
+def _guardian_guard(request: Request, response: Response) -> None:
+    """보호자 확인 API: 응답 저장 금지 + 클라이언트별 요청 제한 (프로세스 메모리, 분당 20회).
+
+    토큰은 256비트라 추측이 사실상 불가능하지만 반복 요청을 막는다. 인스턴스별로 센다.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    client = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    hits = _guardian_hits.setdefault(client, deque())
+    while hits and now - hits[0] > _GUARDIAN_WINDOW_SECONDS:
+        hits.popleft()
+    if len(hits) >= _GUARDIAN_MAX_REQUESTS:
+        raise RateLimitedError(
+            "Too many guardian consent requests",
+            headers={"Retry-After": str(_GUARDIAN_WINDOW_SECONDS)},
+        )
+    hits.append(now)
+    if len(_guardian_hits) > 10_000:  # 메모리 상한
+        _guardian_hits.clear()
+
+
+GuardianGuard = Annotated[None, Depends(_guardian_guard)]
 
 
 @guardian_consents.post(
-    "/{token}",
+    "/view",
+    summary="보호자 확인 화면 정보 (로그인 불필요, v0.9.6)",
+    description="링크 토큰(요청 본문)으로 동의 내용(제공자·목적·버전·연령 구간)만 보여 준다. 학생 "
+    "이름·작품·전사 내용은 포함하지 않는다. 없거나 만료·사용된 링크는 404 `GUARDIAN_LINK_INVALID`. "
+    "토큰은 URL에 넣지 않는다 (서버 접근 로그·Referer 노출 방지).",
+    responses=error_responses(404, 422, 429),
+)
+async def guardian_consent_view(
+    data: GuardianToken, _: GuardianGuard, session: DbSession, settings: AppSettings
+) -> GuardianConsentView:
+    return await _svc(session, settings).guardian_consent_view(data.token)
+
+
+@guardian_consents.post(
+    "/confirm",
     summary="보호자 동의 확인 (로그인 불필요, v0.9.6)",
     description="보호자 성명·관계를 받고 동의를 유효하게 한다. 링크는 한 번만 쓸 수 있다.",
-    responses=error_responses(404, 422),
+    responses=error_responses(404, 422, 429),
 )
 async def guardian_confirm(
-    token: Annotated[str, Path(min_length=20, max_length=100)],
-    data: GuardianConsentConfirm,
-    session: DbSession,
-    settings: AppSettings,
+    data: GuardianConsentConfirm, _: GuardianGuard, session: DbSession, settings: AppSettings
 ) -> GuardianConsentView:
-    return await _svc(session, settings).guardian_confirm(token, data)
+    return await _svc(session, settings).guardian_confirm(data.token, data)
 
 
 @consents.delete(

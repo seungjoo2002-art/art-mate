@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import { useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
 import { Button, Card, Checkbox, Input, Select } from '../../../components/ui'
@@ -20,7 +19,12 @@ const RELATIONSHIPS = [
  * 학생 이름·작품·전사 내용은 보여 주지 않고 동의 내용만 보여 준다. 링크는 한 번만 쓸 수 있다.
  */
 export default function GuardianConsentPage() {
-  const { token } = useParams()
+  // 토큰은 URL 조각(#)에서 읽고 주소창·방문 기록에서는 지운다 (서버로 보내는 것은 요청 본문뿐)
+  const [token] = useState(() => {
+    const value = decodeURIComponent(window.location.hash.slice(1))
+    if (value) window.history.replaceState(null, '', window.location.pathname)
+    return value
+  })
   const load = useCallback(() => getGuardianConsent(token), [token])
   const { data, error } = useAsync(load)
   const [name, setName] = useState('')
@@ -72,10 +76,10 @@ export default function GuardianConsentPage() {
           <div>
             <h2 className={formStyles.title}>{copy.title} (보호자 확인)</h2>
             <p className={formStyles.sub}>
-              자녀가 ART MATE에서 AI 첨삭 정리를 쓰려고 해요. 만 18세 미만은 보호자(법정대리인)의
+              자녀가 ART MATE에서 AI 첨삭 정리를 쓰려고 해요. 이 기능에는 보호자(법정대리인)의
               동의가 필요해요.
-              {data.age_band === 'UNDER_13' &&
-                ' 만 13세 미만은 동의하더라도 서비스 준비가 끝날 때까지 AI 정리를 쓸 수 없어요.'}
+              {data.age_band === 'UNDER_14' &&
+                ' 만 14세 미만은 동의하더라도 서비스 준비가 끝날 때까지 AI 정리를 쓸 수 없어요.'}
             </p>
           </div>
           <Card>

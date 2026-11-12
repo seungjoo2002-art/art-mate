@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button, Card, Checkbox, Select } from '../../../components/ui'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { renewGuardianLink, saveAiConsent } from '../aiApi'
-import { consentCopy, consentReasonMessage, guardianLink } from '../consentCopy'
+import { BLOCKED_REASONS, consentCopy, consentReasonMessage, guardianLink } from '../consentCopy'
 import styles from './ConsentForm.module.css'
 
 const THIS_YEAR = new Date().getFullYear()
@@ -51,7 +51,7 @@ function GuardianLinkPanel({ token, purpose }) {
   return (
     <Card>
       <p className={styles.sub}>
-        만 18세 미만은 보호자(법정대리인)의 확인이 필요해요. 아래 링크를 보호자에게 보내 주세요.
+        보호자(법정대리인)의 확인이 필요해요. 아래 링크를 보호자에게 보내 주세요.
         보호자가 링크에서 확인하면 AI 정리를 쓸 수 있어요. (링크는 7일 동안, 한 번만 쓸 수 있어요)
       </p>
       {link ? (
@@ -93,9 +93,7 @@ export default function AiConsentForm({ purpose = 'FEEDBACK_SUMMARY', status, on
   const [submitting, setSubmitting] = useState(false)
 
   const pending = result ?? (status.reason === 'GUARDIAN_PENDING' ? status : null)
-  const blockedReason = ['UNDER_13_BLOCKED', 'MINOR_BLOCKED'].find(
-    (reason) => reason === (result ?? status).reason,
-  )
+  const blockedReason = BLOCKED_REASONS.find((reason) => reason === (result ?? status).reason)
   const canSubmit = agreed && year && month && !submitting
 
   async function handleSubmit() {

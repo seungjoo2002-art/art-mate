@@ -62,7 +62,9 @@ class AiConsentRead(BaseModel):
     granted_by: ConsentGrantor
     granted_at: dt.datetime
     revoked_at: dt.datetime | None
-    age_band: AiAgeBand | None = Field(description="UNDER_13 / MINOR / ADULT (이전 동의는 null)")
+    age_band: AiAgeBand | None = Field(
+        description="UNDER_14 / TEEN(만 14~17세) / ADULT (이전 동의는 null)"
+    )
     guardian_relationship: GuardianRelationship | None
     guardian_confirmed_at: dt.datetime | None = Field(description="보호자가 확인한 시각")
 
@@ -73,12 +75,12 @@ class AiConsentStatus(BaseModel):
     required_version: str
     is_valid: bool = Field(description="현재 버전에 유효한 동의가 있음 → AI 요약 요청 가능")
     reason: (
-        Literal["NOT_CONSENTED", "MINOR_BLOCKED", "GUARDIAN_PENDING", "UNDER_13_BLOCKED"] | None
+        Literal["NOT_CONSENTED", "TEEN_NOT_ENABLED", "UNDER_14_BLOCKED", "GUARDIAN_PENDING"] | None
     ) = Field(
         default=None,
-        description="유효하지 않은 이유: 동의 없음·이전 버전·다른 제공자 / 보호자 확인 대기 / "
-        "만 13세 미만(운영자 데이터 무보관 승인 전 전송 차단) / MINOR_BLOCKED 미성년자 전송을 "
-        "운영자가 아직 허용하지 않음(AI_MINORS_ENABLED)",
+        description="유효하지 않은 이유: NOT_CONSENTED 동의 없음·이전 버전·다른 제공자 / "
+        "TEEN_NOT_ENABLED 만 14~17세 전송을 운영자가 아직 열지 않음 / UNDER_14_BLOCKED 만 14세 "
+        "미만(법정대리인 확인·데이터 무보관 승인 전) / GUARDIAN_PENDING 보호자 확인 대기",
     )
     consent: AiConsentRead | None
     guardian_token: str | None = Field(
@@ -100,7 +102,13 @@ class GuardianConsentView(BaseModel):
     expires_at: dt.datetime | None
 
 
-class GuardianConsentConfirm(InputModel):
+class GuardianToken(InputModel):
+    """보호자 확인 링크 토큰 (URL 조각 #에서 읽어 요청 본문으로만 보낸다)."""
+
+    token: str = Field(min_length=20, max_length=100)
+
+
+class GuardianConsentConfirm(GuardianToken):
     guardian_name: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)
     ] = Field(description="보호자(법정대리인) 성명")

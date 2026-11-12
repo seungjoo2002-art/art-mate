@@ -1,4 +1,4 @@
-"""AI 전송 동의 판정 (v0.9.6): 연령 구간, 보호자 확인, 13세 미만 차단, 제공자·버전."""
+"""AI 전송 동의 판정 (v0.9.6): 만 14세 기준 연령 구간, 연령별 운영자 허용, 보호자 확인, ZDR."""
 
 import datetime as dt
 import uuid
@@ -11,23 +11,34 @@ from app.models.enums import AiAgeBand, AiConsentPurpose, AiProvider, ConsentGra
 from app.services import ai_consent_policy as policy
 from tests.conftest import make_settings
 
-TODAY = date(2026, 11, 12)
+TODAY = date(2026, 11, 13)
 PURPOSE = AiConsentPurpose.FEEDBACK_SUMMARY
+NOW = dt.datetime(2026, 11, 13, tzinfo=dt.UTC)
 
 
 @pytest.mark.parametrize(
     ("birth", "band"),
     [
-        ("2014-01", AiAgeBand.UNDER_13),  # 12세
-        ("2013-12", AiAgeBand.UNDER_13),  # 12월 말 생일 가정 → 아직 12세 (보수적)
-        ("2013-10", AiAgeBand.MINOR),  # 13세
-        ("2008-12", AiAgeBand.MINOR),  # 17세 (12월 말 생일 가정)
+        # 만 14세 경계 (생일은 그 달 말일로 가정 → 나이를 적게 계산)
+        ("2012-11", AiAgeBand.UNDER_14),  # 11월 말 생일 → 오늘(11-13)은 아직 13세
+        ("2012-10", AiAgeBand.TEEN),  # 10월 말 생일 지남 → 14세
+        ("2012-12", AiAgeBand.UNDER_14),
+        ("2013-01", AiAgeBand.UNDER_14),
+        ("2016-05", AiAgeBand.UNDER_14),  # 10세
+        # 만 18세 경계
+        ("2008-11", AiAgeBand.TEEN),  # 11월 말 생일 → 아직 17세
         ("2008-10", AiAgeBand.ADULT),  # 18세
         ("1990-05", AiAgeBand.ADULT),
     ],
 )
-def test_age_band_is_conservative(birth: str, band: AiAgeBand) -> None:
+def test_age_band_korean_14_and_18_boundaries(birth: str, band: AiAgeBand) -> None:
     assert policy.age_band(birth, TODAY) == band
+
+
+def test_age_band_exact_birthday_month_end() -> None:
+    # 2012-11 생 → 2026-11-30에 만 14세가 된다고 본다
+    assert policy.age_band("2012-11", date(2026, 11, 29)) == AiAgeBand.UNDER_14
+    assert policy.age_band("2012-11", date(2026, 11, 30)) == AiAgeBand.TEEN
 
 
 @pytest.mark.parametrize("birth", ["2027-01", "2026-13", "26-01", "1890-01", "2009/03"])
@@ -44,7 +55,7 @@ def _consent(**overrides) -> AiProcessingConsent:  # type: ignore[no-untyped-def
         "purpose": PURPOSE,
         "policy_version": "2026-12-ai-v2",
         "granted_by": ConsentGrantor.SELF,
-        "granted_at": dt.datetime(2026, 11, 12, tzinfo=dt.UTC),
+        "granted_at": NOW,
         "revoked_at": None,
         "age_band": AiAgeBand.ADULT,
         "guardian_confirmed_at": None,
@@ -52,51 +63,60 @@ def _consent(**overrides) -> AiProcessingConsent:  # type: ignore[no-untyped-def
     return AiProcessingConsent(**(values | overrides))
 
 
-def test_minors_blocked_by_default_even_with_guardian() -> None:
-    now = dt.datetime(2026, 11, 12, tzinfo=dt.UTC)
-    default = make_settings()  # 배포 기본값: AI_MINORS_ENABLED=false
-    for band in (AiAgeBand.MINOR, AiAgeBand.UNDER_13):
-        for confirmed in (None, now):
-            consent = _consent(age_band=band, guardian_confirmed_at=confirmed)
-            state = policy.evaluate(consent, default, PURPOSE)
-            assert (state.is_valid, state.reason) == (False, "MINOR_BLOCKED")
-    # ZDR 승인만으로는 풀리지 않음
-    zdr_only = make_settings(ai_zdr_approved=True)
-    under13 = _consent(age_band=AiAgeBand.UNDER_13, guardian_confirmed_at=now)
-    assert policy.evaluate(under13, zdr_only, PURPOSE).reason == "MINOR_BLOCKED"
-    assert policy.evaluate(_consent(), default, PURPOSE).is_valid  # 성인은 그대로
+def _state(consent, **settings):  # type: ignore[no-untyped-def]
+    result = policy.evaluate(consent, make_settings(**settings), PURPOSE)
+    return (result.is_valid, result.reason)
 
 
-def test_evaluate_rules() -> None:
-    settings = make_settings(ai_minors_enabled=True)  # 운영자가 미성년자 허용한 뒤의 규칙
-    now = dt.datetime(2026, 11, 12, tzinfo=dt.UTC)
-
-    def state(consent, s=settings):  # type: ignore[no-untyped-def]
-        result = policy.evaluate(consent, s, PURPOSE)
-        return (result.is_valid, result.reason)
-
-    assert state(_consent()) == (True, None)
-    assert state(None) == (False, "NOT_CONSENTED")
-    assert state(_consent(revoked_at=now)) == (False, "NOT_CONSENTED")
-    assert state(_consent(policy_version="2026-11-ai-v1")) == (False, "NOT_CONSENTED")
+def test_common_rules() -> None:
+    assert _state(_consent()) == (True, None)
+    assert _state(None) == (False, "NOT_CONSENTED")
+    assert _state(_consent(revoked_at=NOW)) == (False, "NOT_CONSENTED")
+    assert _state(_consent(policy_version="2026-11-ai-v1")) == (False, "NOT_CONSENTED")
     # 이전 제공자(Gemini) 동의로는 OpenAI 전송 불가
-    assert state(_consent(provider=AiProvider.GOOGLE_GEMINI)) == (False, "NOT_CONSENTED")
-    # 연령 확인 없는 이전 동의
-    assert state(_consent(age_band=None)) == (False, "NOT_CONSENTED")
-    # 미성년자: 보호자 확인 전/후
-    assert state(_consent(age_band=AiAgeBand.MINOR)) == (False, "GUARDIAN_PENDING")
-    assert state(_consent(age_band=AiAgeBand.MINOR, guardian_confirmed_at=now)) == (True, None)
-    # 13세 미만: 보호자 확인이 있어도 ZDR 승인 전에는 차단
-    under13 = _consent(age_band=AiAgeBand.UNDER_13, guardian_confirmed_at=now)
-    assert state(under13) == (False, "UNDER_13_BLOCKED")
-    assert state(_consent(age_band=AiAgeBand.UNDER_13)) == (False, "GUARDIAN_PENDING")
-    zdr = make_settings(ai_minors_enabled=True, ai_zdr_approved=True)
-    assert state(under13, zdr) == (True, None)
-    # 학년은 쓰지 않음: 판정에 grade 입력 자체가 없다
+    assert _state(_consent(provider=AiProvider.GOOGLE_GEMINI)) == (False, "NOT_CONSENTED")
+    assert _state(_consent(age_band=None)) == (False, "NOT_CONSENTED")  # 연령 확인 없는 이전 동의
+
+
+def test_teen_self_consent_only_after_operator_enables() -> None:
+    teen = _consent(age_band=AiAgeBand.TEEN)
+    assert _state(teen) == (False, "TEEN_NOT_ENABLED")  # 배포 기본값: 차단
+    assert _state(teen, ai_teens_enabled=True) == (True, None)  # 국내법: 본인 동의
+    # 보호자 허락이 필요하다고 판단되면 운영자가 켬
+    required = {"ai_teens_enabled": True, "ai_teen_guardian_required": True}
+    assert _state(teen, **required) == (False, "GUARDIAN_PENDING")
+    assert _state(_consent(age_band=AiAgeBand.TEEN, guardian_confirmed_at=NOW), **required) == (
+        True,
+        None,
+    )
+    # 운영자가 끄면 즉시 다시 차단 (보호자 확인과 무관)
+    confirmed = _consent(age_band=AiAgeBand.TEEN, guardian_confirmed_at=NOW)
+    assert _state(confirmed) == (False, "TEEN_NOT_ENABLED")
+
+
+def test_under_14_needs_operator_zdr_and_guardian() -> None:
+    child = _consent(age_band=AiAgeBand.UNDER_14)
+    confirmed = _consent(age_band=AiAgeBand.UNDER_14, guardian_confirmed_at=NOW)
+    for settings in (
+        {},
+        {"ai_under14_enabled": True},  # ZDR 없음
+        {"ai_zdr_approved": True},  # 운영자 허용 없음
+        {"ai_teens_enabled": True, "ai_zdr_approved": True},  # 청소년 허용은 무관
+    ):
+        assert _state(confirmed, **settings) == (False, "UNDER_14_BLOCKED")
+    both = {"ai_under14_enabled": True, "ai_zdr_approved": True}
+    assert _state(child, **both) == (False, "GUARDIAN_PENDING")  # 법정대리인 확인 필수
+    assert _state(confirmed, **both) == (True, None)
+
+
+def test_needs_guardian() -> None:
+    assert policy.needs_guardian(AiAgeBand.UNDER_14, make_settings())
+    assert not policy.needs_guardian(AiAgeBand.TEEN, make_settings())
+    assert policy.needs_guardian(AiAgeBand.TEEN, make_settings(ai_teen_guardian_required=True))
+    assert not policy.needs_guardian(AiAgeBand.ADULT, make_settings(ai_teen_guardian_required=True))
 
 
 def test_guardian_token_is_hashed_and_expires() -> None:
-    now = dt.datetime(2026, 11, 12, tzinfo=dt.UTC)
-    token, digest, expires = policy.new_guardian_token(now)
+    token, digest, expires = policy.new_guardian_token(NOW)
     assert len(token) >= 40 and digest == policy.hash_token(token) and digest != token
-    assert expires - now == dt.timedelta(days=policy.GUARDIAN_LINK_DAYS)
+    assert expires - NOW == dt.timedelta(days=policy.GUARDIAN_LINK_DAYS)

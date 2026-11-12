@@ -165,9 +165,14 @@ class Settings(BaseSettings):
     # 운영자 승인: OpenAI 데이터 무보관(ZDR)이 이 조직에 승인·적용됨. false면 만 13세 미만 학생의
     # 전사문은 보호자 동의가 있어도 보내지 않는다 (OpenAI Under-18 guidance)
     ai_zdr_approved: bool = False
-    # 운영자 승인 (v0.9.6 배포 준비): 만 18세 미만 학생의 전사문 외부 전송 허용.
-    # 보호자 확인 방식의 법률 검토·OpenAI 약관 원문 확인 전까지 false — 보호자가 확인해도 차단
-    ai_minors_enabled: bool = False
+    # --- 연령별 외부 AI 전송 허용 (운영자 승인, 모두 기본 false) -------------------
+    # 만 14~17세: 본인 동의(국내법) + OpenAI 미성년자 보호조치 확인 후 true
+    ai_teens_enabled: bool = False
+    # 만 14~17세에도 보호자 확인을 요구 (OpenAI 비즈니스 약관이 보호자 허락을 요구하는 것으로
+    # 확인되면 true). 국내법상으로는 만 14세 이상 본인 동의 가능
+    ai_teen_guardian_required: bool = False
+    # 만 14세 미만: 법정대리인 동의 확인 방법(시행령 제17조의2) 충족 + ZDR 승인 후에만 true
+    ai_under14_enabled: bool = False
 
     # --- OpenAI (Worker 전용, 키는 GitHub Actions Secret에만) -------------------
     openai_api_key: SecretStr | None = None

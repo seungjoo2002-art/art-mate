@@ -17,9 +17,10 @@ from tests.db.test_migrations_v051 import _alembic
 def test_lineage_is_linear() -> None:
     history = _alembic("history")
     assert "0010 -> 0011" in history
-    assert "0011 -> 0012 (head)" in history
+    assert "0011 -> 0012" in history
+    assert "0012 -> 0013 (head)" in history
     heads = _alembic("heads")
-    assert heads.count("(head)") == 1 and "0012" in heads
+    assert heads.count("(head)") == 1 and "0013" in heads
 
 
 async def _consents(conn: asyncpg.Connection, user: uuid.UUID) -> list[asyncpg.Record]:
@@ -49,7 +50,7 @@ async def test_existing_db_upgrades_step_by_step_and_keeps_data(migrated_databas
         _alembic("upgrade", "0011")  # PR #48 먼저 (운영 DB가 0011인 경우도 여기서부터 같다)
         assert await conn.fetchval("SELECT real_name FROM profiles WHERE id = $1", user) is None
         _alembic("upgrade", "0012")
-        assert "0012 (head)" in _alembic("current")
+        assert "0012" in _alembic("current")
 
         rows = await _consents(conn, user)
         assert len(rows) == 1
@@ -98,4 +99,53 @@ async def test_existing_db_upgrades_step_by_step_and_keeps_data(migrated_databas
     finally:
         _alembic("upgrade", "head")
         await conn.execute("DELETE FROM profiles WHERE id = $1", user)
+        await conn.close()
+
+
+async def test_0013_maps_age_bands_conservatively(migrated_database: str) -> None:
+    """0012의 UNDER_13·MINOR(13~17)는 만 14세 기준으로 구분할 수 없어 더 엄격한 UNDER_14로."""
+    conn = await asyncpg.connect(_asyncpg_dsn(migrated_database))
+    users = {band: uuid.uuid4() for band in ("UNDER_13", "MINOR", "ADULT")}
+    try:
+        _alembic("downgrade", "0012")
+        for band, user in users.items():
+            await conn.execute(
+                "INSERT INTO profiles (id, display_name, user_type) VALUES ($1, 's', 'STUDENT')",
+                user,
+            )
+            await conn.execute(
+                "INSERT INTO ai_processing_consents (id, user_id, provider, purpose,"
+                " policy_version, granted_by, granted_at, age_band) VALUES ($1, $2, 'OPENAI',"
+                " 'FEEDBACK_SUMMARY', '2026-12-ai-v2', 'SELF', now(), $3)",
+                uuid.uuid4(),
+                user,
+                band,
+            )
+
+        async def bands() -> dict[str, str]:
+            rows = await conn.fetch(
+                "SELECT user_id, age_band FROM ai_processing_consents WHERE user_id = ANY($1)",
+                list(users.values()),
+            )
+            by_user = {r["user_id"]: r["age_band"] for r in rows}
+            return {band: by_user[user] for band, user in users.items()}
+
+        _alembic("upgrade", "0013")
+        assert await bands() == {"UNDER_13": "UNDER_14", "MINOR": "UNDER_14", "ADULT": "ADULT"}
+        await conn.execute(
+            "UPDATE ai_processing_consents SET age_band = 'TEEN' WHERE user_id = $1",
+            users["ADULT"],
+        )
+        with pytest.raises(asyncpg.CheckViolationError):
+            await conn.execute(
+                "UPDATE ai_processing_consents SET age_band = 'MINOR' WHERE user_id = $1",
+                users["ADULT"],
+            )
+        _alembic("downgrade", "0012")
+        assert await bands() == {"UNDER_13": "UNDER_13", "MINOR": "UNDER_13", "ADULT": "MINOR"}
+        _alembic("upgrade", "head")
+        assert "No new upgrade operations detected" in _alembic("check")
+    finally:
+        _alembic("upgrade", "head")
+        await conn.execute("DELETE FROM profiles WHERE id = ANY($1)", list(users.values()))
         await conn.close()

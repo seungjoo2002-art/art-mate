@@ -1,4 +1,5 @@
 # v0.9.6 운영 배포 준비 — 브랜치·마이그레이션·보안·설정 점검
+> **2026-11-13 갱신**: `AI_MINORS_ENABLED`는 연령별 설정(`AI_TEENS_ENABLED`·`AI_TEEN_GUARDIAN_REQUIRED`·`AI_UNDER14_ENABLED`)으로 바뀌었다 → [minors-ai-policy-v0.9.6.md](minors-ai-policy-v0.9.6.md)
 
 > 작성: 2026-11-12. 이번 작업에서 하지 않은 것: 운영 DB 변경, 실제 OpenAI 호출, 결제, main 병합.
 

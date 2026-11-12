@@ -56,8 +56,10 @@ jobs:
       OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
       # OpenAI 데이터 무보관(ZDR) 승인 후에만 true → 만 13세 미만 전송 허용
       AI_ZDR_APPROVED: ${{ vars.AI_ZDR_APPROVED || 'false' }}
-      # 미성년자 전송 허용 (법률 검토 후에만 true). API 서버(Render)와 같은 값
-      AI_MINORS_ENABLED: ${{ vars.AI_MINORS_ENABLED || 'false' }}
+      # 연령별 전송 허용 (법률 검토 후에만 true). API 서버(Render)와 같은 값이어야 한다
+      AI_TEENS_ENABLED: ${{ vars.AI_TEENS_ENABLED || 'false' }}
+      AI_TEEN_GUARDIAN_REQUIRED: ${{ vars.AI_TEEN_GUARDIAN_REQUIRED || 'false' }}
+      AI_UNDER14_ENABLED: ${{ vars.AI_UNDER14_ENABLED || 'false' }}
       AI_SUMMARY_ENABLED: ${{ vars.AI_SUMMARY_ENABLED || 'false' }}
       GROWTH_AI_ENABLED: ${{ vars.GROWTH_AI_ENABLED || 'false' }}
       # 운영자 확인: Gemini 유료 등급 + 제공자 약관(연령 조항)·동의 범위 검토 (없으면 외부 AI 전송 안 함)

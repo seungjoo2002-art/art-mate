@@ -16,7 +16,7 @@ import {
   retryTranscription,
 } from '../aiApi'
 import { pollDelay, recordingCardState } from '../aiStatus'
-import { consentReasonMessage } from '../consentCopy'
+import { BLOCKED_REASONS, consentReasonMessage } from '../consentCopy'
 import { resolvePlan } from '../stt/browserStt'
 import { forgetInterrupted, getInterrupted, skipToServer, startDeviceJob } from '../stt/deviceJobs'
 import { useDeviceJob } from '../stt/useBrowserStt'
@@ -378,7 +378,7 @@ export default function RecordingAiStatus({ artworkId, recording }) {
             {consentReasonMessage(consent.reason) ??
               'AI 첨삭 정리를 하려면 AI 사용 동의가 필요해요. 동의하지 않아도 대본은 볼 수 있어요.'}
           </p>
-          {!['UNDER_13_BLOCKED', 'MINOR_BLOCKED'].includes(consent.reason) && (
+          {!BLOCKED_REASONS.includes(consent.reason) && (
             <button
               type="button"
               className={styles.link}

@@ -18,8 +18,14 @@ const RECIPIENT = {
 }
 
 const AGE_ITEM = [
-  '나이 확인',
-  '생년월로 나이 구간만 확인하고 생년월은 저장하지 않아요. 만 18세 미만은 보호자(법정대리인)가 따로 확인해야 AI 정리를 쓸 수 있어요. 만 13세 미만은 아직 이용할 수 없어요.',
+  '나이별 동의',
+  '생년월로 나이 구간만 확인하고 생년월은 저장하지 않아요. 만 14세 이상은 본인이 동의할 수 있어요. 만 14세 미만은 법정대리인(부모님 등)의 동의와 확인이 필요하고, 지금은 이용할 수 없어요.',
+]
+
+// 학생이 직접 읽는 AI 안내 (연령에 맞는 쉬운 말 — OpenAI 미성년자 가이드, 개인정보 보호법 제22조의2)
+const AI_NOTICE_ITEM = [
+  'AI 정리 안내',
+  'AI 정리는 선생님 말을 요약한 초안이라 틀릴 수 있어요. 대본과 다르면 직접 고치거나 지울 수 있고, 내가 확정한 내용만 성장 분석에 쓰여요. 이름·전화번호처럼 알아볼 수 있는 정보는 보내기 전에 최대한 가리지만 모두 가려지지는 않아요.',
 ]
 
 export function consentCopy(purpose, provider = 'OPENAI') {
@@ -37,6 +43,7 @@ export function consentCopy(purpose, provider = 'OPENAI') {
         ],
         ['보관', `ART MATE: 결과는 근거 첨삭을 삭제할 때까지 보관해요. ${r.keep}`],
         AGE_ITEM,
+        AI_NOTICE_ITEM,
         ['거부할 권리', '동의하지 않아도 통계와 기본 연습 과제 추천은 그대로 쓸 수 있어요.'],
         [
           '동의 철회',
@@ -60,6 +67,7 @@ export function consentCopy(purpose, provider = 'OPENAI') {
       ],
       ['보관', `ART MATE: 전사문·요약은 녹음을 삭제할 때까지 보관해요. ${r.keep}`],
       AGE_ITEM,
+      AI_NOTICE_ITEM,
       ['거부할 권리', '동의하지 않아도 녹음·재생·대본 보기는 그대로 쓸 수 있어요. AI 정리만 쓸 수 없어요.'],
       [
         '동의 철회',
@@ -75,12 +83,19 @@ export function consentCopy(purpose, provider = 'OPENAI') {
 /** 동의가 아직 유효하지 않은 이유 → 학생에게 보여 줄 문장 (null이면 일반 동의 화면) */
 export function consentReasonMessage(reason) {
   if (reason === 'GUARDIAN_PENDING') return '보호자 확인을 기다리고 있어요. 보호자가 링크에서 확인하면 AI 정리를 쓸 수 있어요.'
-  if (reason === 'MINOR_BLOCKED')
-    return '만 18세 미만은 아직 AI 첨삭 정리를 쓸 수 없어요. 준비가 끝나면 보호자 확인 후 쓸 수 있어요. 녹음과 대본은 그대로 쓸 수 있어요.'
-  if (reason === 'UNDER_13_BLOCKED') return '만 13세 미만은 아직 AI 첨삭 정리를 쓸 수 없어요. 녹음과 대본은 그대로 쓸 수 있어요.'
+  if (reason === 'TEEN_NOT_ENABLED')
+    return '만 18세 미만 학생의 AI 첨삭 정리는 아직 준비 중이에요. 녹음과 대본은 그대로 쓸 수 있어요.'
+  if (reason === 'UNDER_14_BLOCKED')
+    return '만 14세 미만은 아직 AI 첨삭 정리를 쓸 수 없어요. 녹음과 대본은 그대로 쓸 수 있어요.'
   return null
 }
 
-/** 보호자 확인 링크 (토큰은 동의·재발급 응답에서 한 번만 받는다) */
+/** 보호자 확인을 기다리는 대신 이용할 수 없는 상태 */
+export const BLOCKED_REASONS = ['TEEN_NOT_ENABLED', 'UNDER_14_BLOCKED']
+
+/**
+ * 보호자 확인 링크 (토큰은 동의·재발급 응답에서 한 번만 받는다).
+ * 토큰은 URL 조각(#)에 둔다 — 조각은 서버·접근 로그·Referer로 전송되지 않는다.
+ */
 export const guardianLink = (token, origin = globalThis.location?.origin ?? '') =>
-  `${origin}/guardian-consent/${token}`
+  `${origin}/guardian-consent#${token}`
