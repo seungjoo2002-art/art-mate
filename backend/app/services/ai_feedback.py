@@ -41,6 +41,7 @@ from app.core.exceptions import (
     ErrorCode,
     ForbiddenError,
     NotFoundError,
+    RateLimitedError,
     StorageNotConfiguredError,
     StorageUnavailableError,
     SttNotConfiguredError,
@@ -113,6 +114,7 @@ from app.services.ai_cleanup import (
     consent_version,
     skip_pending_narratives,
 )
+from app.services.ai_limits import check_summary_quota, log_stt_disabled, log_summary_disabled
 from app.services.artworks import ArtworkService
 
 KIND_ORDER = (
@@ -386,15 +388,33 @@ class AiFeedbackService:
         *,
         auto_summarize: bool,
         retry: bool = False,
+        defer_seconds: int = 0,
     ) -> tuple[JobRead, bool]:
-        """(작업, 새로 만들었는지). 진행 중 작업이 있으면 그것을 돌려준다 (중복 방지·멱등)."""
+        """(작업, 새로 만들었는지). 진행 중 작업이 있으면 그것을 돌려준다 (중복 방지·멱등).
+
+        defer_seconds > 0: 기기 전사 중 백업 작업 (run_after를 미룸).
+        defer_seconds == 0인데 미뤄 둔 대기 작업이 있으면 지금 처리하도록 앞당긴다.
+        """
         recording_id = recording.id
         if not self.settings.stt_enabled:
+            log_stt_disabled("request_transcription")
             raise SttNotConfiguredError()
         if self.audio_storage is None:
             raise StorageNotConfiguredError()
+        defer_seconds = min(defer_seconds, self.settings.stt_max_defer_seconds)
         active = await self._active_job(recording.id, AiJobType.TRANSCRIBE)
         if active is not None:
+            now = clock.utc_now()
+            if (
+                defer_seconds == 0
+                and active.status == AiJobStatus.QUEUED
+                and active.run_after > now
+            ):
+                active.run_after = now
+                if auto_summarize and not active.params.get("chain_summary"):
+                    active.params = {**active.params, "chain_summary": True}
+                await self.session.commit()
+                await self.session.refresh(active)
             return job_read(active), False
         if recording.audio_deleted_at is not None:
             raise ConflictError(
@@ -445,7 +465,7 @@ class AiFeedbackService:
             requested_by=requester.id,
             attempts=0,
             max_attempts=self.settings.job_max_attempts,
-            run_after=now,
+            run_after=now + timedelta(seconds=defer_seconds),
             source_url=urls[recording.storage_path],
             source_url_expires_at=now + timedelta(seconds=ttl),
             params={"chain_summary": auto_summarize},
@@ -574,15 +594,24 @@ class AiFeedbackService:
         recording.transcription_updated_at = now
         await self.session.commit()
         summary_job = None
-        if (
-            data.auto_summarize
-            and self.settings.ai_summary_enabled
-            and await self.has_valid_ai_consent(recording.owner_id)
-        ):
-            summary_job, _ = await self.request_summary(recording, owner, regenerate=False)
+        summary_status = "NOT_REQUESTED"
+        if data.auto_summarize:
+            if not self.settings.ai_summary_enabled:
+                log_summary_disabled("save_browser_transcript")
+                summary_status = "AI_DISABLED"
+            elif not await self.has_valid_ai_consent(recording.owner_id):
+                summary_status = "CONSENT_REQUIRED"
+            else:
+                try:
+                    summary_job, _ = await self.request_summary(recording, owner, regenerate=False)
+                    summary_status = "QUEUED"
+                except RateLimitedError:
+                    summary_status = "LIMIT_REACHED"
         recording = await self._recording_by_id(recording_id)
         return BrowserTranscriptResult(
-            transcript=await self.transcript(recording), summary_job=summary_job
+            transcript=await self.transcript(recording),
+            summary_job=summary_job,
+            summary_status=summary_status,  # type: ignore[arg-type]
         )
 
     async def _recording_by_id(self, recording_id: uuid.UUID) -> FeedbackRecording:
@@ -695,6 +724,7 @@ class AiFeedbackService:
         self, recording: FeedbackRecording, requester: Profile, *, regenerate: bool
     ) -> tuple[JobRead, bool]:
         if not self.settings.ai_summary_enabled:
+            log_summary_disabled("request_summary")
             raise AiNotConfiguredError()
         recording_id = recording.id
         active = await self._active_job(recording.id, AiJobType.SUMMARIZE)
@@ -723,6 +753,7 @@ class AiFeedbackService:
                 code=ErrorCode.FEEDBACK_INVALID_STATE,
                 details={"feedback_id": str(current.id)},
             )
+        await check_summary_quota(self.session, self.settings, recording.owner_id)
         job = AiProcessingJob(
             id=uuid.uuid4(),
             job_type=AiJobType.SUMMARIZE,

@@ -83,3 +83,34 @@ async def get_options(request: Request, response: Response) -> Options:
         weakness_categories=_options(WEAKNESS_CATEGORY_LABELS),
         feedback_item_kinds=_options(FEEDBACK_ITEM_KIND_LABELS),
     )
+
+
+class AiFeatures(BaseModel):
+    """AI·음성 변환 기능 사용 가능 여부 (화면 표시용, 설정값·키는 포함하지 않음)."""
+
+    browser_transcription: bool = Field(
+        description="기기(브라우저) 음성 변환 — 기기 지원 여부는 화면에서 확인"
+    )
+    server_transcription: bool = Field(
+        description="서버 음성 변환 요청 가능 (처리는 주기 작업, 지연 가능)"
+    )
+    ai_summary: bool = Field(description="AI 첨삭 정리 요청 가능")
+    ai_summary_daily_limit: int = Field(
+        description="학생 1명의 하루 AI 정리 요청 한도 (0 = 제한 없음)"
+    )
+
+
+@router.get(
+    "/ai-features",
+    summary="AI·음성 변환 기능 사용 가능 여부",
+    description="꺼진 기능은 화면에서 미리 안내한다 (요청 후 503을 받기 전에). 인증 불필요.",
+)
+async def get_ai_features(request: Request, response: Response) -> AiFeatures:
+    response.headers["Cache-Control"] = "public, max-age=60"
+    settings = request.app.state.settings
+    return AiFeatures(
+        browser_transcription=True,
+        server_transcription=settings.stt_enabled,
+        ai_summary=settings.ai_summary_enabled,
+        ai_summary_daily_limit=settings.ai_summary_daily_limit,
+    )

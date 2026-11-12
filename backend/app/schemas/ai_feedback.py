@@ -73,6 +73,16 @@ class TranscriptionRequest(InputModel):
         description="전사가 끝나면 AI 요약을 자동으로 요청 "
         "(그 시점에 학생의 AI 전송 동의가 있어야 함)",
     )
+    defer_seconds: int = Field(
+        default=0,
+        ge=0,
+        le=21600,
+        description="(v0.9.3) 이 시간 뒤에 서버 처리 시작. "
+        "기기(브라우저)에서 변환하는 동안 만들어 두는 백업 작업용: "
+        "기기 전사가 저장되면 취소되고, 브라우저가 닫히면 서버가 이어서 처리한다. "
+        "서버 상한(STT_MAX_DEFER_SECONDS)을 넘으면 상한으로 줄인다. "
+        "0으로 다시 요청하면 대기 중인 백업 작업을 바로 처리하도록 앞당긴다.",
+    )
 
 
 class JobRead(BaseModel):
@@ -411,3 +421,10 @@ class BrowserTranscriptCreate(InputModel):
 class BrowserTranscriptResult(BaseModel):
     transcript: TranscriptRead
     summary_job: JobRead | None = Field(description="auto_summarize로 만든 요약 작업 (없으면 null)")
+    summary_status: Literal[
+        "QUEUED", "NOT_REQUESTED", "AI_DISABLED", "CONSENT_REQUIRED", "LIMIT_REACHED"
+    ] = Field(
+        default="NOT_REQUESTED",
+        description="요약 요청 결과: QUEUED 대기열 등록 / AI_DISABLED AI 정리 미설정 / "
+        "CONSENT_REQUIRED AI 전송 동의 없음 / LIMIT_REACHED 오늘 한도 초과",
+    )

@@ -19,6 +19,7 @@ from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 from app.core.security import build_token_verifier
 from app.db.session import create_database
 from app.integrations.supabase.storage import build_storage
+from app.services.worker_dispatch import WorkerDispatcher
 
 logger = logging.getLogger("app")
 
@@ -75,6 +76,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.audio_storage = build_storage(settings, settings.recording_bucket)
     # 공유용 파생 이미지 (v0.8): 원본과 분리된 비공개 버킷
     app.state.shared_storage = build_storage(settings, settings.shared_bucket)
+    # 작업을 큐에 넣으면 GitHub Actions Worker 실행 요청 (토큰이 없으면 아무것도 안 함)
+    app.state.worker_dispatcher = WorkerDispatcher()
 
     register_exception_handlers(app)
 

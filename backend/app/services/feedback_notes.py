@@ -51,6 +51,7 @@ from app.schemas.ai_feedback import (
     NoteSegment,
 )
 from app.services.ai_feedback import AiFeedbackService, job_read, review_mode_for
+from app.services.ai_limits import check_summary_quota, log_summary_disabled
 from app.services.ai_summary import split_segments
 
 MAX_NOTES_PER_ARTWORK = 50
@@ -278,6 +279,7 @@ class FeedbackNoteService:
         self, owner: Profile, note_id: uuid.UUID, *, regenerate: bool
     ) -> tuple[JobRead, bool]:
         if not self.settings.ai_summary_enabled:
+            log_summary_disabled("note_summary")
             raise AiNotConfiguredError()
         note, _ = await self._note(owner, note_id)
         ids: dict[str, Any] = {"note": note.id, "artwork": note.artwork_id, "version": note.version}
@@ -302,4 +304,5 @@ class FeedbackNoteService:
                 code=ErrorCode.FEEDBACK_INVALID_STATE,
                 details={"feedback_id": str(current.id)},
             )
+        await check_summary_quota(self.session, self.settings, owner.id)
         return await self._queue(ids["note"], ids["artwork"], owner, ids["version"])
