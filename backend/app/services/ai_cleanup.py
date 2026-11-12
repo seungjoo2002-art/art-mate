@@ -34,6 +34,7 @@ PURPOSE_JOB_TYPES: dict[AiConsentPurpose, tuple[AiJobType, ...]] = {
 
 
 def consent_version(settings: Settings, purpose: AiConsentPurpose) -> str:
+    """현재 동의서 버전 (판정 규칙 전체는 ai_consent_policy.evaluate)."""
     if purpose == AiConsentPurpose.GROWTH_COACHING:
         return settings.ai_growth_consent_version
     return settings.ai_consent_version

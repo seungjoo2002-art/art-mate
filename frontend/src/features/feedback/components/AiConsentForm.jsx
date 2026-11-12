@@ -1,87 +1,138 @@
 import { useState } from 'react'
-import { Button, Card, Checkbox } from '../../../components/ui'
+import { Button, Card, Checkbox, Select } from '../../../components/ui'
 import { toErrorMessage } from '../../../utils/errorMessages'
-import { saveAiConsent } from '../aiApi'
+import { renewGuardianLink, saveAiConsent } from '../aiApi'
+import { consentCopy, consentReasonMessage, guardianLink } from '../consentCopy'
 import styles from './ConsentForm.module.css'
 
-// 표시 항목: docs/frontend-integration-v0.6.md §1, v0.7 §7 (법적 검토 전 초안 — 확정 문구 나오면 교체)
-const FEEDBACK_SUMMARY_ITEMS = [
-  ['목적', '첨삭 녹음을 글로 바꾼 내용(전사문)을 요약·분류해 학습 기록으로 정리해요.'],
-  ['제공받는 곳', 'Google LLC (Gemini API) · 미국 등 국외로 전송돼요.'],
-  [
-    '보내는 내용',
-    '첨삭 녹음의 전사문(문장과 시각)만 보내요. 이름·학교·작품 제목·계정 정보는 보내지 않아요. 단, 녹음 안에서 말한 이름 등은 전사문에 포함될 수 있어요.',
-  ],
-  [
-    '보관',
-    'ART MATE: 전사문·요약은 녹음을 삭제할 때까지 보관해요. Google: 유료 API 약관에 따라 처리되며 모델 학습에 쓰이지 않아요.',
-  ],
-  ['거부할 권리', '동의하지 않아도 녹음과 재생은 그대로 쓸 수 있어요. AI 정리만 쓸 수 없어요.'],
-  [
-    '동의 철회',
-    '마이페이지에서 언제든 철회할 수 있어요. 진행 중인 정리는 취소되고, 이미 만든 정리는 남아요.',
-  ],
-]
+const THIS_YEAR = new Date().getFullYear()
+const YEARS = Array.from({ length: 60 }, (_, i) => {
+  const year = String(THIS_YEAR - 6 - i)
+  return { code: year, label: `${year}년` }
+})
+const MONTHS = Array.from({ length: 12 }, (_, i) => {
+  const month = String(i + 1).padStart(2, '0')
+  return { code: month, label: `${i + 1}월` }
+})
 
-const GROWTH_COACHING_ITEMS = [
-  ['목적', '확정된 첨삭 기록을 바탕으로 성장 리포트 설명과 맞춤 연습 과제 초안을 만들어요.'],
-  [
-    '제공받는 곳',
-    'Google LLC (Gemini API) · 미국 등 국외로 전송돼요. 모델 학습에 쓰이지 않는 유료 등급을 사용해요.',
-  ],
-  [
-    '보내는 내용',
-    '약점 카테고리별 통계(작품 수 등)와 확정된 첨삭 문장만 보내요. 작품 제목·이름·학원·계정 정보는 보내지 않아요.',
-  ],
-  ['거부할 권리', '동의하지 않아도 통계와 기본 연습 과제 추천은 그대로 쓸 수 있어요.'],
-  [
-    '동의 철회',
-    '마이페이지에서 언제든 철회할 수 있어요. 진행 중인 AI 생성은 취소되고, 이미 만든 결과는 남아요(근거 첨삭이 삭제되면 설명도 삭제).',
-  ],
-]
+/** 보호자에게 보낼 확인 링크 (복사·공유). 토큰은 동의 응답에서 한 번만 받는다 */
+function GuardianLinkPanel({ token, purpose }) {
+  const [current, setCurrent] = useState(token)
+  const [message, setMessage] = useState('')
+  const link = current ? guardianLink(current) : null
 
-const CONSENT_COPY = {
-  FEEDBACK_SUMMARY: {
-    title: 'AI 피드백 정리 동의',
-    sub: 'AI로 첨삭을 정리하려면 아래 내용에 동의해 주세요.',
-    items: FEEDBACK_SUMMARY_ITEMS,
-    agree: '위 내용을 확인했고 전사문을 AI(Google Gemini)로 보내는 데 동의합니다.',
-    submit: '동의하고 AI로 정리하기',
-  },
-  GROWTH_COACHING: {
-    title: 'AI 성장 코칭 동의',
-    sub: 'AI가 성장 리포트 설명과 연습 과제를 만들려면 아래 내용에 동의해 주세요.',
-    items: GROWTH_COACHING_ITEMS,
-    agree: '위 내용을 확인했고 확정된 첨삭 기록을 AI(Google Gemini)로 보내는 데 동의합니다.',
-    submit: '동의하기',
-  },
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link)
+      setMessage('링크를 복사했어요. 보호자에게 보내 주세요.')
+    } catch {
+      setMessage('복사하지 못했어요. 링크를 길게 눌러 복사해 주세요.')
+    }
+  }
+
+  async function share() {
+    try {
+      await navigator.share({ title: 'ART MATE 보호자 동의', url: link })
+    } catch {
+      // 취소
+    }
+  }
+
+  async function renew() {
+    setMessage('')
+    try {
+      const status = await renewGuardianLink(purpose)
+      setCurrent(status.guardian_token)
+    } catch (error) {
+      setMessage(toErrorMessage(error))
+    }
+  }
+
+  return (
+    <Card>
+      <p className={styles.sub}>
+        만 18세 미만은 보호자(법정대리인)의 확인이 필요해요. 아래 링크를 보호자에게 보내 주세요.
+        보호자가 링크에서 확인하면 AI 정리를 쓸 수 있어요. (링크는 7일 동안, 한 번만 쓸 수 있어요)
+      </p>
+      {link ? (
+        <>
+          <p className={styles.version} style={{ wordBreak: 'break-all' }}>
+            {link}
+          </p>
+          <div className={styles.checks}>
+            <Button onClick={copy}>링크 복사하기</Button>
+            {typeof navigator !== 'undefined' && navigator.share && (
+              <Button variant="soft" onClick={share}>
+                보호자에게 공유하기
+              </Button>
+            )}
+          </div>
+        </>
+      ) : (
+        <Button variant="soft" onClick={renew}>
+          보호자 확인 링크 다시 만들기
+        </Button>
+      )}
+      {message && <p className={styles.sub}>{message}</p>}
+    </Card>
+  )
 }
 
-/** AI 전송 동의 (녹음 동의와 별개). 체크박스는 기본 해제 */
-export default function AiConsentForm({ purpose = 'FEEDBACK_SUMMARY', requiredVersion, onSaved }) {
-  const copy = CONSENT_COPY[purpose]
+/**
+ * AI 전송 동의 (녹음 동의와 별개, v0.9.6).
+ * 생년월로 나이 구간만 확인 → 성인은 바로 유효, 만 18세 미만은 보호자 링크, 만 13세 미만은 이용 불가 안내.
+ * status: GET /ai-processing-consents/me 응답 (provider·reason·required_version)
+ */
+export default function AiConsentForm({ purpose = 'FEEDBACK_SUMMARY', status, onSaved }) {
+  const copy = consentCopy(purpose, status.provider)
   const [agreed, setAgreed] = useState(false)
-  const [underFourteen, setUnderFourteen] = useState(false)
-  const [guardianAgreed, setGuardianAgreed] = useState(false)
+  const [year, setYear] = useState('')
+  const [month, setMonth] = useState('')
+  const [result, setResult] = useState(null) // 저장 후 아직 유효하지 않은 동의 상태
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const canSubmit = agreed && (!underFourteen || guardianAgreed) && !submitting
+  const pending = result ?? (status.reason === 'GUARDIAN_PENDING' ? status : null)
+  const blocked = (result ?? status).reason === 'UNDER_13_BLOCKED'
+  const canSubmit = agreed && year && month && !submitting
 
   async function handleSubmit() {
     setSubmitting(true)
     setFormError('')
     try {
-      await saveAiConsent({
+      const saved = await saveAiConsent({
         purpose,
-        policyVersion: requiredVersion,
-        grantedBy: underFourteen ? 'GUARDIAN' : 'SELF',
+        policyVersion: status.required_version,
+        birthYearMonth: `${year}-${month}`,
       })
-      onSaved()
+      if (saved.is_valid) {
+        onSaved()
+        return
+      }
+      setResult(saved)
     } catch (error) {
       setFormError(toErrorMessage(error))
+    } finally {
       setSubmitting(false)
     }
+  }
+
+  if (blocked) {
+    return (
+      <div className={styles.form}>
+        <h2 className={styles.title}>{copy.title}</h2>
+        <p className={styles.sub}>{consentReasonMessage('UNDER_13_BLOCKED')}</p>
+      </div>
+    )
+  }
+
+  if (pending) {
+    return (
+      <div className={styles.form}>
+        <h2 className={styles.title}>보호자 확인이 필요해요</h2>
+        <GuardianLinkPanel token={pending.guardian_token} purpose={purpose} />
+      </div>
+    )
   }
 
   return (
@@ -100,21 +151,27 @@ export default function AiConsentForm({ purpose = 'FEEDBACK_SUMMARY', requiredVe
             </div>
           ))}
         </dl>
-        <p className={styles.version}>동의서 버전 {requiredVersion}</p>
+        <p className={styles.version}>동의서 버전 {status.required_version}</p>
       </Card>
 
       <div className={styles.checks}>
+        <Select
+          label="태어난 해"
+          placeholder="연도"
+          options={YEARS}
+          value={year}
+          onChange={(e) => setYear(e.target.value)}
+        />
+        <Select
+          label="태어난 달"
+          placeholder="월"
+          options={MONTHS}
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+        />
         <Checkbox checked={agreed} onChange={setAgreed}>
           {copy.agree}
         </Checkbox>
-        <Checkbox checked={underFourteen} onChange={setUnderFourteen}>
-          만 14세 미만이에요.
-        </Checkbox>
-        {underFourteen && (
-          <Checkbox checked={guardianAgreed} onChange={setGuardianAgreed}>
-            보호자(법정대리인)에게 내용을 알리고 동의를 받았어요.
-          </Checkbox>
-        )}
       </div>
 
       {formError && <p className={styles.error}>{formError}</p>}

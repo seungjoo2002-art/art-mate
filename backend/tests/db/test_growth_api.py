@@ -19,7 +19,7 @@ from tests.db.conftest import Actor, World
 from tests.fake_ai import FakeFetcher, FakeLlm, FakeStt
 
 API = "/api/v1"
-GROWTH_VERSION = "2026-11-growth-v1"
+GROWTH_VERSION = "2026-12-growth-v2"
 
 
 @dataclass
@@ -166,7 +166,12 @@ async def _seed_example(client, app, owner: Actor, **artwork) -> list[Seed]:  # 
 async def _growth_consent(client: httpx.AsyncClient, student: Actor) -> None:
     granted = await client.post(
         f"{API}/ai-processing-consents",
-        json={"purpose": "GROWTH_COACHING", "policy_version": GROWTH_VERSION, "agreed": True},
+        json={
+            "purpose": "GROWTH_COACHING",
+            "policy_version": GROWTH_VERSION,
+            "agreed": True,
+            "birth_year_month": "2000-01",
+        },
         headers=student.headers,
     )
     assert granted.status_code == 201, granted.text
@@ -346,7 +351,7 @@ async def test_report_dedupe_stale_regenerate_and_ai_narrative(  # type: ignore[
     # AI 설명문: 첨삭 요약 동의(FEEDBACK_SUMMARY)로는 안 된다 → SKIPPED
     await client.post(
         f"{API}/ai-processing-consents",
-        json={"policy_version": "2026-11-ai-v1", "agreed": True},
+        json={"policy_version": "2026-12-ai-v2", "agreed": True, "birth_year_month": "2000-01"},
         headers=student.headers,
     )
     skipped = await client.post(

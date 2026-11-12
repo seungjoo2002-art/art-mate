@@ -22,7 +22,7 @@ import signal
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.session import create_database
-from app.integrations.ai.gemini import build_llm
+from app.integrations.ai.llm import build_llm
 from app.integrations.ai.stt import build_stt
 from app.integrations.supabase.storage import HttpSignedUrlFetcher
 from app.models.enums import AiJobType
@@ -115,7 +115,7 @@ async def main(argv: list[str] | None = None) -> None:
         extra={
             "mode": "batch" if args.once else "forever",
             "stt": settings.stt_model if stt else None,
-            "llm": settings.gemini_model if llm else None,
+            "llm": llm.model_name if llm else None,
             "job_types": sorted(t.value for t in job_types) if job_types is not None else "all",
         },
     )
@@ -135,9 +135,10 @@ async def main(argv: list[str] | None = None) -> None:
             if waiting_llm and llm is None:
                 logger.warning(
                     "AI jobs are waiting but this worker cannot process them: set GitHub Actions "
-                    "variables AI_SUMMARY_ENABLED=true, AI_PROVIDER_TERMS_CONFIRMED=true (after "
-                    "confirming a paid Gemini tier and the provider terms) "
-                    "and secret GEMINI_API_KEY",
+                    "variables AI_PROVIDER, AI_SUMMARY_ENABLED=true, "
+                    "AI_PROVIDER_TERMS_CONFIRMED=true "
+                    "(after the provider terms review) and secret OPENAI_API_KEY "
+                    "(GEMINI_API_KEY for gemini)",
                     extra={"waiting": waiting_llm},
                 )
             if pending.get(AiJobType.TRANSCRIBE.value) and stt is None:

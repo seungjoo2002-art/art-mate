@@ -63,7 +63,6 @@ from app.models.enums import (
     AiConsentPurpose,
     AiJobStatus,
     AiJobType,
-    AiProvider,
     ConsentType,
     FeedbackItemKind,
     FeedbackItemOrigin,
@@ -80,7 +79,7 @@ from app.models.enums import (
 from app.models.growth import GrowthReport
 from app.models.recording import FeedbackRecording, RecordingConsent
 from app.schemas.growth import Evidence
-from app.services.ai_cleanup import consent_version
+from app.services import ai_consent_policy as consent_policy
 from app.services.ai_feedback import review_mode_for
 from app.services.ai_summary import (
     KIND_FIELDS,
@@ -506,17 +505,19 @@ class JobRunner:
         owner_id: uuid.UUID,
         purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY,
     ) -> None:
-        version = (
+        # API와 같은 규칙 (v0.9.6): 현재 제공자·버전, 연령 구간, 보호자 확인, 13세 미만 차단.
+        # 작업을 큐에 넣은 뒤 조건이 바뀌었어도(철회·제공자 변경 등) 보내기 직전에 다시 확인한다
+        consent = (
             await session.execute(
-                select(AiProcessingConsent.policy_version).where(
+                select(AiProcessingConsent).where(
                     AiProcessingConsent.user_id == owner_id,
-                    AiProcessingConsent.provider == AiProvider.GOOGLE_GEMINI,
+                    AiProcessingConsent.provider == consent_policy.provider_for(self.settings),
                     AiProcessingConsent.purpose == purpose,
                     AiProcessingConsent.revoked_at.is_(None),
                 )
             )
         ).scalar_one_or_none()
-        if version != consent_version(self.settings, purpose):
+        if not consent_policy.evaluate(consent, self.settings, purpose).is_valid:
             raise JobCancelled("AI_CONSENT_REVOKED")
 
     # ------------------------------------------------------------------ TRANSCRIBE
