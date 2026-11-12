@@ -606,7 +606,7 @@ async def test_consent_revocation_blocks_and_cancels(  # type: ignore[no-untyped
     await ai.drain()
     await _ai_consent(client, student)
     status = (await client.get(f"{API}/ai-processing-consents/me", headers=student.headers)).json()
-    assert status["is_valid"] and status["consent"]["provider"] == "GOOGLE_GEMINI"
+    assert status["is_valid"] and status["consent"]["provider"] == "OPENAI"
 
     # 대기 중 요약 작업 → 철회하면 취소
     await client.post(f"{base}/summary", headers=student.headers)
