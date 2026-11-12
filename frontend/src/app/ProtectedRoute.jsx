@@ -3,13 +3,18 @@ import FullScreenStatus from '../components/layout/FullScreenStatus'
 import { Button } from '../components/ui'
 import AuthStatusScreen from './AuthStatusScreen'
 import { useAuth } from './providers/AuthContext'
+import { rememberReturnPath } from './returnPath'
 
 /** 로그인 + 프로필이 있어야 들어갈 수 있는 화면. 학생 전용 서비스 */
 export default function ProtectedRoute() {
-  const { status, profile, signOut } = useAuth()
-  const { pathname } = useLocation()
+  const { status, profile, signOut, signedOutBy } = useAuth()
+  const { pathname, search } = useLocation()
 
-  if (status === 'signedOut') return <Navigate to="/" replace />
+  if (status === 'signedOut') {
+    // 다시 로그인하면 보던 화면으로 돌아오게 (이전에는 항상 홈으로 이동)
+    if (signedOutBy !== 'user') rememberReturnPath(pathname + search)
+    return <Navigate to="/" replace />
+  }
   if (status === 'needsProfile') return <Navigate to="/onboarding" replace />
   if (status !== 'ready') return <AuthStatusScreen />
 

@@ -16,6 +16,17 @@ export default function AuthStatusScreen() {
     )
   }
 
+  if (status === 'offline') {
+    return (
+      <FullScreenStatus
+        title="연결이 불안정해요"
+        description={'로그인 정보는 그대로 있어요.\n인터넷 연결을 확인한 뒤 다시 시도해 주세요.'}
+      >
+        <Button onClick={retry}>다시 시도</Button>
+      </FullScreenStatus>
+    )
+  }
+
   if (status === 'error') {
     return (
       <FullScreenStatus title="정보를 불러오지 못했어요" description={toErrorMessage(error)}>
