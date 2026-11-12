@@ -169,7 +169,11 @@ async def sweep_with_new_session(state) -> bool:  # type: ignore[no-untyped-def]
     dispatcher: WorkerDispatcher | None = getattr(state, "worker_dispatcher", None)
     database = getattr(state, "database", None)
     settings: Settings = state.settings
-    if dispatcher is None or database is None or not dispatcher.enabled(settings):
+    if (
+        not isinstance(dispatcher, WorkerDispatcher)
+        or database is None
+        or not dispatcher.enabled(settings)
+    ):
         return False
     try:
         async with database.session_factory() as session:
