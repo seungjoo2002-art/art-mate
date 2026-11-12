@@ -5,6 +5,7 @@
 값은 코드 배포로만 바뀌므로 응답을 캐시해도 된다 (Cache-Control 1시간).
 """
 
+import datetime as dt
 from typing import Literal
 
 from fastapi import APIRouter, Request, Response
@@ -19,6 +20,7 @@ from app.models.enums import (
     WORK_CATEGORY_LABELS,
     WORK_STATUS_LABELS,
 )
+from app.services.worker_dispatch import WorkerDispatcher, queue_health
 
 router = APIRouter(prefix="/meta", tags=["meta"])
 
@@ -106,6 +108,60 @@ class AiFeatures(BaseModel):
     )
     ai_summary_daily_limit: int = Field(
         description="학생 1명의 하루 AI 정리 요청 한도 (0 = 제한 없음)"
+    )
+
+
+class WorkerDispatchInfo(BaseModel):
+    at: dt.datetime
+    reason: str = Field(description="job / transcription / summary / stale ...")
+    ok: bool
+    status: int | None = Field(description="GitHub 응답 코드 (204 정상, 401·403 토큰, 404 이름)")
+
+
+class WorkerStatus(BaseModel):
+    """Worker 연결 상태 (운영 확인용, v0.9.6). 토큰 값·작업 내용·사용자 정보는 포함하지 않는다."""
+
+    dispatch_configured: bool = Field(description="API 서버에 WORKER_DISPATCH_TOKEN이 있음")
+    due_jobs: int | None = Field(
+        description="지금 처리할 수 있는 대기 작업 수 (DB 미설정이면 null)"
+    )
+    oldest_due_minutes: int | None = Field(description="가장 오래 기다린 작업의 대기 시간(분)")
+    last_dispatch: WorkerDispatchInfo | None = Field(
+        description="이 서버 프로세스가 마지막으로 보낸 실행 요청 결과 (재시작하면 비어 있음)"
+    )
+
+
+@router.get(
+    "/worker-status",
+    summary="Worker 연결 상태 (운영 확인용)",
+    description="즉시 실행 토큰 설정 여부, 대기 작업 수·대기 시간, 마지막 실행 요청 결과.",
+)
+async def get_worker_status(request: Request, response: Response) -> WorkerStatus:
+    response.headers["Cache-Control"] = "no-store"
+    state = request.app.state
+    settings = state.settings
+    dispatcher = getattr(state, "worker_dispatcher", None)
+    due = oldest = None
+    if state.database is not None:
+        try:
+            async with state.database.session_factory() as session:
+                health = await queue_health(session)
+            due = health.due_jobs
+            if health.oldest_due_at is not None:
+                waited = dt.datetime.now(dt.UTC) - health.oldest_due_at
+                oldest = max(0, int(waited.total_seconds() // 60))
+        except Exception:  # DB 장애 시에도 나머지 정보는 보여 준다
+            due = oldest = None
+    last = dispatcher.last_result if dispatcher is not None else None
+    return WorkerStatus(
+        dispatch_configured=WorkerDispatcher.enabled(settings),
+        due_jobs=due,
+        oldest_due_minutes=oldest,
+        last_dispatch=(
+            WorkerDispatchInfo(at=last.at, reason=last.reason, ok=last.ok, status=last.status)
+            if last
+            else None
+        ),
     )
 
 

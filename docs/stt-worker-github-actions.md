@@ -75,6 +75,16 @@ API가 작업을 큐에 넣을 때 워크플로를 바로 실행 요청(`workflo
 - 기기 변환 중 만드는 **백업 전사 작업**(`defer_seconds`, 기본 15분 뒤)은 바로 실행 요청하지 않는다. 기기 변환이 실패하면 프론트가 같은 요청을 `defer_seconds` 없이 보내 백업을 앞당기고, 그때 실행을 요청한다.
 - 공개 저장소의 표준 러너는 사용 시간 과금이 없다. 실행 1회당 준비(설치·캐시 복원) 약 20~60초.
 
+### 2.3.1 장시간 방치 방지 (v0.9.6 보강)
+
+| 장치 | 동작 |
+| --- | --- |
+| 오래 대기한 작업 재요청 | 실행 시각이 `WORKER_STALE_AFTER_SECONDS`(기본 120초) 넘게 지난 작업이 있으면 Worker 실행을 다시 요청한다. 학생 화면이 전사·요약 상태를 확인할 때(응답 뒤)와 API 서버 주기 점검(`WORKER_SWEEP_INTERVAL_SECONDS`, 기본 300초)에서 확인하고, 프로세스당 `WORKER_REDISPATCH_INTERVAL_SECONDS`(기본 600초)에 한 번만 보낸다. 처음 요청이 실패했거나, 토큰을 나중에 넣었거나, 미뤄 둔 백업 작업이 실행 시각이 된 경우를 모두 처리한다 |
+| 연속 실행 | 한 번 실행에서 처리 한도(`max_jobs`)까지 처리했으면 워크플로가 `GITHUB_TOKEN`으로 다음 실행을 바로 요청한다 (권한 `actions: write`). 한도만큼 처리했을 때만 요청하므로 처리할 수 없는 작업 때문에 반복되지 않는다 |
+| 상태 확인 | `GET /api/v1/meta/worker-status` (인증 불필요): `dispatch_configured`(토큰 설정 여부), `due_jobs`, `oldest_due_minutes`, `last_dispatch`(마지막 요청 결과·GitHub 응답 코드). 토큰 값·작업 내용 없음 |
+
+**Render Free 주의**: 15분 동안 요청이 없으면 서버가 잠들어 주기 점검도 멈춘다. 학생이 앱을 열면 서버가 깨어나 상태 확인과 함께 재요청이 동작한다. 아무도 앱을 열지 않는 동안에는 GitHub 예약 실행만 남는다.
+
 ### 2.4 Supabase
 
 - 마이그레이션 `0009`까지 적용 (완료했다고 전달받음 — `backend/scripts/verify_dev_environment.py`로 확인 가능).
