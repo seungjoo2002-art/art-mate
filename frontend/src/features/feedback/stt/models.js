@@ -98,3 +98,21 @@ export function looksDegenerate(segments) {
   const unique = new Set(segments.map((s) => s.text))
   return unique.size <= segments.length / 2
 }
+
+// Whisper가 무음·잡음 구간에서 자주 만들어 내는 한국어 문장 (영상 자막 학습 데이터의 흔적).
+// 미술 첨삭 녹음에 실제로 나올 일이 거의 없어 이 문구가 든 구간은 버린다.
+const HALLUCINATIONS = [
+  /시청\s*해\s*주셔서\s*감사/,
+  /구독\s*(과|와)?\s*좋아요/,
+  /좋아요\s*(와|과)?\s*구독/,
+  /(MBC|KBS|SBS|YTN|JTBC)\s*뉴스/,
+  /자막\s*(제공|제작|by)/i,
+  /한글\s*자막/,
+  /다음\s*영상에서\s*(만나요|뵙겠습니다)/,
+  /^\s*(감사합니다|고맙습니다)[.!]?\s*$/,
+]
+
+/** 환각 문구 구간 제거 → [{ start_ms, end_ms, text }] */
+export function dropHallucinations(segments) {
+  return segments.filter((s) => !HALLUCINATIONS.some((re) => re.test(s.text)))
+}

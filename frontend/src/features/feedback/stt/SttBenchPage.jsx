@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { detectCapabilities, resolvePlan, transcribeBlob } from './browserStt'
 import { PREFERENCES, chooseModel } from './models'
+import { analyzeBlob, judgeSignal } from '../audioSignal'
+import { cer, termAccuracy } from './sttMetrics'
+
+const SIGNAL_LABEL = { silent: '거의 무음', quiet: '소리 작음', ok: '정상' }
 
 // ?device=wasm 이면 WebGPU가 있어도 WASM으로 측정
 const FORCE_WASM = new URLSearchParams(window.location.search).get('device') === 'wasm'
@@ -15,6 +19,7 @@ export default function SttBenchPage() {
   const [preference, setPreference] = useState('auto')
   const [runs, setRuns] = useState([])
   const [busy, setBusy] = useState('')
+  const [reference, setReference] = useState('') // 정답 대본 (있으면 CER·미술 용어 정확도 계산)
 
   useEffect(() => {
     detectCapabilities().then(setCaps)
@@ -28,6 +33,9 @@ export default function SttBenchPage() {
       setBusy('이 기기·설정에서는 기기 음성 인식을 쓸 수 없어요.')
       return
     }
+    setBusy('녹음 신호 확인 중…')
+    // 재생·STT 문제 진단: 파일에 실제 소리가 있는지 (기기 안에서만)
+    const signal = await analyzeBlob(file, { maxMs: 20 * 60 * 1000 })
     setBusy('준비 중…')
     try {
       const result = await transcribeBlob(file, plan, {
@@ -43,13 +51,19 @@ export default function SttBenchPage() {
         chunkCount: result.chunkCount,
         ...result.timings,
         text: result.segments.map((s) => s.text).join(' '),
+        signal,
+        signalJudge: signal ? judgeSignal(signal) : null,
         memoryMb: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null,
+      }
+      if (reference.trim()) {
+        entry.cer = cer(reference, entry.text)
+        entry.terms = termAccuracy(reference, entry.text)
       }
       window.__sttBench = [...(window.__sttBench ?? []), entry]
       setRuns((prev) => [...prev, entry])
       setBusy('')
     } catch (error) {
-      window.__sttBench = [...(window.__sttBench ?? []), { file: file.name, error: error.message }]
+      window.__sttBench = [...(window.__sttBench ?? []), { file: file.name, error: error.message, signal }]
       setBusy(`실패: ${error.message}`)
     }
   }
@@ -78,6 +92,16 @@ export default function SttBenchPage() {
           if (file) run(file)
         }}
       />
+      <label style={{ display: 'block', marginTop: 8 }}>
+        정답 대본 (선택, 붙여 넣으면 정확도 계산)
+        <textarea
+          data-testid="reference"
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+          rows={3}
+          style={{ width: '100%' }}
+        />
+      </label>
       <p data-testid="busy">{busy}</p>
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead>
@@ -105,9 +129,19 @@ export default function SttBenchPage() {
         </tbody>
       </table>
       {runs.map((r, i) => (
-        <p key={i} style={{ whiteSpace: 'pre-wrap' }}>
-          <b>{r.file}</b> {r.text}
-        </p>
+        <div key={i} style={{ marginTop: 12 }}>
+          <p>
+            <b>{r.file}</b> · 신호:{' '}
+            {r.signal
+              ? `${SIGNAL_LABEL[r.signalJudge]} (최대 ${r.signal.peak}, ${r.signal.rmsDb}dB, 소리 구간 ${Math.round(r.signal.speechRatio * 100)}%)`
+              : '확인 못 함'}
+            {r.skippedChunks ? ` · 무음 구간 ${r.skippedChunks}개 건너뜀` : ''}
+            {r.cer != null && ` · CER ${(r.cer * 100).toFixed(1)}%`}
+            {r.terms?.ratio != null &&
+              ` · 미술 용어 ${r.terms.matched}/${r.terms.total}${r.terms.missed.length ? ` (놓침: ${r.terms.missed.join(', ')})` : ''}`}
+          </p>
+          <p style={{ whiteSpace: 'pre-wrap' }}>{r.text}</p>
+        </div>
       ))}
     </main>
   )

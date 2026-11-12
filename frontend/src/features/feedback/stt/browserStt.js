@@ -1,6 +1,7 @@
 // 브라우저 STT 클라이언트: 기능 감지 · 음성 디코딩(16kHz mono) · Worker 호출 · 구간별 변환
 import { SAMPLE_RATE, mergeChunkSegments, planChunks } from './chunks'
-import { PREFERENCE_KEY, chooseModel, isMobileDevice, looksDegenerate, toSegments } from './models'
+import { judgeSignal, signalStats } from '../audioSignal'
+import { PREFERENCE_KEY, chooseModel, dropHallucinations, isMobileDevice, looksDegenerate, toSegments } from './models'
 
 // 이 기기에서 변환 중 탭이 강제 종료된 기록 → 'wasm' (WebGPU 사용 안 함). deviceJobs.js가 기록
 export const SAFETY_KEY = 'artmate.stt.safety'
@@ -252,15 +253,24 @@ export async function transcribeBlob(blob, plan, { onStage, onProgress, onFallba
 
   onStage?.('transcribing', { chunkCount: bounds.length, done: parts.length })
   let transcribeMs = 0
+  let skippedChunks = 0
   for (let index = parts.length; index < bounds.length; index += 1) {
     const { start, end } = bounds[index]
     const slice = audio.slice(start, end) // 복사본을 Worker로 넘김 (원본은 다음 구간에 필요)
     const chunkMs = Math.round(((end - start) / SAMPLE_RATE) * 1000)
-    const result = await withDeadline(call({ type: 'transcribe', audio: slice }, [slice.buffer]), CHUNK_TIMEOUT_MS)
-    transcribeMs += result.transcribeMs
-    const part = {
-      offsetMs: Math.round((start / SAMPLE_RATE) * 1000),
-      segments: toSegments(result.output, chunkMs),
+    const offsetMs = Math.round((start / SAMPLE_RATE) * 1000)
+    let part
+    if (judgeSignal(signalStats(slice, SAMPLE_RATE)) === 'silent') {
+      // 거의 무음 구간은 Whisper에 넣지 않는다 (없는 문장을 만들어 냄 — 서버는 VAD로 같은 처리)
+      part = { offsetMs, segments: [], skipped: true }
+      skippedChunks += 1
+    } else {
+      const result = await withDeadline(
+        call({ type: 'transcribe', audio: slice }, [slice.buffer]),
+        CHUNK_TIMEOUT_MS,
+      )
+      transcribeMs += result.transcribeMs
+      part = { offsetMs, segments: dropHallucinations(toSegments(result.output, chunkMs)) }
     }
     parts.push(part)
     onChunk?.({ index, total: bounds.length, bounds, parts })
@@ -287,6 +297,7 @@ export async function transcribeBlob(blob, plan, { onStage, onProgress, onFallba
       fallbackFrom: loaded.fallbackFrom ?? null,
       transcribeMs,
       resumedChunks: sameBounds ? resume.parts.length : 0,
+      skippedChunks, // 무음이라 건너뛴 구간 수
       totalMs: Math.round(performance.now() - started),
     },
   }

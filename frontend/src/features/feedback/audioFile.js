@@ -57,3 +57,15 @@ export function readDurationMs(url) {
     audio.src = url
   })
 }
+
+// HTMLMediaElement.error.code → 안내 (재생 실패를 조용히 넘기지 않음)
+export function playbackMessage(code, contentType) {
+  if (code === 2) return '녹음을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'
+  if (code === 3) return '녹음 파일을 읽지 못했어요. 파일이 손상됐을 수 있어요.'
+  if (code === 4) {
+    return contentType
+      ? `이 브라우저에서는 재생할 수 없는 녹음 형식이에요 (${contentType}). 다른 브라우저에서 열어 주세요.`
+      : '녹음을 재생할 수 없어요. 잠시 후 다시 시도해 주세요.'
+  }
+  return '녹음을 재생할 수 없어요. 잠시 후 다시 시도해 주세요.'
+}

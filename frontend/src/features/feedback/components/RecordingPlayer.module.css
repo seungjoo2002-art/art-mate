@@ -52,3 +52,9 @@
   color: var(--color-text-sub);
   text-align: right;
 }
+
+.failure {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+}
