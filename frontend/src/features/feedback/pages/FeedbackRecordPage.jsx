@@ -9,6 +9,7 @@ import { toErrorMessage } from '../../../utils/errorMessages'
 import { getConsent, uploadRecording } from '../api'
 import { getAiConsent, requestTranscription } from '../aiApi'
 import { ACCEPT } from '../audioFile'
+import { judgeSignal } from '../audioSignal'
 import BrowserSttStatus from '../components/BrowserSttStatus'
 import ConsentForm from '../components/ConsentForm'
 import { getPreference, resolvePlan, setPreference } from '../stt/browserStt'
@@ -72,7 +73,8 @@ export default function FeedbackRecordPage() {
 
 function Recorder({ artworkId }) {
   const navigate = useNavigate()
-  const { status, elapsedMs, result, error, start, stop, reset, loadFile } = useAudioRecorder()
+  const { status, elapsedMs, result, error, silentInput, start, stop, reset, loadFile } =
+    useAudioRecorder()
   const prewarm = useModelPrewarm()
   const [preference, setPreferenceState] = useState(getPreference)
   const [uploading, setUploading] = useState(false)
@@ -81,6 +83,8 @@ function Recorder({ artworkId }) {
   const recording = status === 'recording'
   const { start: startPrewarm, reset: resetPrewarm, skip: skipPrewarm } = prewarm
   const serverOnly = preference === 'off' || prewarm.state.phase === 'skipped'
+  // 'silent' | 'quiet' | 'ok' — 소리가 거의 없는 녹음은 글로 바꾸지 않는다 (Whisper가 없는 문장을 만들어 냄)
+  const signal = judgeSignal(result?.signal)
 
   // 녹음이 끝나면(또는 파일을 고르면) 음성 인식 모델을 미리 준비 (변환은 저장 후)
   useEffect(() => {
@@ -113,7 +117,7 @@ function Recorder({ artworkId }) {
     }
 
     const artworkPath = `/artworks/${artworkId}`
-    if (withAi) {
+    if (withAi && signal !== 'silent') {
       try {
         const { needsConsent } = await transcribeAfterUpload(artworkId, saved.id, result.blob, {
           serverOnly,
@@ -165,9 +169,27 @@ function Recorder({ artworkId }) {
             : '버튼을 눌러 녹음을 시작하세요'}
       </p>
 
+      {recording && silentInput && (
+        <p className={styles.error} role="alert">
+          마이크 소리가 들어오지 않아요. 마이크를 가리고 있지 않은지, 다른 앱이 마이크를 쓰고 있지
+          않은지 확인해 주세요.
+        </p>
+      )}
+
       {status === 'recorded' ? (
         <div className={styles.review}>
           <audio controls src={result.url} className={styles.preview} />
+          {signal === 'silent' && (
+            <p className={styles.error} role="alert">
+              이 녹음에는 소리가 거의 없어요. 재생해서 확인한 뒤 다시 녹음해 주세요. 그대로 저장하면
+              녹음만 저장되고 글로 바꾸지는 않아요.
+            </p>
+          )}
+          {signal === 'quiet' && (
+            <p className={styles.hint}>
+              소리가 작게 녹음됐어요. 휴대폰을 말하는 사람 가까이에 두면 글로 더 정확하게 바꿀 수 있어요.
+            </p>
+          )}
           {result.durationMs > LONG_RECORDING_MS && (
             <p className={styles.hint}>
               5분이 넘는 녹음은 글로 바꾸는 데 시간이 오래 걸릴 수 있어요.
@@ -181,10 +203,12 @@ function Recorder({ artworkId }) {
             artworkId={artworkId}
           />
           {uploadError && <p className={styles.error}>{uploadError}</p>}
-          <Button onClick={() => handleSave({ withAi: true })} disabled={uploading}>
-            <Sparkles size={20} aria-hidden />
-            {uploading ? '녹음 올리는 중…' : '저장하고 AI로 정리하기'}
-          </Button>
+          {signal !== 'silent' && (
+            <Button onClick={() => handleSave({ withAi: true })} disabled={uploading}>
+              <Sparkles size={20} aria-hidden />
+              {uploading ? '녹음 올리는 중…' : '저장하고 AI로 정리하기'}
+            </Button>
+          )}
           <Button variant="soft" onClick={() => handleSave()} disabled={uploading}>
             녹음만 저장하기
           </Button>
