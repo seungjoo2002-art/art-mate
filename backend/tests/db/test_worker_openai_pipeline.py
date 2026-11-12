@@ -119,7 +119,7 @@ async def test_minor_gets_transcript_but_nothing_is_sent(  # type: ignore[no-unt
         json={"policy_version": AI_VERSION, "agreed": True, "birth_year_month": "2010-05"},
         headers=student.headers,
     )
-    assert pending.json()["reason"] == "MINOR_BLOCKED"  # 배포 기본값: 미성년자 전송 차단
+    assert pending.json()["reason"] == "TEEN_NOT_ENABLED"  # 배포 기본값: 만 14~17세 전송 차단
     base = await _server_transcription(client, app, student, auto=True)
 
     calls: list[dict] = []

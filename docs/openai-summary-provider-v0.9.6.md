@@ -1,4 +1,5 @@
 # v0.9.6 OpenAI 요약 제공자 + 연령 확인·보호자 동의 — 구현·활성화
+> **2026-11-13 갱신**: 연령 구간은 만 14세 기준(UNDER_14 / TEEN / ADULT, 마이그레이션 0013)으로 바뀌었다 → [minors-ai-policy-v0.9.6.md](minors-ai-policy-v0.9.6.md)
 
 > 작성: 2026-11-12 · 브랜치 `feature/openai-summary-provider` (PR #51 브랜치 위)
 > 설계: [llm-provider-selection-v0.9.6.md](llm-provider-selection-v0.9.6.md) · 이전: [ai-feedback-summary-v0.9.5.md](ai-feedback-summary-v0.9.5.md)
