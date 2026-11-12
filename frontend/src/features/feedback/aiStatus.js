@@ -14,8 +14,9 @@ const PERMANENT_ERRORS = {
   LLM_BLOCKED: 'AI가 정리할 수 없는 녹음이에요.',
   LLM_AUTH_FAILED: 'AI 정리 기능에 문제가 있어요. 잠시 후 이용해 주세요.',
   LLM_BAD_REQUEST: 'AI 정리 기능에 문제가 있어요. 잠시 후 이용해 주세요.',
-  STT_NOT_CONFIGURED: 'AI 정리 기능은 아직 준비 중이에요.',
-  AI_NOT_CONFIGURED: 'AI 정리 기능은 아직 준비 중이에요.',
+  STT_NOT_CONFIGURED: '서버 음성 변환이 아직 설정되지 않았어요.',
+  AI_NOT_CONFIGURED: 'AI 정리 기능이 아직 설정되지 않았어요.',
+  SOURCE_URL_EXPIRED: '변환 대기 시간이 길어 다시 요청이 필요해요.',
   RECORDING_CONSENT_REVOKED: '녹음 동의가 철회되어 취소됐어요.',
   AI_CONSENT_REVOKED: 'AI 정리 동의가 철회되어 취소됐어요.',
 }
@@ -70,4 +71,73 @@ export function aiPhase(transcription, summary) {
 export function pollDelay(state) {
   if (!['transcribing', 'summarizing'].includes(state.phase)) return null
   return state.retrying ? 10_000 : 5_000
+}
+
+// 서버 작업이 이 시간 넘게 대기하면 "늦어지고 있어요" 안내 + 이 기기에서 바로 바꾸기 제안
+// (Worker 즉시 실행 요청이 켜져 있으면 보통 몇 분, 꺼져 있으면 GitHub 예약 실행에 따라 몇 시간)
+export const SERVER_DELAY_MS = 10 * 60 * 1000
+
+const DEVICE_BUSY = ['queued', 'preparing', 'transcribing', 'saving']
+
+/**
+ * 녹음 카드 화면 상태 (v0.9.3). aiPhase에 기기 변환·기능 설정·대기 지연을 더한다
+ * kind:
+ *  - idle               아직 글로 바꾸지 않음 → "녹음을 글로 바꾸기"
+ *  - deviceTranscribing 이 기기에서 모델 준비·변환·저장 중 (devicePhase)
+ *  - interrupted        이 기기 변환이 중간에 끊김 (새로고침·탭 종료) → 이어서 변환 / 서버에서 변환
+ *  - serverDeferred     기기 변환용 백업 서버 작업이 대기 중 (deferredUntil 이후 서버가 처리)
+ *  - serverQueued       서버 변환 대기 중 (delayed면 늦어짐 안내)
+ *  - serverRunning      서버에서 변환 중
+ *  - transcribed        전사 완료 → 대본 보기 + AI 정리 (aiAvailable일 때)
+ *  - summarizing        AI 정리 중 (delayed면 늦어짐 안내)
+ *  - ready              AI 정리 완료 → 결과 보기 + 대본 보기
+ *  - failed             실패 (retry: 'transcription' | 'summary' | null)
+ * hasTranscript: 대본 보기 버튼 표시, aiAvailable: AI 정리 기능 설정 여부
+ * devicePhase: deviceJobs 작업 phase, interrupted: deviceJobs.getInterrupted 결과
+ */
+export function recordingCardState({
+  transcription,
+  summary,
+  features,
+  devicePhase,
+  interrupted = null,
+  now = Date.now(),
+}) {
+  const base = aiPhase(transcription, summary)
+  const hasTranscript = transcription?.transcription_status === 'COMPLETED' || Boolean(transcription?.transcript)
+  const aiAvailable = features ? features.ai_summary !== false : true
+  const serverAvailable = features ? features.server_transcription !== false : true
+  const common = { hasTranscript, aiAvailable, serverAvailable }
+  const delayed = (job) =>
+    Boolean(job?.created_at) && now - Date.parse(job.created_at) > SERVER_DELAY_MS
+
+  if (DEVICE_BUSY.includes(devicePhase) && !hasTranscript) {
+    return { ...common, kind: 'deviceTranscribing' }
+  }
+  const tJob = transcription?.job
+  const deferredUntil =
+    tJob?.status === 'QUEUED' && tJob.next_attempt_at && Date.parse(tJob.next_attempt_at) > now
+      ? tJob.next_attempt_at
+      : null
+  if (interrupted && !hasTranscript && (base.phase === 'idle' || deferredUntil)) {
+    return { ...common, kind: 'interrupted', interrupted, deferredUntil }
+  }
+  switch (base.phase) {
+    case 'transcribing': {
+      if (deferredUntil) return { ...common, kind: 'serverDeferred', deferredUntil }
+      return tJob.status === 'RUNNING'
+        ? { ...common, kind: 'serverRunning', retrying: base.retrying }
+        : { ...common, kind: 'serverQueued', retrying: base.retrying, delayed: delayed(tJob) }
+    }
+    case 'summarizing':
+      return { ...common, kind: 'summarizing', retrying: base.retrying, delayed: delayed(summary.job) }
+    case 'needsSummary':
+      return { ...common, kind: 'transcribed', hasTranscript: true }
+    case 'ready':
+      return { ...common, kind: 'ready', feedbackId: base.feedbackId, feedbackStatus: base.feedbackStatus }
+    case 'failed':
+      return { ...common, kind: 'failed', message: base.message, retry: base.retry }
+    default:
+      return { ...common, kind: 'idle' }
+  }
 }

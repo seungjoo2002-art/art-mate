@@ -57,7 +57,25 @@ Secret이 없으면 워크플로는 아무것도 하지 않고 성공으로 끝�
 
 Render에서 기존 상시 Worker 서비스는 만들지 않는다 (유료).
 
-### 2.3 Supabase
+### 2.3 Worker 즉시 실행 (v0.9.3, 선택 — 강력 권장)
+
+예약 실행(`*/15`)은 실제로 크게 밀린다. 2026-11-10 07:26 UTC 병합 후 첫 예약 실행이 **약 29시간 뒤**(11-11 12:51)였고,
+이후 49시간 동안 실행은 **4회**(간격 5.8~7.1시간)뿐이었다. 그 사이 서버 전사 2건이 `SOURCE_URL_EXPIRED`로 실패했다.
+
+API가 작업을 큐에 넣을 때 워크플로를 바로 실행 요청(`workflow_dispatch`)하면 이 지연을 없앨 수 있다 (GitHub가 실행을 보장하지는 않으므로 예약 실행은 그대로 둔다).
+
+| 위치 | 이름 | 값 |
+| --- | --- | --- |
+| Render | `WORKER_DISPATCH_TOKEN` | **fine-grained PAT**: Repository access = 이 저장소만, Permissions = **Actions: Read and write** (그 밖의 권한 없음). 만료일을 정하고 갱신 일정 관리 |
+| Render (선택) | `WORKER_DISPATCH_REPO` / `WORKER_DISPATCH_WORKFLOW` / `WORKER_DISPATCH_REF` | 기본 `seungjoo2002-art/art-mate` / `stt-worker.yml` / `main` |
+| Render (선택) | `WORKER_DISPATCH_MIN_INTERVAL_SECONDS` | 기본 30. 이 간격 안의 요청은 한 번으로 합침 |
+
+- 요청 본문은 `{"ref": "main"}`뿐 (작업·사용자 정보 없음). Worker는 기존처럼 DB 큐에서 가져간다.
+- 토큰이 없거나 GitHub가 거절하면 경고 로그(`worker dispatch rejected`, 상태 코드만)를 남기고 예약 실행에 맡긴다. 요청 API 응답에는 영향 없음 (응답 후 백그라운드).
+- 기기 변환 중 만드는 **백업 전사 작업**(`defer_seconds`, 기본 15분 뒤)은 바로 실행 요청하지 않는다. 기기 변환이 실패하면 프론트가 같은 요청을 `defer_seconds` 없이 보내 백업을 앞당기고, 그때 실행을 요청한다.
+- 공개 저장소의 표준 러너는 사용 시간 과금이 없다. 실행 1회당 준비(설치·캐시 복원) 약 20~60초.
+
+### 2.4 Supabase
 
 - 마이그레이션 `0009`까지 적용 (완료했다고 전달받음 — `backend/scripts/verify_dev_environment.py`로 확인 가능).
 - Storage `feedback-audio` 버킷·정책 (`backend/supabase/storage-setup.sql` v0.5 블록)이 있어야 학생 토큰으로 Signed URL이 발급된다.
@@ -74,13 +92,13 @@ Render에서 기존 상시 Worker 서비스는 만들지 않는다 (유료).
 
 | 항목 | 값 |
 | --- | --- |
-| 대기 시간 | 예약 15분 간격 + GitHub 예약 지연(보통 수 분~수십 분, 혼잡 시 건너뜀) → **실시간 아님**. 급하면 수동 실행 |
+| 대기 시간 | 예약 15분 간격이지만 **실측 5.8~7.1시간 간격**(2026-11-11~12, 첫 실행은 병합 29시간 뒤) → **실시간 아님**. §2.3 즉시 실행을 켜면 작업 생성 직후 실행 요청 (GitHub 사정으로 늦어질 수 있음) |
 | 실행 준비 | 의존성 설치 약 1분(uv 캐시), 모델 캐시 복원 수십 초, 모델 로드 수십 초. 전사 작업이 없으면 STT 설치·모델 생략 |
 | 전사 속도 | 로컬 측정(아래 §5): 16초 음성 → 7.1초 (모델 로드 후). Actions 러너(4 vCPU)에서는 미측정 — 20분 녹음은 수 분~10분 내외 예상 |
 | 사용량 | 공개 저장소의 표준 러너는 분 단위 과금 없음. 캐시 0.5GB (저장소 한도 10GB) |
 | 예약 비활성화 | 공개 저장소에 60일간 활동이 없으면 GitHub가 예약 실행을 끈다 → 다시 켜야 함 |
 | 동시 처리 | 실행 1개씩 → 녹음이 많이 몰리면 대기 증가 (한 실행 최대 10건) |
-| Signed URL 만료 | 24시간(설정 시) 안에 처리 못 하면 `SOURCE_URL_EXPIRED` → 학생이 재시도 |
+| Signed URL 만료 | 기본 24시간(v0.9.3, 이전 기본 6시간) 안에 처리 못 하면 `SOURCE_URL_EXPIRED` → 학생이 재시도 (새 URL 발급) |
 
 ## 5. 검증 결과
 

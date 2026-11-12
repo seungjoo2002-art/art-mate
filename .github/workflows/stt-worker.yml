@@ -4,6 +4,7 @@
 # - 전사(TRANSCRIBE): faster-whisper small · CPU INT8 · 한국어 (모델은 actions/cache로 재사용)
 # - 요약·성장 AI(SUMMARIZE 등): Gemini — 저장소 변수 AI_SUMMARY_ENABLED=true + GEMINI_API_KEY일 때만
 # 예약 실행은 GitHub 사정에 따라 늦어지거나 건너뛸 수 있다 (실시간 처리 보장 없음).
+# API가 작업을 넣을 때 workflow_dispatch로 바로 실행을 요청한다 (토큰 설정 시).
 # 설명: docs/stt-worker-github-actions.md
 
 name: stt-worker
@@ -19,8 +20,10 @@ on:
         description: "이 시간(분)이 지나면 새 작업을 잡지 않음"
         default: "40"
         required: false
+  # 예약 실행은 보조 경로다 (실측: 15분 주기 설정에도 5.8~7.1시간 간격). 주 경로는 API의 즉시 실행 요청
+  # (WORKER_DISPATCH_TOKEN, docs/stt-worker-github-actions.md §2.3). 혼잡한 정각·15분 단위를 피해 7분 어긋남
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7,22,37,52 * * * *"
 
 # 실행은 하나씩 (겹치면 다음 실행은 대기). 큐 선점은 DB에서도 SKIP LOCKED로 중복 방지
 concurrency:

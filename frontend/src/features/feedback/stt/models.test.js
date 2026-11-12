@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MODELS, chooseModel, looksDegenerate, toSegments } from './models'
+import { MODELS, chooseModel, isMobileDevice, looksDegenerate, toSegments } from './models'
 import { withTimeout } from './useBrowserStt'
 
 const DESKTOP_GPU = { worker: true, wasm: true, webgpu: true, shaderF16: false, deviceMemory: 8 }
@@ -36,6 +36,31 @@ describe('chooseModel', () => {
     expect(chooseModel({ ...NO_GPU, worker: false })).toBeNull()
     expect(chooseModel({ ...NO_GPU, wasm: false })).toBeNull()
     expect(chooseModel(NO_GPU, 'large')).toBeNull()
+  })
+})
+
+describe('chooseModel on phones and after a crash (v0.9.3)', () => {
+  const PHONE_GPU = { ...DESKTOP_GPU, mobile: true, deviceMemory: 4 }
+
+  it('uses WASM on phones even with WebGPU (tab memory limit)', () => {
+    expect(chooseModel(PHONE_GPU)).toMatchObject({ size: 'base', device: 'wasm', downloadMb: 77 })
+    // iPhone Safari: deviceMemory 없음 → WASM
+    expect(chooseModel({ ...PHONE_GPU, deviceMemory: null }).device).toBe('wasm')
+    // 메모리 8GB 이상으로 보고되는 휴대폰만 WebGPU
+    expect(chooseModel({ ...PHONE_GPU, deviceMemory: 8 }).device).toBe('webgpu')
+  })
+
+  it('stops using WebGPU after the tab was killed during transcription', () => {
+    expect(chooseModel(DESKTOP_GPU, 'auto', 'wasm')).toMatchObject({ device: 'wasm' })
+    expect(chooseModel(DESKTOP_GPU, 'auto', 'normal').device).toBe('webgpu')
+  })
+
+  it('detects phones and iPadOS', () => {
+    expect(isMobileDevice({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' })).toBe(true)
+    expect(isMobileDevice({ userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-S918N) Mobile' })).toBe(true)
+    expect(isMobileDevice({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', maxTouchPoints: 5 })).toBe(true)
+    expect(isMobileDevice({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', maxTouchPoints: 0 })).toBe(false)
+    expect(isMobileDevice({ userAgentData: { mobile: true }, userAgent: '' })).toBe(true)
   })
 })
 

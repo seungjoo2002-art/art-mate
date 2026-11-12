@@ -16,7 +16,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
 
 from app.api.deps import (
     AcademyStaff,
@@ -27,8 +27,9 @@ from app.api.deps import (
     require_user_types,
 )
 from app.api.responses import AUTH_ERRORS, error_responses
+from app.core import timezone as clock
 from app.core.security import CurrentUser
-from app.models.enums import AiConsentPurpose, FeedbackStatus, UserType
+from app.models.enums import AiConsentPurpose, AiJobStatus, FeedbackStatus, UserType
 from app.models.profile import Profile
 from app.schemas.ai_feedback import (
     AiConsentCreate,
@@ -86,9 +87,40 @@ def _svc(session, settings, storage=None) -> AiFeedbackService:  # type: ignore[
     return AiFeedbackService(session, settings, storage)
 
 
-def _queued(job_and_created: tuple[JobRead, bool], response: Response) -> JobRead:
+class WorkerKick:
+    """작업을 큐에 넣은 뒤(응답 후) GitHub Actions Worker 실행을 요청한다 (v0.9.3).
+
+    토큰이 없으면 아무것도 하지 않는다. 미뤄 둔 백업 작업(next_attempt_at이 미래)은 요청하지 않는다.
+    """
+
+    def __init__(self, request: Request, background: BackgroundTasks) -> None:
+        self._request = request
+        self._background = background
+
+    def __call__(self, job: JobRead | None, reason: str) -> None:
+        if job is None or job.status != AiJobStatus.QUEUED:
+            return
+        if job.next_attempt_at is not None and job.next_attempt_at > clock.utc_now():
+            return
+        state = self._request.app.state
+        dispatcher = getattr(state, "worker_dispatcher", None)
+        if dispatcher is not None:
+            self._background.add_task(dispatcher.notify, state.settings, reason)
+
+
+Kick = Annotated[WorkerKick, Depends(WorkerKick)]
+
+
+def _queued(
+    job_and_created: tuple[JobRead, bool],
+    response: Response,
+    kick: WorkerKick | None = None,
+    reason: str = "job",
+) -> JobRead:
     job, created = job_and_created
     response.status_code = status.HTTP_202_ACCEPTED if created else status.HTTP_200_OK
+    if kick is not None:
+        kick(job, reason)
     return job
 
 
@@ -167,6 +199,7 @@ async def owner_request_transcription(
     session: DbSession,
     settings: AppSettings,
     storage: AudioStorage,
+    kick: Kick,
     data: TranscriptionRequest | None = None,
 ) -> JobRead:
     svc = _svc(session, settings, storage)
@@ -174,9 +207,15 @@ async def owner_request_transcription(
     data = data or TranscriptionRequest()
     return _queued(
         await svc.request_transcription(
-            recording, owner, user.access_token, auto_summarize=data.auto_summarize
+            recording,
+            owner,
+            user.access_token,
+            auto_summarize=data.auto_summarize,
+            defer_seconds=data.defer_seconds,
         ),
         response,
+        kick,
+        "transcription",
     )
 
 
@@ -196,6 +235,7 @@ async def owner_retry_transcription(
     session: DbSession,
     settings: AppSettings,
     storage: AudioStorage,
+    kick: Kick,
     data: TranscriptionRequest | None = None,
 ) -> JobRead:
     svc = _svc(session, settings, storage)
@@ -206,6 +246,8 @@ async def owner_retry_transcription(
             recording, owner, user.access_token, auto_summarize=data.auto_summarize, retry=True
         ),
         response,
+        kick,
+        "transcription_retry",
     )
 
 
@@ -261,10 +303,13 @@ async def owner_save_browser_transcript(
     owner: Student,
     session: DbSession,
     settings: AppSettings,
+    kick: Kick,
 ) -> BrowserTranscriptResult:
     svc = _svc(session, settings)
     _, recording = await svc.owner_target(owner, artwork_id, recording_id)
-    return await svc.save_browser_transcript(owner, recording, data)
+    result = await svc.save_browser_transcript(owner, recording, data)
+    kick(result.summary_job, "summary")
+    return result
 
 
 @owner_processing.put(
@@ -309,10 +354,13 @@ async def owner_request_summary(
     owner: Student,
     session: DbSession,
     settings: AppSettings,
+    kick: Kick,
 ) -> JobRead:
     svc = _svc(session, settings)
     _, recording = await svc.owner_target(owner, artwork_id, recording_id)
-    return _queued(await svc.request_summary(recording, owner, regenerate=False), response)
+    return _queued(
+        await svc.request_summary(recording, owner, regenerate=False), response, kick, "summary"
+    )
 
 
 @owner_processing.post(
@@ -330,10 +378,13 @@ async def owner_regenerate_summary(
     owner: Student,
     session: DbSession,
     settings: AppSettings,
+    kick: Kick,
 ) -> JobRead:
     svc = _svc(session, settings)
     _, recording = await svc.owner_target(owner, artwork_id, recording_id)
-    return _queued(await svc.request_summary(recording, owner, regenerate=True), response)
+    return _queued(
+        await svc.request_summary(recording, owner, regenerate=True), response, kick, "summary"
+    )
 
 
 @owner_processing.get("/summary", summary="AI 요약 상태 (학생)", responses=READ)
@@ -814,10 +865,13 @@ async def request_note_summary(
     owner: Student,
     session: DbSession,
     settings: AppSettings,
+    kick: Kick,
     data: NoteSummaryRequest | None = None,
 ) -> JobRead:
     data = data or NoteSummaryRequest()
     return _queued(
         await _notes(session, settings).request_summary(owner, note_id, regenerate=data.regenerate),
         response,
+        kick,
+        "note_summary",
     )

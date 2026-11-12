@@ -31,14 +31,16 @@ export default function SttBenchPage() {
     setBusy('준비 중…')
     try {
       const result = await transcribeBlob(file, plan, {
-        onStage: (stage) => setBusy(stage === 'loading' ? '모델 불러오는 중…' : '변환 중…'),
+        onStage: (stage) => setBusy(stage === 'transcribing' ? '변환 중…' : '모델 불러오는 중…'),
+        onChunk: ({ index, total }) => setBusy(`변환 중… ${index + 1}/${total} 구간`),
         onProgress: (p) => p.total && setBusy(`모델 다운로드 ${Math.round((p.loaded / p.total) * 100)}%`),
       })
       const entry = {
         file: file.name,
         model: plan.size,
-        device: plan.device,
+        device: result.device, // WebGPU 초기화 실패 시 WASM으로 바뀐 실제 장치
         audioS: (result.durationMs / 1000).toFixed(1),
+        chunkCount: result.chunkCount,
         ...result.timings,
         text: result.segments.map((s) => s.text).join(' '),
         memoryMb: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null,

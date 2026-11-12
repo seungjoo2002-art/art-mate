@@ -129,7 +129,20 @@ async def main(argv: list[str] | None = None) -> None:
     )
     try:
         if args.once:
-            logger.info("queue before batch", extra={"pending": await runner.pending_counts()})
+            pending = await runner.pending_counts()
+            logger.info("queue before batch", extra={"pending": pending})
+            waiting_llm = pending_outputs(pending)["llm"]
+            if waiting_llm and llm is None:
+                logger.warning(
+                    "AI jobs are waiting but this worker cannot process them: set GitHub Actions "
+                    "variable AI_SUMMARY_ENABLED=true and secret GEMINI_API_KEY",
+                    extra={"waiting": waiting_llm},
+                )
+            if pending.get(AiJobType.TRANSCRIBE.value) and stt is None:
+                logger.warning(
+                    "transcription jobs are waiting but STT is disabled on this worker",
+                    extra={"waiting": pending.get(AiJobType.TRANSCRIBE.value)},
+                )
             await runner.run_batch(
                 max_jobs=args.max_jobs,
                 max_seconds=args.max_seconds,

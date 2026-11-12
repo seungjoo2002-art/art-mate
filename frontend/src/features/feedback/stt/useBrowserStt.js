@@ -1,74 +1,65 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { cancelBrowserStt, resolvePlan, transcribeBlob } from './browserStt'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { cancelBrowserStt, prewarm, resolvePlan } from './browserStt'
+import { getDeviceJob, hasBusyDeviceJob, subscribe } from './deviceJobs'
+
+/** 이 녹음의 기기 전사 작업 상태 (deviceJobs.js, 화면을 옮겨도 유지). 없으면 null */
+export function useDeviceJob(recordingId) {
+  return useSyncExternalStore(
+    subscribe,
+    () => getDeviceJob(recordingId),
+    () => null,
+  )
+}
 
 /**
- * 브라우저(기기) 음성 인식 상태
- * phase: idle → (unsupported | preparing → transcribing → done | failed | skipped)
- *  - unsupported/failed/skipped면 저장 후 기존 서버(GitHub Actions) 전사로 대신한다
- * wait(): 결과 Promise (성공 결과 또는 null). start 전에 불러도 된다
+ * 녹음 직후 음성 인식 모델만 미리 준비 (가장 오래 걸리는 단계). 실제 변환은 업로드 후 deviceJobs에서.
+ * phase: idle → unsupported | preparing → ready | failed(저장 때 다시 시도) | skipped(서버 처리 선택)
  */
-export function useBrowserStt() {
+export function useModelPrewarm() {
   const [state, setState] = useState({ phase: 'idle' })
-  const runRef = useRef(null)
   const generationRef = useRef(0)
 
-  const start = useCallback((blob) => {
+  const start = useCallback(async () => {
     const generation = ++generationRef.current
     const update = (next) => {
       if (generationRef.current === generation) setState(next)
     }
-    runRef.current = (async () => {
-      const plan = await resolvePlan()
-      if (!plan) {
-        update({ phase: 'unsupported' })
-        return null
-      }
-      update({ phase: 'preparing', plan, progress: null })
-      try {
-        const result = await transcribeBlob(blob, plan, {
-          onStage: (stage) =>
-            update((prev) => ({ ...prev, phase: stage === 'loading' ? 'preparing' : 'transcribing' })),
-          onProgress: (progress) => update((prev) => ({ ...prev, progress })),
-        })
-        update({ phase: 'done', plan, result })
-        return generationRef.current === generation ? result : null
-      } catch (error) {
-        update({
-          phase: error.message === 'cancelled' ? 'skipped' : 'failed',
-          plan,
-          error: error.message,
-        })
-        return null
-      }
-    })()
-    return runRef.current
+    const plan = await resolvePlan()
+    if (!plan) {
+      update({ phase: 'unsupported' })
+      return
+    }
+    update({ phase: 'preparing', plan, progress: null })
+    const loaded = await prewarm(plan, {
+      onProgress: (progress) => update((prev) => ({ ...prev, progress })),
+    })
+    update(loaded ? { phase: 'ready', plan, loaded } : { phase: 'failed', plan })
   }, [])
 
-  const wait = useCallback(() => runRef.current ?? Promise.resolve(null), [])
-
-  /** 서버에서 처리하기: 기기 변환 중단 */
+  /** "서버에서 처리하기": 모델 준비를 멈추고 이번 녹음은 서버로 */
   const skip = useCallback(() => {
     generationRef.current += 1
-    cancelBrowserStt()
-    runRef.current = Promise.resolve(null)
+    if (!hasBusyDeviceJob()) cancelBrowserStt() // 다른 녹음 변환 중이면 Worker는 그대로
     setState({ phase: 'skipped' })
   }, [])
 
   const reset = useCallback(() => {
     generationRef.current += 1
-    runRef.current = null
     setState({ phase: 'idle' })
   }, [])
 
-  // 화면을 떠나도 Worker·모델은 유지 (다음 녹음에서 바로 사용). 결과만 버린다
-  useEffect(() => () => {
-    generationRef.current += 1
-  }, [])
+  // 화면을 떠나도 Worker·모델은 유지 (바로 이어지는 변환에서 사용). 결과 표시만 멈춤
+  useEffect(
+    () => () => {
+      generationRef.current += 1
+    },
+    [],
+  )
 
-  return { state, start, wait, skip, reset }
+  return { state, start, skip, reset }
 }
 
-/** 제한 시간 안에 끝나지 않으면 null (→ 서버 처리) */
+/** 제한 시간 안에 끝나지 않으면 null */
 export function withTimeout(promise, ms) {
   return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))])
 }

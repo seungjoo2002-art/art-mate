@@ -15,13 +15,38 @@ export const saveAiConsent = ({ purpose = 'FEEDBACK_SUMMARY', policyVersion, gra
     body: { purpose, policy_version: policyVersion, agreed: true, granted_by: grantedBy },
   })
 
+let featuresCache = null
+
+/**
+ * AI·음성 변환 기능 사용 가능 여부 (GET /meta/ai-features, 인증 불필요).
+ * 이 API가 없는 이전 서버이거나 실패하면 null → 화면은 "사용 가능"으로 보고 요청 시 오류로 안내
+ */
+export function getAiFeatures() {
+  if (!featuresCache) {
+    featuresCache = api('/meta/ai-features').catch(() => {
+      featuresCache = null
+      return null
+    })
+  }
+  return featuresCache
+}
+
 const recordingPath = (artworkId, recordingId) => `/artworks/${artworkId}/recordings/${recordingId}`
 
 /** 전사(STT) 요청. autoSummarize면 전사가 끝난 뒤 AI 요약까지 자동으로 이어짐 */
-export const requestTranscription = (artworkId, recordingId, { autoSummarize = true } = {}) =>
+/**
+ * deferSeconds(v0.9.3): 기기에서 변환하는 동안 만들어 두는 백업 서버 작업 — 그 시간 뒤에 서버가 처리.
+ * 기기 전사가 저장되면 자동 취소된다. 0(기본)으로 다시 부르면 대기 중인 백업을 바로 처리하도록 앞당김.
+ * (0일 때는 필드를 보내지 않아 이전 서버와도 호환)
+ */
+export const requestTranscription = (
+  artworkId,
+  recordingId,
+  { autoSummarize = true, deferSeconds = 0 } = {},
+) =>
   api(`${recordingPath(artworkId, recordingId)}/transcription`, {
     method: 'POST',
-    body: { auto_summarize: autoSummarize },
+    body: { auto_summarize: autoSummarize, ...(deferSeconds > 0 ? { defer_seconds: deferSeconds } : {}) },
   })
 
 /**

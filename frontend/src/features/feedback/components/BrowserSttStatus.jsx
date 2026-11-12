@@ -11,41 +11,66 @@ const PREFERENCE_LABELS = {
   off: '사용 안 함 (서버에서 변환)',
 }
 
+/** 실제 받은 바이트 기준 다운로드 비율 (모르면 null → 퍼센트를 표시하지 않음) */
 function percent(progress) {
   if (!progress?.total) return null
   return Math.min(100, Math.round((progress.loaded / progress.total) * 100))
 }
 
-function message(state) {
+/**
+ * state.phase
+ *  녹음 화면(모델 미리 준비): idle | unsupported | preparing | ready | failed | skipped
+ *  기기 전사 작업(deviceJobs): queued | preparing | transcribing | saving | done | server | failed
+ */
+function message(state, { afterSave }) {
   const plan = state.plan
   switch (state.phase) {
     case 'unsupported':
-      return '이 기기에서는 바로 변환할 수 없어요. 저장하면 서버에서 변환해요 (수 분~수십 분).'
+      return '이 기기에서는 바로 변환할 수 없어요. 저장하면 서버에서 변환해요.'
+    case 'queued':
+      return '앞의 녹음 변환이 끝나면 이어서 바꿔요…'
     case 'preparing': {
       const pct = percent(state.progress)
       return pct !== null && pct < 100
-        ? `음성 인식 모델 준비 중 ${pct}% (처음 한 번 약 ${plan.downloadMb}MB, Wi-Fi 권장)`
-        : '음성 인식 모델 불러오는 중…'
+        ? `음성 인식 모델 받는 중 ${pct}% (처음 한 번 약 ${plan.downloadMb}MB, Wi-Fi 권장)`
+        : '음성 인식 모델 준비 중…'
     }
-    case 'transcribing':
-      return '이 기기에서 녹음을 글로 바꾸는 중…'
-    case 'done': {
-      const seconds = (state.result.timings.totalMs / 1000).toFixed(1)
-      return `글로 바꾸기 완료 (${seconds}초). 저장하면 결과를 확인·수정할 수 있어요.`
+    case 'ready':
+      return '음성 인식 준비 완료. 저장하면 바로 글로 바꿔요.'
+    case 'transcribing': {
+      const chunk = state.chunk
+      return chunk?.total > 1
+        ? `음성을 글로 바꾸는 중… (${chunk.done}/${chunk.total} 구간 완료)`
+        : '음성을 글로 바꾸는 중…'
     }
+    case 'saving':
+      return '변환한 글을 저장하는 중…'
+    case 'done':
+      return '글로 바꾸기 완료'
+    case 'server':
+      return '서버에서 변환하도록 요청했어요.'
     case 'failed':
-      return '이 기기에서 변환하지 못했어요. 저장하면 서버에서 변환해요.'
+      return afterSave
+        ? '이 기기에서 변환하지 못했어요.'
+        : '모델을 미리 준비하지 못했어요. 저장할 때 다시 시도해요.'
     case 'skipped':
-      return '저장하면 서버에서 변환해요 (수 분~수십 분).'
+      return '저장하면 서버에서 변환해요.'
     default:
       return null
   }
 }
 
-/** 녹음 직후 기기 음성 인식 진행 상태 + 서버 처리·직접 입력 전환 */
-export default function BrowserSttStatus({ state, onSkip, preference, onPreferenceChange, artworkId }) {
-  const text = message(state)
-  const busy = state.phase === 'preparing' || state.phase === 'transcribing'
+/** 기기 음성 인식 진행 상태 (녹음 화면·녹음 카드 공용) + 서버 처리·직접 입력 전환 */
+export default function BrowserSttStatus({
+  state,
+  onSkip,
+  preference,
+  onPreferenceChange,
+  artworkId,
+  afterSave = false,
+}) {
+  const text = message(state, { afterSave })
+  const busy = ['queued', 'preparing', 'transcribing', 'saving'].includes(state.phase)
   return (
     <div className={styles.box} role="status" aria-live="polite">
       {text && (
@@ -55,7 +80,7 @@ export default function BrowserSttStatus({ state, onSkip, preference, onPreferen
         </p>
       )}
       <div className={styles.actions}>
-        {busy && (
+        {busy && onSkip && state.phase !== 'saving' && (
           <button type="button" className={styles.link} onClick={onSkip}>
             서버에서 처리하기
           </button>

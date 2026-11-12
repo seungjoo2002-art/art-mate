@@ -135,7 +135,24 @@ class Settings(BaseSettings):
     stt_timeout_seconds: int = Field(default=1800, ge=30, le=10800)
     # Worker가 음성을 내려받을 Signed URL 유효시간.
     # 요청한 사용자 토큰으로 발급한다 (service_role 미사용)
-    stt_source_url_seconds: int = Field(default=21600, ge=600, le=86400)
+    # 24시간: GitHub Actions 예약 실행은 실제로 6~7시간씩 밀린 기록이 있어(2026-11-11)
+    # 6시간이면 Worker가 받기 전에 만료(SOURCE_URL_EXPIRED)됐다
+    stt_source_url_seconds: int = Field(default=86400, ge=600, le=86400)
+    # 기기 전사 중 만들어 두는 "백업" 서버 전사 작업의 최대 지연 (요청값 상한)
+    stt_max_defer_seconds: int = Field(default=3600, ge=0, le=21600)
+
+    # --- Worker 즉시 실행 (GitHub Actions workflow_dispatch) ------------------
+    # 작업을 큐에 넣으면 stt-worker 워크플로를 바로 실행 요청한다 (예약 실행 15분 주기는 실제로
+    # 수 시간씩 밀림). 토큰이 없으면 아무것도 하지 않고 예약 실행만 쓴다.
+    # 토큰: 이 저장소 하나에 Actions: Read and write 권한만 준 fine-grained PAT
+    worker_dispatch_token: SecretStr | None = None
+    worker_dispatch_repo: str = Field(
+        default="seungjoo2002-art/art-mate", pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    )
+    worker_dispatch_workflow: str = Field(default="stt-worker.yml", pattern=r"^[A-Za-z0-9_.-]+$")
+    worker_dispatch_ref: str = Field(default="main", min_length=1, max_length=100)
+    # 같은 API 프로세스에서 이 간격 안의 요청은 한 번으로 합친다 (실행 중인 Worker가 함께 처리)
+    worker_dispatch_min_interval_seconds: int = Field(default=30, ge=0, le=3600)
 
     ai_summary_enabled: bool = False
     # Gemini API 키 (Worker 전용).
@@ -147,6 +164,8 @@ class Settings(BaseSettings):
     gemini_max_output_tokens: int = Field(default=4096, ge=256, le=32768)
     # 한 번에 보내는 전사문 최대 글자 수 (넘으면 요약 실패 처리)
     ai_max_transcript_chars: int = Field(default=30000, ge=1000, le=200000)
+    # 학생 1명이 하루(Asia/Seoul)에 요청할 수 있는 AI 요약 수 (무료 한도·남용 방지). 0 = 제한 없음
+    ai_summary_daily_limit: int = Field(default=20, ge=0, le=1000)
     # 외부 AI 전송 동의서 버전. 바꾸면 학생은 새 버전에 다시 동의해야 AI 요약을 요청할 수 있다
     ai_consent_version: str = Field(
         default="2026-11-ai-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
