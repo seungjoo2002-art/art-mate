@@ -596,7 +596,7 @@ class AiFeedbackService:
         summary_job = None
         summary_status = "NOT_REQUESTED"
         if data.auto_summarize:
-            if not self.settings.ai_summary_enabled:
+            if not self.settings.ai_summary_active:
                 log_summary_disabled("save_browser_transcript")
                 summary_status = "AI_DISABLED"
             elif not await self.has_valid_ai_consent(recording.owner_id):
@@ -723,7 +723,7 @@ class AiFeedbackService:
     async def request_summary(
         self, recording: FeedbackRecording, requester: Profile, *, regenerate: bool
     ) -> tuple[JobRead, bool]:
-        if not self.settings.ai_summary_enabled:
+        if not self.settings.ai_summary_active:
             log_summary_disabled("request_summary")
             raise AiNotConfiguredError()
         recording_id = recording.id

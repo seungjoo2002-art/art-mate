@@ -26,9 +26,11 @@ STT_SETUP = (
     "(needs secret WORKER_DATABASE_URL). Browser transcription still works."
 )
 SUMMARY_SETUP = (
-    "AI summary requested but AI_SUMMARY_ENABLED is not true on the API service (Render). "
-    "Set AI_SUMMARY_ENABLED=true on Render, and in GitHub Actions set variable "
-    "AI_SUMMARY_ENABLED=true and secret GEMINI_API_KEY (summaries are processed by stt-worker)."
+    "AI summary requested but it is not active on the API service (Render). "
+    "Set AI_SUMMARY_ENABLED=true and, after confirming a paid Gemini tier and the provider terms "
+    "(age clause, guardian consent), AI_PROVIDER_TERMS_CONFIRMED=true on Render; in GitHub Actions "
+    "set variables AI_SUMMARY_ENABLED=true, AI_PROVIDER_TERMS_CONFIRMED=true and secret "
+    "GEMINI_API_KEY (summaries are processed by stt-worker)."
 )
 
 

@@ -51,6 +51,8 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       AI_SUMMARY_ENABLED: ${{ vars.AI_SUMMARY_ENABLED || 'false' }}
       GROWTH_AI_ENABLED: ${{ vars.GROWTH_AI_ENABLED || 'false' }}
+      # 운영자 확인: Gemini 유료 등급 + 제공자 약관(연령 조항)·동의 범위 검토 (없으면 외부 AI 전송 안 함)
+      AI_PROVIDER_TERMS_CONFIRMED: ${{ vars.AI_PROVIDER_TERMS_CONFIRMED || 'false' }}
       # API 서버(Render)와 같은 값이어야 동의가 유효하다 (빈 값은 무시되어 앱 기본값 사용)
       AI_CONSENT_VERSION: ${{ vars.AI_CONSENT_VERSION }}
       AI_GROWTH_CONSENT_VERSION: ${{ vars.AI_GROWTH_CONSENT_VERSION }}

@@ -5,6 +5,8 @@
 값은 코드 배포로만 바뀌므로 응답을 캐시해도 된다 (Cache-Control 1시간).
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
@@ -95,6 +97,10 @@ class AiFeatures(BaseModel):
         description="서버 음성 변환 요청 가능 (처리는 주기 작업, 지연 가능)"
     )
     ai_summary: bool = Field(description="AI 첨삭 정리 요청 가능")
+    ai_summary_status: Literal["ENABLED", "DISABLED", "TERMS_UNCONFIRMED"] = Field(
+        description="ENABLED 사용 가능 / DISABLED 기능 꺼짐 / TERMS_UNCONFIRMED 운영자의 외부 AI "
+        "약관·유료 등급 확인 전이라 전송 차단 (v0.9.5)"
+    )
     ai_summary_daily_limit: int = Field(
         description="학생 1명의 하루 AI 정리 요청 한도 (0 = 제한 없음)"
     )
@@ -111,6 +117,13 @@ async def get_ai_features(request: Request, response: Response) -> AiFeatures:
     return AiFeatures(
         browser_transcription=True,
         server_transcription=settings.stt_enabled,
-        ai_summary=settings.ai_summary_enabled,
+        ai_summary=settings.ai_summary_active,
+        ai_summary_status=(
+            "ENABLED"
+            if settings.ai_summary_active
+            else "TERMS_UNCONFIRMED"
+            if settings.ai_summary_enabled
+            else "DISABLED"
+        ),
         ai_summary_daily_limit=settings.ai_summary_daily_limit,
     )

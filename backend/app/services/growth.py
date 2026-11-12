@@ -910,7 +910,7 @@ class GrowthService:
         """
         if report.status == ReportStatus.INSUFFICIENT_DATA:
             code = "INSUFFICIENT_DATA"
-        elif not self.settings.growth_ai_enabled:
+        elif not self.settings.growth_ai_active:
             code = "GROWTH_AI_NOT_CONFIGURED"
         elif not await AiFeedbackService(self.session, self.settings).has_valid_ai_consent(
             report.owner_id, AiConsentPurpose.GROWTH_COACHING
@@ -1211,7 +1211,7 @@ class GrowthService:
         )
 
     async def _queue_ai(self, scope: Scope, requester: Profile, batch_key: str) -> GenerationResult:
-        if not self.settings.growth_ai_enabled:
+        if not self.settings.growth_ai_active:
             raise ServiceUnavailableError(
                 "AI growth coaching is not enabled", code=ErrorCode.GROWTH_AI_NOT_CONFIGURED
             )

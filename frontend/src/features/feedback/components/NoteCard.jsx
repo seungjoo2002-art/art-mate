@@ -104,7 +104,7 @@ export default function NoteCard({ note, options, onChanged }) {
         ) : note.feedback_id ? (
           <Link to={`/feedbacks/${note.feedback_id}`} className={aiStyles.result}>
             <Sparkles size={18} aria-hidden />
-            <span className={aiStyles.resultText}>AI 정리 결과 보기</span>
+            <span className={aiStyles.resultText}>AI 첨삭 정리 보기</span>
             <span className={note.feedback_status === 'APPROVED' ? aiStyles.done : aiStyles.todo}>
               {note.feedback_status === 'APPROVED' ? '확정됨' : '확인 필요'}
             </span>

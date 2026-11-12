@@ -79,7 +79,7 @@ def supported_job_types(
         types.add(AiJobType.TRANSCRIBE)
     if has_llm:
         types.add(AiJobType.SUMMARIZE)
-        if settings.growth_ai_enabled:
+        if settings.growth_ai_active:
             types |= {AiJobType.GROWTH_REPORT, AiJobType.PRACTICE_RECOMMEND}
     return frozenset(types)
 
@@ -135,7 +135,9 @@ async def main(argv: list[str] | None = None) -> None:
             if waiting_llm and llm is None:
                 logger.warning(
                     "AI jobs are waiting but this worker cannot process them: set GitHub Actions "
-                    "variable AI_SUMMARY_ENABLED=true and secret GEMINI_API_KEY",
+                    "variables AI_SUMMARY_ENABLED=true, AI_PROVIDER_TERMS_CONFIRMED=true (after "
+                    "confirming a paid Gemini tier and the provider terms) "
+                    "and secret GEMINI_API_KEY",
                     extra={"waiting": waiting_llm},
                 )
             if pending.get(AiJobType.TRANSCRIBE.value) and stt is None:

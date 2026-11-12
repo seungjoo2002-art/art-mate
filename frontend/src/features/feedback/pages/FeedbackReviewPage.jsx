@@ -63,7 +63,7 @@ export default function FeedbackReviewPage() {
 
   const renderItems = (items) =>
     items.length === 0 ? (
-      <p className={styles.empty}>언급 없음</p>
+      <p className={styles.empty}>언급되지 않음</p>
     ) : (
       <ul className={styles.items}>
         {items.map((item) => (
@@ -167,7 +167,7 @@ export default function FeedbackReviewPage() {
               {feedback.summary ? (
                 <p className={styles.summary}>{feedback.summary}</p>
               ) : (
-                <p className={styles.empty}>언급 없음</p>
+                <p className={styles.empty}>언급되지 않음</p>
               )}
               {feedback.categories.length > 0 && (
                 <div className={styles.chips}>
@@ -186,7 +186,7 @@ export default function FeedbackReviewPage() {
             <section className={styles.section}>
               <h2 className={styles.label}>개선할 점</h2>
               {feedback.weaknesses.length === 0 && feedback.fixes.length === 0 ? (
-                <p className={styles.empty}>언급 없음</p>
+                <p className={styles.empty}>언급되지 않음</p>
               ) : (
                 <>
                   {feedback.weaknesses.length > 0 && (

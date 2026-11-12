@@ -6,6 +6,7 @@ import { toErrorMessage } from '../../../utils/errorMessages'
 import { getRecordingUrl } from '../api'
 import {
   getAiConsent,
+  getAiConsentCached,
   getAiFeatures,
   getSummaryStatus,
   getTranscriptionStatus,
@@ -32,7 +33,7 @@ const timeOf = (iso) =>
 // 이 카드에서만 쓰는 안내 (요청 결과에 따라 문구를 구체적으로)
 const CARD_MESSAGES = {
   RATE_LIMITED: '오늘 AI 정리 요청을 모두 사용했어요. 내일 다시 이용해 주세요. 녹음 대본은 지금도 볼 수 있어요.',
-  AI_NOT_CONFIGURED: 'AI 정리 기능이 아직 열리지 않았어요. 녹음 대본은 지금도 볼 수 있어요.',
+  AI_NOT_CONFIGURED: 'AI 서비스 설정이 필요해요. 녹음 대본은 지금도 볼 수 있어요.',
 }
 
 async function loadStatus(artworkId, recordingId) {
@@ -58,6 +59,7 @@ export default function RecordingAiStatus({ artworkId, recording }) {
   const load = useCallback(() => loadStatus(artworkId, recording.id), [artworkId, recording.id])
   const { data, reload } = useAsync(load)
   const [features, setFeatures] = useState(null)
+  const [consent, setConsent] = useState(null) // AI 첨삭 요약 동의 (null = 아직 모름)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null) // 서버 변환을 쓸 수 없을 때 안내
@@ -73,6 +75,7 @@ export default function RecordingAiStatus({ artworkId, recording }) {
   useEffect(() => {
     let alive = true
     getAiFeatures().then((value) => alive && setFeatures(value))
+    getAiConsentCached().then((value) => alive && setConsent(value))
     return () => {
       alive = false
     }
@@ -134,6 +137,13 @@ export default function RecordingAiStatus({ artworkId, recording }) {
    * 이 기기에서 글로 바꾸기 (저장된 녹음을 다시 받아 변환). 기기에서 못 하면 false.
    * 변환은 앱 전역 작업이라 다른 화면으로 가도 계속되고, 돌아오면 진행 상태가 보인다
    */
+  /** 대본이 완성되면 AI 요약까지 자동으로: AI 기능이 켜져 있고 학생이 동의했을 때만 */
+  async function shouldAutoSummarize() {
+    if (features && features.ai_summary === false) return false
+    const current = await getAiConsentCached()
+    return Boolean(current?.is_valid)
+  }
+
   async function transcribeOnDevice() {
     if (audioGone) return false
     const plan = await resolvePlan()
@@ -141,6 +151,7 @@ export default function RecordingAiStatus({ artworkId, recording }) {
     startDeviceJob({
       artworkId,
       recordingId: recording.id,
+      autoSummarize: await shouldAutoSummarize(),
       getBlob: async () => {
         const { url } = await getRecordingUrl(artworkId, recording.id)
         const response = await fetch(url)
@@ -159,20 +170,22 @@ export default function RecordingAiStatus({ artworkId, recording }) {
       return
     }
     try {
-      await requestTranscription(artworkId, recording.id, { autoSummarize: false })
+      await requestTranscription(artworkId, recording.id, {
+        autoSummarize: await shouldAutoSummarize(),
+      })
     } catch (err) {
       if (err.code !== 'TRANSCRIPTION_ALREADY_DONE') throw err
     }
   }
 
-  /** "녹음을 글로 바꾸기": AI 동의 없이 가능 (기기 우선, 안 되면 서버) */
+  /** "녹음을 글로 바꾸기": AI 동의 없이 가능 (기기 우선, 안 되면 서버). 동의가 있으면 AI 요약까지 자동 */
   async function transcribe() {
     setNotice(null)
     if (await transcribeOnDevice()) return
     await transcribeOnServer()
   }
 
-  /** "AI로 피드백 정리하기": 사용자가 누를 때만, AI 전송 동의 확인 후 */
+  /** "AI로 첨삭 정리하기": 기존 대본·수정한 대본·실패 후 재시도. AI 전송 동의 확인 후 */
   async function summarize({ regenerate = false } = {}) {
     const consent = await getAiConsent()
     if (!consent.is_valid) {
@@ -299,7 +312,7 @@ export default function RecordingAiStatus({ artworkId, recording }) {
                 ? '서버 변환 순서를 기다리는 중…'
                 : card.kind === 'serverRunning'
                   ? '서버에서 녹음을 글로 바꾸는 중…'
-                  : 'AI가 피드백을 정리하는 중…'}
+                  : 'AI가 첨삭을 분석하는 중…'}
             {pollingStopped && (
               <button
                 type="button"
@@ -358,7 +371,22 @@ export default function RecordingAiStatus({ artworkId, recording }) {
         </Link>
       )}
 
-      {canSummarize && card.aiAvailable && (card.kind === 'transcribed' || card.retry === 'summary') && (
+      {canSummarize && card.aiAvailable && consent?.is_valid === false && (
+        <div className={styles.notice}>
+          <p>AI 첨삭 정리를 하려면 AI 사용 동의가 필요해요. 동의하지 않아도 대본은 볼 수 있어요.</p>
+          <button
+            type="button"
+            className={styles.link}
+            onClick={() => navigate('/ai-consent', { state: { from: location.pathname } })}
+          >
+            AI 사용 동의 확인하기
+          </button>
+        </div>
+      )}
+      {canSummarize &&
+        card.aiAvailable &&
+        consent?.is_valid !== false &&
+        (card.kind === 'transcribed' || card.retry === 'summary') && (
         <button
           type="button"
           className={styles.action}
@@ -366,17 +394,21 @@ export default function RecordingAiStatus({ artworkId, recording }) {
           disabled={busy}
         >
           <Sparkles size={18} aria-hidden />
-          {busy ? '요청하는 중…' : card.kind === 'failed' ? 'AI 정리 다시 요청하기' : 'AI로 피드백 정리하기'}
+          {busy ? '요청하는 중…' : card.kind === 'failed' ? 'AI 분석 다시 시도' : 'AI로 첨삭 정리하기'}
         </button>
       )}
       {canSummarize && !card.aiAvailable && (
-        <p className={styles.muted}>AI 정리 기능이 아직 열리지 않았어요. 대본을 보고 직접 정리할 수 있어요.</p>
+        <p className={styles.muted}>
+          {features?.ai_summary_status === 'TERMS_UNCONFIRMED'
+            ? 'AI 서비스 설정이 필요해요 (외부 AI 이용 조건 확인 중). 대본을 보고 직접 정리할 수 있어요.'
+            : 'AI 서비스 설정이 필요해요. 대본을 보고 직접 정리할 수 있어요.'}
+        </p>
       )}
 
       {card.kind === 'ready' && (
         <Link to={`/feedbacks/${card.feedbackId}`} className={styles.result}>
           <Sparkles size={18} aria-hidden />
-          <span className={styles.resultText}>AI 정리 결과 보기</span>
+          <span className={styles.resultText}>AI 첨삭 정리 보기</span>
           <span className={card.feedbackStatus === 'APPROVED' ? styles.done : styles.todo}>
             {card.feedbackStatus === 'APPROVED' ? '확정됨' : '확인 필요'}
           </span>

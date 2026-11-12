@@ -143,7 +143,7 @@ function SummaryPanel({ artworkId, recordingId, refreshKey }) {
     return (
       <Link to={`/feedbacks/${phase.feedbackId}`} className={styles.summaryLink}>
         <Sparkles size={18} aria-hidden />
-        <span>AI 정리 결과 보기</span>
+        <span>AI 첨삭 정리 보기</span>
         <ChevronRight size={18} aria-hidden />
       </Link>
     )
@@ -153,7 +153,7 @@ function SummaryPanel({ artworkId, recordingId, refreshKey }) {
       {phase.phase === 'summarizing' ? (
         <p>AI가 이 대본으로 피드백을 정리하는 중이에요.</p>
       ) : features?.ai_summary === false ? (
-        <p>AI 정리 기능이 아직 열리지 않았어요. 대본을 보며 직접 정리할 수 있어요.</p>
+        <p>AI 서비스 설정이 필요해요. 대본을 보며 직접 정리할 수 있어요.</p>
       ) : (
         <>
           <p>
