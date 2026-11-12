@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 
 from app.models.enums import (
+    AiAgeBand,
     AiConsentPurpose,
     AiJobStatus,
     AiJobType,
@@ -16,6 +17,7 @@ from app.models.enums import (
     FeedbackItemOrigin,
     FeedbackSource,
     FeedbackStatus,
+    GuardianRelationship,
     ReviewAction,
     ReviewMode,
     TranscriptionStatus,
@@ -38,11 +40,17 @@ class AiConsentCreate(InputModel):
         max_length=20,
         description="GET /ai-processing-consents/me 의 required_version",
     )
-    agreed: Literal[True] = Field(
-        description="전사문의 외부 AI(Gemini) 전송에 동의함 (true만 허용)"
+    agreed: Literal[True] = Field(description="전사문의 외부 AI 전송에 동의함 (true만 허용)")
+    birth_year_month: str | None = Field(
+        default=None,
+        pattern=r"^(19|20)\d{2}-(0[1-9]|1[0-2])$",
+        description="(v0.9.6 필수) 생년월 YYYY-MM. 연령 구간 계산에만 쓰고 저장하지 않는다. "
+        "만 18세 미만이면 보호자 확인 링크가 발급되고, 보호자가 확인해야 동의가 유효해진다",
+        examples=["2009-03"],
     )
-    granted_by: ConsentGrantor = Field(
-        default=ConsentGrantor.SELF, description="만 14세 미만은 GUARDIAN (법정대리인 동의)"
+    granted_by: ConsentGrantor | None = Field(
+        default=None,
+        description="(v0.9.6부터 무시) 연령 구간으로 서버가 정한다: 성인 SELF, 미성년자 GUARDIAN",
     )
 
 
@@ -54,14 +62,50 @@ class AiConsentRead(BaseModel):
     granted_by: ConsentGrantor
     granted_at: dt.datetime
     revoked_at: dt.datetime | None
+    age_band: AiAgeBand | None = Field(description="UNDER_13 / MINOR / ADULT (이전 동의는 null)")
+    guardian_relationship: GuardianRelationship | None
+    guardian_confirmed_at: dt.datetime | None = Field(description="보호자가 확인한 시각")
 
 
 class AiConsentStatus(BaseModel):
-    provider: AiProvider
+    provider: AiProvider = Field(description="지금 전사문을 받는 AI 제공자 (AI_PROVIDER)")
     purpose: AiConsentPurpose
     required_version: str
     is_valid: bool = Field(description="현재 버전에 유효한 동의가 있음 → AI 요약 요청 가능")
+    reason: (
+        Literal["NOT_CONSENTED", "MINOR_BLOCKED", "GUARDIAN_PENDING", "UNDER_13_BLOCKED"] | None
+    ) = Field(
+        default=None,
+        description="유효하지 않은 이유: 동의 없음·이전 버전·다른 제공자 / 보호자 확인 대기 / "
+        "만 13세 미만(운영자 데이터 무보관 승인 전 전송 차단) / MINOR_BLOCKED 미성년자 전송을 "
+        "운영자가 아직 허용하지 않음(AI_MINORS_ENABLED)",
+    )
     consent: AiConsentRead | None
+    guardian_token: str | None = Field(
+        default=None,
+        description="보호자 확인 링크용 토큰 — 동의·링크 재발급 응답에서 한 번만 내려준다. "
+        "링크: {프론트}/guardian-consent/{token}",
+    )
+    guardian_token_expires_at: dt.datetime | None = None
+
+
+class GuardianConsentView(BaseModel):
+    """보호자 확인 화면 (로그인 없이 링크로 연다). 학생 이름·작품·전사 내용은 보여 주지 않는다."""
+
+    provider: AiProvider
+    purpose: AiConsentPurpose
+    policy_version: str
+    age_band: AiAgeBand
+    status: Literal["PENDING", "CONFIRMED"]
+    expires_at: dt.datetime | None
+
+
+class GuardianConsentConfirm(InputModel):
+    guardian_name: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)
+    ] = Field(description="보호자(법정대리인) 성명")
+    relationship: GuardianRelationship
+    agreed: Literal[True] = Field(description="자녀의 전사문을 외부 AI로 보내는 데 동의함")
 
 
 # ----------------------------------------------------------------------------- jobs

@@ -38,6 +38,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
 from app.models.enums import (
+    AiAgeBand,
     AiConsentPurpose,
     AiJobStatus,
     AiJobType,
@@ -47,6 +48,7 @@ from app.models.enums import (
     FeedbackItemOrigin,
     FeedbackSource,
     FeedbackStatus,
+    GuardianRelationship,
     ReviewAction,
     ReviewMode,
     WeaknessCategory,
@@ -68,6 +70,12 @@ class AiProcessingConsent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             postgresql_where=text("revoked_at IS NULL"),
         ),
         Index("ix_ai_processing_consents_user_granted", "user_id", "granted_at"),
+        # v0.9.6: 보호자가 확인했으면 성명·관계가 있어야 함
+        CheckConstraint(
+            "guardian_confirmed_at IS NULL"
+            " OR (guardian_name IS NOT NULL AND guardian_relationship IS NOT NULL)",
+            name="guardian_confirmed_has_name",
+        ),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"))
@@ -81,6 +89,18 @@ class AiProcessingConsent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     granted_by: Mapped[ConsentGrantor] = mapped_column(enum_column(ConsentGrantor, "granted_by"))
     granted_at: Mapped[datetime]
     revoked_at: Mapped[datetime | None]
+    # v0.9.6 연령·보호자 동의. 생년월은 저장하지 않고 동의 시점의 연령 구간만 (이전 동의는 NULL)
+    age_band: Mapped[AiAgeBand | None] = mapped_column(enum_column(AiAgeBand, "age_band"))
+    # 미성년자: 보호자가 별도 링크에서 확인해야 유효. 개인정보 보호법 시행령 제17조의2에 따라
+    # 동의 확인에 필요한 보호자 성명·관계만 저장 (연락처는 받지 않음)
+    guardian_name: Mapped[str | None] = mapped_column(String(50))
+    guardian_relationship: Mapped[GuardianRelationship | None] = mapped_column(
+        enum_column(GuardianRelationship, "guardian_relationship")
+    )
+    guardian_confirmed_at: Mapped[datetime | None]
+    # 보호자 확인 링크 토큰의 SHA-256 (원문은 저장하지 않음), 만료 시각
+    guardian_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    guardian_token_expires_at: Mapped[datetime | None]
 
 
 class AiProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):

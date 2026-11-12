@@ -140,9 +140,3 @@ class GeminiClient:
             finish_reason=finish,
             model_name=self.model_name,
         )
-
-
-def build_llm(settings: Settings) -> SummaryLlm | None:
-    if not (settings.ai_summary_active and settings.gemini_configured):
-        return None
-    return GeminiClient(settings)

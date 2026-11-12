@@ -16,6 +16,7 @@ import {
   retryTranscription,
 } from '../aiApi'
 import { pollDelay, recordingCardState } from '../aiStatus'
+import { consentReasonMessage } from '../consentCopy'
 import { resolvePlan } from '../stt/browserStt'
 import { forgetInterrupted, getInterrupted, skipToServer, startDeviceJob } from '../stt/deviceJobs'
 import { useDeviceJob } from '../stt/useBrowserStt'
@@ -373,14 +374,19 @@ export default function RecordingAiStatus({ artworkId, recording }) {
 
       {canSummarize && card.aiAvailable && consent?.is_valid === false && (
         <div className={styles.notice}>
-          <p>AI 첨삭 정리를 하려면 AI 사용 동의가 필요해요. 동의하지 않아도 대본은 볼 수 있어요.</p>
-          <button
-            type="button"
-            className={styles.link}
-            onClick={() => navigate('/ai-consent', { state: { from: location.pathname } })}
-          >
-            AI 사용 동의 확인하기
-          </button>
+          <p>
+            {consentReasonMessage(consent.reason) ??
+              'AI 첨삭 정리를 하려면 AI 사용 동의가 필요해요. 동의하지 않아도 대본은 볼 수 있어요.'}
+          </p>
+          {!['UNDER_13_BLOCKED', 'MINOR_BLOCKED'].includes(consent.reason) && (
+            <button
+              type="button"
+              className={styles.link}
+              onClick={() => navigate('/ai-consent', { state: { from: location.pathname } })}
+            >
+              {consent.reason === 'GUARDIAN_PENDING' ? '보호자 확인 링크 보기' : 'AI 사용 동의 확인하기'}
+            </button>
+          )}
         </div>
       )}
       {canSummarize &&

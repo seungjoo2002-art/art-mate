@@ -65,7 +65,6 @@ from app.models.enums import (
     AiConsentPurpose,
     AiJobStatus,
     AiJobType,
-    AiProvider,
     ConsentGrantor,
     ConsentType,
     FeedbackItemKind,
@@ -94,6 +93,8 @@ from app.schemas.ai_feedback import (
     FeedbackRead,
     FeedbackReject,
     FeedbackUpdate,
+    GuardianConsentConfirm,
+    GuardianConsentView,
     JobRead,
     ReviewerFeedbackRead,
     ReviewHistoryRead,
@@ -107,11 +108,11 @@ from app.schemas.ai_feedback import (
 )
 from app.schemas.common import PaginationParams
 from app.schemas.students import student_ref
+from app.services import ai_consent_policy as consent_policy
 from app.services.access import managed_student_ids
 from app.services.ai_cleanup import (
     PURPOSE_JOB_TYPES,
     cancel_jobs_for_owner,
-    consent_version,
     skip_pending_narratives,
 )
 from app.services.ai_limits import check_summary_quota, log_stt_disabled, log_summary_disabled
@@ -205,14 +206,15 @@ class AiFeedbackService:
     # ================================================================ AI 전송 동의
 
     def required_version(self, purpose: AiConsentPurpose) -> str:
-        return consent_version(self.settings, purpose)
+        return consent_policy.required_version(self.settings, purpose)
 
     async def _active_ai_consent(
         self, user_id: uuid.UUID, purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY
     ) -> AiProcessingConsent | None:
+        """지금 제공자(AI_PROVIDER)에 대한 철회되지 않은 동의 (보호자 확인 대기 포함)."""
         stmt = select(AiProcessingConsent).where(
             AiProcessingConsent.user_id == user_id,
-            AiProcessingConsent.provider == AiProvider.GOOGLE_GEMINI,
+            AiProcessingConsent.provider == consent_policy.provider_for(self.settings),
             AiProcessingConsent.purpose == purpose,
             AiProcessingConsent.revoked_at.is_(None),
         )
@@ -222,18 +224,23 @@ class AiFeedbackService:
         self, user_id: uuid.UUID, purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY
     ) -> bool:
         consent = await self._active_ai_consent(user_id, purpose)
-        return consent is not None and consent.policy_version == self.required_version(purpose)
+        return consent_policy.evaluate(consent, self.settings, purpose).is_valid
 
     async def ai_consent_status(
-        self, user: Profile, purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY
+        self,
+        user: Profile,
+        purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY,
+        *,
+        guardian_token: str | None = None,
     ) -> AiConsentStatus:
         consent = await self._active_ai_consent(user.id, purpose)
-        required = self.required_version(purpose)
+        state = consent_policy.evaluate(consent, self.settings, purpose)
         return AiConsentStatus(
-            provider=AiProvider.GOOGLE_GEMINI,
+            provider=consent_policy.provider_for(self.settings),
             purpose=purpose,
-            required_version=required,
-            is_valid=consent is not None and consent.policy_version == required,
+            required_version=self.required_version(purpose),
+            is_valid=state.is_valid,
+            reason=state.reason,  # type: ignore[arg-type]
             consent=(
                 AiConsentRead(
                     id=consent.id,
@@ -243,13 +250,25 @@ class AiFeedbackService:
                     granted_by=consent.granted_by,
                     granted_at=consent.granted_at,
                     revoked_at=consent.revoked_at,
+                    age_band=consent.age_band,
+                    guardian_relationship=consent.guardian_relationship,
+                    guardian_confirmed_at=consent.guardian_confirmed_at,
                 )
                 if consent
                 else None
             ),
+            guardian_token=guardian_token,
+            guardian_token_expires_at=(
+                consent.guardian_token_expires_at if consent and guardian_token else None
+            ),
         )
 
     async def grant_ai_consent(self, user: Profile, data: AiConsentCreate) -> AiConsentStatus:
+        """동의 (v0.9.6). 생년월로 연령 구간을 정하고(저장 안 함), 미성년자는 보호자 확인 링크 발급.
+
+        같은 버전·제공자·연령 구간의 동의가 이미 유효(또는 차단 사유가 보호자 대기가 아님)하면
+        그대로 돌려준다 (멱등). 보호자 대기 중 다시 동의하면 새 링크를 발급한다.
+        """
         purpose = data.purpose
         required = self.required_version(purpose)
         if data.policy_version != required:
@@ -257,26 +276,47 @@ class AiFeedbackService:
                 "Please agree to the current AI processing consent version",
                 details={"required_version": required, "purpose": purpose.value},
             )
+        if data.birth_year_month is None:
+            raise UnprocessableError(
+                "Birth year and month are required to check the age for AI processing",
+                code=ErrorCode.AI_AGE_REQUIRED,
+            )
+        try:
+            band = consent_policy.age_band(data.birth_year_month, clock.local_today())
+        except ValueError:
+            raise UnprocessableError(
+                "Invalid birth year and month", code=ErrorCode.AI_AGE_REQUIRED
+            ) from None
         current = await self._active_ai_consent(user.id, purpose)
         if (
             current is not None
-            and current.policy_version == data.policy_version
-            and current.granted_by == data.granted_by
+            and current.policy_version == required
+            and current.age_band == band
+            and consent_policy.evaluate(current, self.settings, purpose).reason
+            != consent_policy.GUARDIAN_PENDING
         ):
             return await self.ai_consent_status(user, purpose)
         now = clock.utc_now()
         if current is not None:
-            current.revoked_at = now  # 이전 버전 동의는 철회 처리 (이력 보존)
+            current.revoked_at = now  # 이전 동의(버전·보호자 대기)는 철회 처리 (이력 보존)
             await self.session.flush()
+        guardian = consent_policy.needs_guardian(band)
+        token: str | None = None
+        token_hash = expires_at = None
+        if guardian:
+            token, token_hash, expires_at = consent_policy.new_guardian_token(now)
         self.session.add(
             AiProcessingConsent(
                 id=uuid.uuid4(),
                 user_id=user.id,
-                provider=AiProvider.GOOGLE_GEMINI,
+                provider=consent_policy.provider_for(self.settings),
                 purpose=purpose,
                 policy_version=data.policy_version,
-                granted_by=ConsentGrantor(data.granted_by),
+                granted_by=ConsentGrantor.GUARDIAN if guardian else ConsentGrantor.SELF,
                 granted_at=now,
+                age_band=band,
+                guardian_token_hash=token_hash,
+                guardian_token_expires_at=expires_at,
             )
         )
         try:
@@ -284,7 +324,75 @@ class AiFeedbackService:
         except IntegrityError:
             await self.session.rollback()  # 동시 동의: 먼저 저장된 동의 사용
             await self.session.refresh(user)  # 만료된 ORM 객체 재조회 (MissingGreenlet 방지)
-        return await self.ai_consent_status(user, purpose)
+            return await self.ai_consent_status(user, purpose)
+        return await self.ai_consent_status(user, purpose, guardian_token=token)
+
+    async def new_guardian_link(
+        self, user: Profile, purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY
+    ) -> AiConsentStatus:
+        """보호자 확인 대기 중인 동의의 링크 재발급 (이전 링크는 무효)."""
+        consent = await self._active_ai_consent(user.id, purpose)
+        state = consent_policy.evaluate(consent, self.settings, purpose)
+        if consent is None or state.reason != consent_policy.GUARDIAN_PENDING:
+            raise ConflictError(
+                "There is no consent waiting for a guardian",
+                code=ErrorCode.FEEDBACK_INVALID_STATE,
+            )
+        token, token_hash, expires_at = consent_policy.new_guardian_token(clock.utc_now())
+        consent.guardian_token_hash = token_hash
+        consent.guardian_token_expires_at = expires_at
+        await self.session.commit()
+        return await self.ai_consent_status(user, purpose, guardian_token=token)
+
+    async def _consent_by_guardian_token(
+        self, token: str, *, for_update: bool = False
+    ) -> AiProcessingConsent:
+        stmt = select(AiProcessingConsent).where(
+            AiProcessingConsent.guardian_token_hash == consent_policy.hash_token(token),
+            AiProcessingConsent.revoked_at.is_(None),
+        )
+        if for_update:
+            stmt = stmt.with_for_update()
+        consent = (await self.session.execute(stmt)).scalar_one_or_none()
+        if (
+            consent is None
+            or consent.guardian_token_expires_at is None
+            or consent.guardian_token_expires_at <= clock.utc_now()
+            or consent.age_band is None
+        ):
+            raise NotFoundError(
+                "The guardian link is invalid or expired", code=ErrorCode.GUARDIAN_LINK_INVALID
+            )
+        return consent
+
+    @staticmethod
+    def _guardian_view(consent: AiProcessingConsent) -> GuardianConsentView:
+        assert consent.age_band is not None
+        return GuardianConsentView(
+            provider=consent.provider,
+            purpose=consent.purpose,
+            policy_version=consent.policy_version,
+            age_band=consent.age_band,
+            status="CONFIRMED" if consent.guardian_confirmed_at else "PENDING",
+            expires_at=consent.guardian_token_expires_at,
+        )
+
+    async def guardian_consent_view(self, token: str) -> GuardianConsentView:
+        return self._guardian_view(await self._consent_by_guardian_token(token))
+
+    async def guardian_confirm(
+        self, token: str, data: GuardianConsentConfirm
+    ) -> GuardianConsentView:
+        """보호자 확인 (로그인 불필요, 링크 토큰). 확인하면 링크는 더 쓸 수 없다."""
+        consent = await self._consent_by_guardian_token(token, for_update=True)
+        consent.guardian_name = data.guardian_name
+        consent.guardian_relationship = data.relationship
+        consent.guardian_confirmed_at = clock.utc_now()
+        consent.guardian_token_hash = None  # 한 번 쓰면 끝 (다시 열면 404)
+        consent.guardian_token_expires_at = None
+        view = self._guardian_view(consent)
+        await self.session.commit()
+        return view
 
     async def revoke_ai_consent(
         self, user: Profile, purpose: AiConsentPurpose = AiConsentPurpose.FEEDBACK_SUMMARY

@@ -22,6 +22,7 @@ async def test_ai_features_flags(client: httpx.AsyncClient, app) -> None:  # typ
         "browser_transcription": True,
         "server_transcription": True,
         "ai_summary": True,
+        "ai_provider": "openai",
         "ai_summary_status": "ENABLED",
         "ai_summary_daily_limit": 20,
     }

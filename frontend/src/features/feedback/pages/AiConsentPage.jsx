@@ -36,7 +36,7 @@ export default function AiConsentPage() {
       <main className={`${styles.body} ${styles.left}`}>
         <AiConsentForm
           purpose={purpose}
-          requiredVersion={consent.required_version}
+          status={consent}
           onSaved={() => navigate(from, { replace: true, state: { aiConsented: true } })}
         />
       </main>
