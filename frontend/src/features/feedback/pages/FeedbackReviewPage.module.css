@@ -134,3 +134,14 @@
   font-weight: var(--weight-bold);
   color: var(--color-primary);
 }
+
+.subLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-sub);
+}
+
+.empty {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}

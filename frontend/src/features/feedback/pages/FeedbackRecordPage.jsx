@@ -7,49 +7,39 @@ import { Button } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getConsent, uploadRecording } from '../api'
-import { getAiConsent, requestSummary, requestTranscription, saveBrowserTranscript } from '../aiApi'
+import { getAiConsent, requestTranscription } from '../aiApi'
 import { ACCEPT } from '../audioFile'
 import BrowserSttStatus from '../components/BrowserSttStatus'
 import ConsentForm from '../components/ConsentForm'
-import { getPreference, setPreference } from '../stt/browserStt'
-import { useBrowserStt, withTimeout } from '../stt/useBrowserStt'
+import { getPreference, resolvePlan, setPreference } from '../stt/browserStt'
+import { startDeviceJob } from '../stt/deviceJobs'
+import { useModelPrewarm } from '../stt/useBrowserStt'
 import { formatDuration } from '../format'
 import { useAudioRecorder } from '../useAudioRecorder'
 import styles from './FeedbackRecordPage.module.css'
 
 const WAVE = [14, 26, 18, 40, 22, 48, 30, 20, 38, 26, 16, 34, 28, 42, 20]
-// 저장 버튼을 누른 뒤 기기 변환을 기다리는 최대 시간. 넘으면 서버(GitHub Actions)로 처리
-const STT_WAIT_MS = 120_000
+// 이보다 긴 녹음은 기기 변환에 시간이 오래 걸릴 수 있어 미리 알려 줌 (저장·변환은 가능)
+const LONG_RECORDING_MS = 5 * 60 * 1000
 
 /**
- * 저장 후 전사·요약 요청. 기기 전사가 있으면 그것을 저장하고(대기 중 서버 작업은 취소됨),
- * 없거나 실패하면 기존처럼 서버 전사를 요청한다. → { needsConsent }
+ * 저장(업로드) 후 글로 바꾸기 시작 (v0.9.3). 결과를 기다리지 않는다 — 작품 화면의 녹음 카드가
+ * 진행 상태를 보여 준다. 녹음은 이미 서버에 저장됐으므로 변환 중 화면을 옮기거나 탭이 닫혀도 남는다.
+ *  - 기기에서 변환 가능: 앱 안에서 계속 변환 (+ 서버 백업 작업을 미뤄서 만들어 둠)
+ *  - 불가·사용 안 함·"서버에서 처리하기": 서버 전사 요청
+ * AI 정리는 AI 전송 동의가 있을 때만 자동 요청. → { needsConsent }
  */
-async function transcribeAfterUpload(artworkId, recordingId, sttResult) {
+async function transcribeAfterUpload(artworkId, recordingId, blob, { serverOnly }) {
   const consent = await getAiConsent()
-  if (sttResult) {
-    try {
-      // AI 동의가 없으면 전사만 저장 (기기 안에서 만든 글이라 외부 전송 없음)
-      await saveBrowserTranscript(artworkId, recordingId, sttResult, {
-        autoSummarize: consent.is_valid,
-      })
-      return { needsConsent: !consent.is_valid }
-    } catch (err) {
-      if (err.code === 'TRANSCRIPTION_ALREADY_DONE') {
-        if (consent.is_valid) await requestSummary(artworkId, recordingId).catch(() => {})
-        return { needsConsent: !consent.is_valid }
-      }
-      // 그 밖의 오류는 서버 전사로 대신
-    }
+  const plan = serverOnly ? null : await resolvePlan()
+  if (plan) {
+    startDeviceJob({ artworkId, recordingId, blob, autoSummarize: consent.is_valid })
+  } else {
+    await requestTranscription(artworkId, recordingId, { autoSummarize: consent.is_valid }).catch(
+      () => {}, // 실패하면 녹음 카드에서 다시 요청
+    )
   }
-  if (!consent.is_valid) return { needsConsent: true }
-  try {
-    await requestTranscription(artworkId, recordingId, { autoSummarize: true })
-  } catch (err) {
-    if (err.code !== 'TRANSCRIPTION_ALREADY_DONE') throw err
-    await requestSummary(artworkId, recordingId)
-  }
-  return { needsConsent: false }
+  return { needsConsent: !consent.is_valid }
 }
 
 export default function FeedbackRecordPage() {
@@ -83,30 +73,29 @@ export default function FeedbackRecordPage() {
 function Recorder({ artworkId }) {
   const navigate = useNavigate()
   const { status, elapsedMs, result, error, start, stop, reset, loadFile } = useAudioRecorder()
-  const stt = useBrowserStt()
+  const prewarm = useModelPrewarm()
   const [preference, setPreferenceState] = useState(getPreference)
   const [uploading, setUploading] = useState(false)
-  const [waitingStt, setWaitingStt] = useState(false)
   const [loadingFile, setLoadingFile] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const recording = status === 'recording'
-  const { start: startStt, reset: resetStt, skip: skipStt } = stt
+  const { start: startPrewarm, reset: resetPrewarm, skip: skipPrewarm } = prewarm
+  const serverOnly = preference === 'off' || prewarm.state.phase === 'skipped'
 
-  // 녹음이 끝나면(또는 파일을 고르면) 바로 기기에서 글로 바꾸기 시작
+  // 녹음이 끝나면(또는 파일을 고르면) 음성 인식 모델을 미리 준비 (변환은 저장 후)
   useEffect(() => {
     if (status !== 'recorded' || !result || preference === 'off') return
-    startStt(result.blob)
-  }, [status, result, preference, startStt])
+    startPrewarm()
+  }, [status, result, preference, startPrewarm])
 
   function changePreference(value) {
     setPreference(value)
     setPreferenceState(value)
-    resetStt()
+    resetPrewarm()
   }
 
   function handleReset() {
-    skipStt()
-    resetStt()
+    resetPrewarm()
     reset()
   }
 
@@ -126,17 +115,16 @@ function Recorder({ artworkId }) {
     const artworkPath = `/artworks/${artworkId}`
     if (withAi) {
       try {
-        setWaitingStt(true)
-        const sttResult = preference === 'off' ? null : await withTimeout(stt.wait(), STT_WAIT_MS)
-        setWaitingStt(false)
-        const { needsConsent } = await transcribeAfterUpload(artworkId, saved.id, sttResult)
+        const { needsConsent } = await transcribeAfterUpload(artworkId, saved.id, result.blob, {
+          serverOnly,
+        })
         if (needsConsent) {
-          // 동의 후 작품 화면에서 "AI로 피드백 정리하기"를 누르면 됨
+          // 글로 바꾸기는 계속 진행. 동의 후 작품 화면에서 "AI로 피드백 정리하기"를 누르면 됨
           navigate('/ai-consent', { replace: true, state: { from: artworkPath } })
           return
         }
       } catch {
-        // 녹음은 저장됨. AI 요청 실패는 작품 화면의 녹음 카드에서 다시 시도
+        // 녹음은 저장됨. 변환·AI 요청은 작품 화면의 녹음 카드에서 다시 시도
       }
     }
     navigate(artworkPath, { replace: true })
@@ -180,9 +168,14 @@ function Recorder({ artworkId }) {
       {status === 'recorded' ? (
         <div className={styles.review}>
           <audio controls src={result.url} className={styles.preview} />
+          {result.durationMs > LONG_RECORDING_MS && (
+            <p className={styles.hint}>
+              5분이 넘는 녹음은 글로 바꾸는 데 시간이 오래 걸릴 수 있어요.
+            </p>
+          )}
           <BrowserSttStatus
-            state={preference === 'off' ? { phase: 'skipped' } : stt.state}
-            onSkip={skipStt}
+            state={preference === 'off' ? { phase: 'skipped' } : prewarm.state}
+            onSkip={skipPrewarm}
             preference={preference}
             onPreferenceChange={uploading ? undefined : changePreference}
             artworkId={artworkId}
@@ -190,7 +183,7 @@ function Recorder({ artworkId }) {
           {uploadError && <p className={styles.error}>{uploadError}</p>}
           <Button onClick={() => handleSave({ withAi: true })} disabled={uploading}>
             <Sparkles size={20} aria-hidden />
-            {waitingStt ? '글로 바꾸기 마무리 중…' : uploading ? '저장하는 중…' : '저장하고 AI로 정리하기'}
+            {uploading ? '녹음 올리는 중…' : '저장하고 AI로 정리하기'}
           </Button>
           <Button variant="soft" onClick={() => handleSave()} disabled={uploading}>
             녹음만 저장하기

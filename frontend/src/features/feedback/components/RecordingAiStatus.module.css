@@ -90,11 +90,28 @@
   text-decoration: underline;
 }
 
-.muted {
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
+.muted,
+.hint {
   font-size: var(--text-sm);
   color: var(--color-text-muted);
+}
+
+.progressBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+  overflow-wrap: anywhere;
 }
 
 .error {

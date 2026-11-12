@@ -25,14 +25,21 @@ export const PREFERENCES = ['auto', 'tiny', 'base', 'small', 'off']
 export const PREFERENCE_KEY = 'artmate.stt.model'
 
 /**
- * caps: { worker, wasm, webgpu, shaderF16, deviceMemory }
+ * caps: { worker, wasm, webgpu, shaderF16, deviceMemory, mobile }
  * preference: 'auto' | 'tiny' | 'base' | 'small' | 'off'
+ * safety: 'normal' | 'wasm' — 이 기기에서 변환 중 탭이 강제 종료(메모리 부족 추정)된 기록이 있으면
+ *   'wasm'으로 WebGPU를 쓰지 않는다 (WebGPU base는 PC 실측 Chrome 메모리 2.2~2.6GB, WASM 1.1~1.3GB)
  * → null(브라우저 STT 안 함 → 서버 처리) 또는 { size, model, device, dtype, downloadMb }
+ *
+ * 휴대폰은 탭 메모리 한도가 작아(특히 iPhone Safari) 모델 준비 중 탭이 강제로 다시 로드될 수 있다.
+ * 그래서 휴대폰은 기본으로 WASM(메모리 약 절반)을 쓰고, 메모리 8GB 이상으로 보고되는 기기만 WebGPU.
  */
-export function chooseModel(caps, preference = 'auto') {
+export function chooseModel(caps, preference = 'auto', safety = 'normal') {
   if (preference === 'off' || !caps.worker || !caps.wasm) return null
-  const device = caps.webgpu ? 'webgpu' : 'wasm'
-  const precision = caps.webgpu ? (caps.shaderF16 ? 'webgpuF16' : 'webgpu') : 'wasm'
+  const roomyMobile = caps.mobile && (caps.deviceMemory ?? 0) >= 8
+  const useGpu = caps.webgpu && safety !== 'wasm' && (!caps.mobile || roomyMobile)
+  const device = useGpu ? 'webgpu' : 'wasm'
+  const precision = useGpu ? (caps.shaderF16 ? 'webgpuF16' : 'webgpu') : 'wasm'
   let size = preference
   if (preference === 'auto') {
     // 기본 base. 메모리가 아주 적은 기기는 tiny (deviceMemory는 Chrome 계열만 제공)
@@ -46,6 +53,15 @@ export function chooseModel(caps, preference = 'auto') {
     dtype: DTYPE[precision],
     downloadMb: DOWNLOAD_MB[precision][size],
   }
+}
+
+/** 휴대폰·태블릿 여부 (iPadOS Safari는 Mac으로 보이므로 터치 지원으로 판단) */
+export function isMobileDevice(nav = globalThis.navigator) {
+  if (!nav) return false
+  if (typeof nav.userAgentData?.mobile === 'boolean' && nav.userAgentData.mobile) return true
+  const ua = nav.userAgent ?? ''
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true
+  return /Macintosh/.test(ua) && (nav.maxTouchPoints ?? 0) > 1
 }
 
 const MAX_TEXT = 1000
