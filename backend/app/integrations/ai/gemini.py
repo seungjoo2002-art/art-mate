@@ -143,6 +143,6 @@ class GeminiClient:
 
 
 def build_llm(settings: Settings) -> SummaryLlm | None:
-    if not (settings.ai_summary_enabled and settings.gemini_configured):
+    if not (settings.ai_summary_active and settings.gemini_configured):
         return None
     return GeminiClient(settings)

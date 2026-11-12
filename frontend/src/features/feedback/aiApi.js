@@ -6,14 +6,32 @@ import { api } from '../../lib/api'
 export const getAiConsent = (purpose = 'FEEDBACK_SUMMARY') =>
   api(`/ai-processing-consents/me?purpose=${purpose}`)
 
-export const revokeAiConsent = (purpose = 'FEEDBACK_SUMMARY') =>
-  api(`/ai-processing-consents/me?purpose=${purpose}`, { method: 'DELETE' })
+export const revokeAiConsent = (purpose = 'FEEDBACK_SUMMARY') => {
+  consentCache = null
+  return api(`/ai-processing-consents/me?purpose=${purpose}`, { method: 'DELETE' })
+}
 
-export const saveAiConsent = ({ purpose = 'FEEDBACK_SUMMARY', policyVersion, grantedBy }) =>
-  api('/ai-processing-consents', {
+export const saveAiConsent = ({ purpose = 'FEEDBACK_SUMMARY', policyVersion, grantedBy }) => {
+  consentCache = null
+  return api('/ai-processing-consents', {
     method: 'POST',
     body: { purpose, policy_version: policyVersion, agreed: true, granted_by: grantedBy },
   })
+}
+
+let consentCache = null // { at, promise } — 녹음 카드 여러 개가 같은 요청을 반복하지 않도록
+
+/** 첨삭 요약 동의 상태 (30초 캐시, 동의·철회하면 비움). 실패하면 null (모름) */
+export function getAiConsentCached() {
+  if (!consentCache || Date.now() - consentCache.at > 30_000) {
+    const promise = getAiConsent().catch(() => {
+      consentCache = null
+      return null
+    })
+    consentCache = { at: Date.now(), promise }
+  }
+  return consentCache.promise
+}
 
 let featuresCache = null
 

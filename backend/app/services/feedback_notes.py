@@ -242,7 +242,7 @@ class FeedbackNoteService:
     # ------------------------------------------------------------------ AI 요약
 
     async def _can_summarize(self, owner_id: uuid.UUID) -> bool:
-        return self.settings.ai_summary_enabled and await self.feedback.has_valid_ai_consent(
+        return self.settings.ai_summary_active and await self.feedback.has_valid_ai_consent(
             owner_id
         )
 
@@ -278,7 +278,7 @@ class FeedbackNoteService:
     async def request_summary(
         self, owner: Profile, note_id: uuid.UUID, *, regenerate: bool
     ) -> tuple[JobRead, bool]:
-        if not self.settings.ai_summary_enabled:
+        if not self.settings.ai_summary_active:
             log_summary_disabled("note_summary")
             raise AiNotConfiguredError()
         note, _ = await self._note(owner, note_id)

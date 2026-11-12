@@ -51,7 +51,7 @@ const API_MESSAGES = {
   RECORDING_AUDIO_EXPIRED: '보관 기간이 지나 음성 파일이 삭제된 녹음이에요.',
   // 서버 설정이 꺼진 경우: 녹음·대본은 그대로 남아 있고, 설정 후 다시 요청할 수 있음
   STT_NOT_CONFIGURED: '서버 음성 변환을 지금은 쓸 수 없어요. 이 기기에서 글로 바꾸거나 글 첨삭으로 남겨 주세요.',
-  AI_NOT_CONFIGURED: 'AI 정리 기능이 아직 열리지 않았어요. 녹음 대본은 지금도 볼 수 있어요.',
+  AI_NOT_CONFIGURED: 'AI 서비스 설정이 필요해요. 녹음 대본은 지금도 볼 수 있어요.',
   RATE_LIMITED: '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.',
   // 커뮤니티 (docs/frontend-integration-v0.8.md, v0.9.md §8)
   SHARING_CONSENT_REQUIRED: '커뮤니티 공유 동의가 필요해요.',

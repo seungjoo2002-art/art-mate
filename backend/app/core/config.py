@@ -155,6 +155,11 @@ class Settings(BaseSettings):
     worker_dispatch_min_interval_seconds: int = Field(default=30, ge=0, le=3600)
 
     ai_summary_enabled: bool = False
+    # 운영자 확인 (배포 환경 필수, v0.9.5):
+    #  - Gemini 유료 등급 (입력이 모델 개선에 쓰이지 않음)
+    #  - 제공자 약관(연령 조항 포함)과 학생·보호자 동의 범위 검토 완료
+    # false면 배포 환경에서는 AI_SUMMARY_ENABLED 등이 켜져 있어도 외부 AI로 보내지 않는다
+    ai_provider_terms_confirmed: bool = False
     # Gemini API 키 (Worker 전용).
     # 무료 등급은 입력이 모델 개선에 쓰일 수 있으므로 유료 등급 키만 사용
     gemini_api_key: SecretStr | None = None
@@ -376,6 +381,20 @@ class Settings(BaseSettings):
     def storage_api_url(self) -> str | None:
         base = self.supabase_base_url
         return f"{base}/storage/v1" if base else None
+
+    @property
+    def ai_terms_blocked(self) -> bool:
+        """배포 환경에서 운영자 확인(AI_PROVIDER_TERMS_CONFIRMED) 없이 외부 AI를 켜려 함."""
+        return self.is_deployed and not self.ai_provider_terms_confirmed
+
+    @property
+    def ai_summary_active(self) -> bool:
+        """AI 첨삭 요약을 실제로 쓸 수 있음 (플래그 + 배포 환경에서는 운영자 확인)."""
+        return self.ai_summary_enabled and not self.ai_terms_blocked
+
+    @property
+    def growth_ai_active(self) -> bool:
+        return self.growth_ai_enabled and not self.ai_terms_blocked
 
     @property
     def gemini_configured(self) -> bool:

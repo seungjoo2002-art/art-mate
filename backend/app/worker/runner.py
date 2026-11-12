@@ -613,7 +613,7 @@ class JobRunner:
         self, session: AsyncSession, job: AiProcessingJob, transcript: FeedbackTranscript
     ) -> None:
         """전사 후 자동 요약: 설정이 켜져 있고 그 시점에 학생의 AI 전송 동의가 있을 때만."""
-        if not self.settings.ai_summary_enabled:
+        if not self.settings.ai_summary_active:
             return
         try:
             await self._check_ai_consent(session, job.owner_id)

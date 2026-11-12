@@ -183,7 +183,7 @@ async def test_academy_flow_transcribe_summarize_review_approve(  # type: ignore
     ]
     assert (detail["model_name"], detail["prompt_version"]) == (
         "gemini-3.1-flash-lite",
-        "feedback-summary-v2",
+        "feedback-summary-v3",
     )
 
     # 강사 수정 → IN_REVIEW, AI 원본은 그대로
