@@ -146,11 +146,20 @@ async def main(argv: list[str] | None = None) -> None:
                     "transcription jobs are waiting but STT is disabled on this worker",
                     extra={"waiting": pending.get(AiJobType.TRANSCRIBE.value)},
                 )
-            await runner.run_batch(
+            stats = await runner.run_batch(
                 max_jobs=args.max_jobs,
                 max_seconds=args.max_seconds,
                 maintenance=not args.no_maintenance,
             )
+            # v0.9.6: 처리 한도에 닿았으면 남은 작업이 있을 수 있음 → 워크플로가 다음 실행을 요청
+            if path := os.environ.get("GITHUB_OUTPUT"):
+                write_github_output(
+                    path,
+                    {
+                        "processed": stats["processed"],
+                        "hit_limit": int(stats["processed"] >= args.max_jobs),
+                    },
+                )
             return
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()

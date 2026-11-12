@@ -16,6 +16,10 @@ class SpyDispatcher:
     def __init__(self) -> None:
         self.reasons: list[str] = []
 
+    @staticmethod
+    def enabled(settings) -> bool:  # type: ignore[no-untyped-def]
+        return False  # 오래 대기 재요청(sweep)은 이 테스트 대상이 아님
+
     async def notify(self, settings, reason: str) -> bool:  # type: ignore[no-untyped-def]
         self.reasons.append(reason)
         return True

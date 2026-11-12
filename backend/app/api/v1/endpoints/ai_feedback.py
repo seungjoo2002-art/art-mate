@@ -63,6 +63,7 @@ from app.schemas.ai_feedback import (
 from app.schemas.common import Page, PaginationQuery
 from app.services.ai_feedback import AiFeedbackService
 from app.services.feedback_notes import FeedbackNoteService
+from app.services.worker_dispatch import sweep_with_new_session
 
 consents = APIRouter(prefix="/ai-processing-consents", tags=["ai-feedback"])
 # v0.9.6 보호자 확인 (로그인 없이 링크 토큰으로)
@@ -117,6 +118,21 @@ class WorkerKick:
 
 
 Kick = Annotated[WorkerKick, Depends(WorkerKick)]
+
+
+class StaleSweep:
+    """상태 확인(카드가 주기적으로 부름) 뒤: 오래 대기한 작업이 있으면 Worker 실행 재요청 (v0.9.6).
+
+    응답을 보낸 뒤 별도 세션으로 확인하며, 재요청은 프로세스당 일정 간격에 한 번뿐이다.
+    """
+
+    def __init__(self, request: Request, background: BackgroundTasks) -> None:
+        state = request.app.state
+        if getattr(state, "worker_dispatcher", None) is not None:
+            background.add_task(sweep_with_new_session, state)
+
+
+Sweep = Annotated[StaleSweep, Depends(StaleSweep)]
 
 
 def _queued(
@@ -342,6 +358,7 @@ async def owner_transcription_status(
     owner: Student,
     session: DbSession,
     settings: AppSettings,
+    _sweep: Sweep,
 ) -> TranscriptionStatusRead:
     svc = _svc(session, settings)
     _, recording = await svc.owner_target(owner, artwork_id, recording_id)
@@ -478,6 +495,7 @@ async def owner_summary_status(
     owner: Student,
     session: DbSession,
     settings: AppSettings,
+    _sweep: Sweep,
 ) -> SummaryStatusRead:
     svc = _svc(session, settings)
     artwork, recording = await svc.owner_target(owner, artwork_id, recording_id)

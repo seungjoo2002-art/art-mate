@@ -4,6 +4,8 @@
 테스트·스크립트에서는 `create_app(settings)`로 독립된 앱 인스턴스를 만든다.
 """
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -19,7 +21,7 @@ from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 from app.core.security import build_token_verifier
 from app.db.session import create_database
 from app.integrations.supabase.storage import build_storage
-from app.services.worker_dispatch import WorkerDispatcher
+from app.services.worker_dispatch import WorkerDispatcher, sweep_with_new_session
 
 logger = logging.getLogger("app")
 
@@ -42,13 +44,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("DATABASE_URL is not set; database features are disabled")
     if not settings.auth_configured:
         logger.warning("SUPABASE_URL is not set; protected APIs will reject all requests")
+    # v0.9.6: 오래 대기한 작업이 있으면 Worker 실행을 다시 요청 (토큰이 있을 때만 동작)
+    sweeper = (
+        asyncio.create_task(_periodic_sweep(app))
+        if settings.worker_sweep_interval_seconds > 0 and settings.database_configured
+        else None
+    )
     try:
         yield
     finally:
+        if sweeper is not None:
+            sweeper.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await sweeper
         if app.state.database is not None:
             await app.state.database.dispose()
         app.state.database = None
         logger.info("application shutdown")
+
+
+async def _periodic_sweep(app: FastAPI) -> None:
+    while True:
+        await asyncio.sleep(app.state.settings.worker_sweep_interval_seconds)
+        await sweep_with_new_session(app.state)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

@@ -153,6 +153,12 @@ class Settings(BaseSettings):
     worker_dispatch_ref: str = Field(default="main", min_length=1, max_length=100)
     # 같은 API 프로세스에서 이 간격 안의 요청은 한 번으로 합친다 (실행 중인 Worker가 함께 처리)
     worker_dispatch_min_interval_seconds: int = Field(default=30, ge=0, le=3600)
+    # 오래 대기한 작업 재요청 (v0.9.6): 실행 시각이 이 시간 넘게 지난 작업이 있으면
+    worker_stale_after_seconds: int = Field(default=120, ge=30, le=86400)
+    # 같은 프로세스에서 재요청 간격 (상태 확인이 자주 와도 이 간격에 한 번)
+    worker_redispatch_interval_seconds: int = Field(default=600, ge=60, le=86400)
+    # API 서버 주기 점검 간격 (0 = 끔). Render Free는 쉬는 동안 멈추고, 요청이 오면 다시 돈다
+    worker_sweep_interval_seconds: int = Field(default=300, ge=0, le=86400)
 
     ai_summary_enabled: bool = False
     # 운영자 확인 (배포 환경 필수, v0.9.5):

@@ -49,7 +49,7 @@ def test_workflow_guards_and_limits() -> None:
     triggers = workflow.get("on", workflow.get(True))  # PyYAML은 'on'을 True로 읽는다
     assert set(triggers) == {"workflow_dispatch", "schedule"}  # PR·push로는 실행되지 않음
     assert workflow["concurrency"] == {"group": "stt-worker", "cancel-in-progress": False}
-    assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["permissions"] == {"contents": "read", "actions": "write"}
     job = workflow["jobs"]["work"]
     assert job["if"] == "github.repository == 'seungjoo2002-art/art-mate'"
     assert job["timeout-minutes"] <= 60

@@ -32,6 +32,8 @@ concurrency:
 
 permissions:
   contents: read
+  # 한 번에 처리 한도까지 처리했으면 남은 작업을 위해 다음 실행을 요청 (v0.9.6)
+  actions: write
 
 jobs:
   work:
@@ -128,6 +130,7 @@ jobs:
           import os; download_model(os.environ['STT_MODEL'], cache_dir=os.environ['STT_MODEL_DIR'])"
 
       - name: Process queue
+        id: batch
         if: steps.config.outputs.ready == 'true'
         env:
           # 전사 작업이 없으면 STT를 켜지 않는다 (모델 로드·설치 생략)
@@ -135,3 +138,12 @@ jobs:
         run: >-
           uv run --no-sync python -m app.worker --once
           --max-jobs "$MAX_JOBS" --max-seconds "$(( MAX_MINUTES * 60 ))"
+
+      # 처리 한도(max_jobs)까지 처리했으면 큐에 작업이 더 있을 수 있다 → 다음 실행을 바로 요청.
+      # 실제로 한도만큼 처리했을 때만 요청하므로, 처리할 수 없는 작업 때문에 무한 반복하지 않는다.
+      # (GITHUB_TOKEN으로 요청한 workflow_dispatch는 새 실행을 만든다)
+      - name: Continue if the batch hit the limit
+        if: steps.batch.outputs.hit_limit == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run stt-worker.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
