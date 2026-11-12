@@ -14,6 +14,7 @@ import RecommendationPage from '../features/growth/pages/RecommendationPage'
 import RecommendationsPage from '../features/growth/pages/RecommendationsPage'
 import FeedbackRecordPage from '../features/feedback/pages/FeedbackRecordPage'
 import FeedbackReviewPage from '../features/feedback/pages/FeedbackReviewPage'
+import GuardianConsentPage from '../features/feedback/pages/GuardianConsentPage'
 import NoteFormPage from '../features/feedback/pages/NoteFormPage'
 import SttBenchPage from '../features/feedback/stt/SttBenchPage'
 import TranscriptPage from '../features/feedback/pages/TranscriptPage'
@@ -52,6 +53,8 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/auth/callback', element: <AuthCallbackPage /> },
+  // 보호자(법정대리인) AI 전송 동의 확인 — 로그인 없이 학생이 보낸 링크로 (v0.9.6)
+  { path: '/guardian-consent/:token', element: <GuardianConsentPage /> },
   // 기기 음성 인식 성능 측정 (로그인 불필요, 서버로 아무것도 보내지 않음)
   { path: '/tools/stt-bench', element: <SttBenchPage /> },
   { path: '/onboarding', element: <OnboardingPage /> },

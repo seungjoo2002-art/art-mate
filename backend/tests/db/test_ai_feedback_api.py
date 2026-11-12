@@ -19,7 +19,7 @@ from tests.fake_ai import SEGMENTS, FakeFetcher, FakeLlm, FakeStt, ai_json
 from tests.fake_storage import FakeStorage
 
 API = "/api/v1"
-AI_VERSION = "2026-11-ai-v1"
+AI_VERSION = "2026-12-ai-v2"
 
 
 @dataclass
@@ -55,7 +55,7 @@ async def _sql(app, sql: str, **params):  # type: ignore[no-untyped-def]
 async def _ai_consent(client: httpx.AsyncClient, student: Actor) -> None:
     granted = await client.post(
         f"{API}/ai-processing-consents",
-        json={"policy_version": AI_VERSION, "agreed": True},
+        json={"policy_version": AI_VERSION, "agreed": True, "birth_year_month": "2000-01"},
         headers=student.headers,
     )
     assert granted.status_code == 201, granted.text
@@ -606,7 +606,7 @@ async def test_consent_revocation_blocks_and_cancels(  # type: ignore[no-untyped
     await ai.drain()
     await _ai_consent(client, student)
     status = (await client.get(f"{API}/ai-processing-consents/me", headers=student.headers)).json()
-    assert status["is_valid"] and status["consent"]["provider"] == "GOOGLE_GEMINI"
+    assert status["is_valid"] and status["consent"]["provider"] == "OPENAI"
 
     # 대기 중 요약 작업 → 철회하면 취소
     await client.post(f"{base}/summary", headers=student.headers)
@@ -723,12 +723,25 @@ async def test_ai_consent_validation(client: httpx.AsyncClient, actors) -> None:
     assert (
         await client.get(f"{API}/ai-processing-consents/me", headers=teacher.headers)
     ).status_code == 403
-    guardian = await client.post(
+    # v0.9.6: 연령 확인(생년월) 필수, granted_by는 서버가 연령으로 정한다
+    no_age = await client.post(
         f"{API}/ai-processing-consents",
-        json={"policy_version": AI_VERSION, "agreed": True, "granted_by": "GUARDIAN"},
+        json={"policy_version": AI_VERSION, "agreed": True},
         headers=student.headers,
     )
-    assert guardian.json()["consent"]["granted_by"] == "GUARDIAN"
+    assert (no_age.status_code, no_age.json()["error"]["code"]) == (422, "AI_AGE_REQUIRED")
+    adult = await client.post(
+        f"{API}/ai-processing-consents",
+        json={
+            "policy_version": AI_VERSION,
+            "agreed": True,
+            "birth_year_month": "2000-01",
+            "granted_by": "GUARDIAN",
+        },
+        headers=student.headers,
+    )
+    assert adult.json()["consent"]["granted_by"] == "SELF"
+    assert adult.json()["consent"]["age_band"] == "ADULT" and adult.json()["is_valid"]
     assert (
         await client.delete(f"{API}/ai-processing-consents/me", headers=student.headers)
     ).status_code == 204

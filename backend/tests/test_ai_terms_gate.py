@@ -4,7 +4,8 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from app.integrations.ai.gemini import GeminiClient, build_llm
+from app.integrations.ai.llm import build_llm
+from app.integrations.ai.openai_llm import OpenAiClient
 from app.main import create_app
 from app.worker.__main__ import supported_job_types
 from tests.conftest import make_settings
@@ -18,7 +19,7 @@ def _prod(**overrides):  # type: ignore[no-untyped-def]
         "database_url": DB,
         "ai_summary_enabled": True,
         "growth_ai_enabled": True,
-        "gemini_api_key": SecretStr("test-key"),
+        "openai_api_key": SecretStr("test-key"),
     }
     return make_settings(**(values | overrides))
 
@@ -26,12 +27,12 @@ def _prod(**overrides):  # type: ignore[no-untyped-def]
 def test_production_blocks_external_ai_until_operator_confirms() -> None:
     blocked = _prod()
     assert (blocked.ai_summary_active, blocked.growth_ai_active) == (False, False)
-    assert build_llm(blocked) is None  # Worker도 Gemini 클라이언트를 만들지 않음
+    assert build_llm(blocked) is None  # Worker도 LLM 클라이언트를 만들지 않음
     assert supported_job_types(blocked, has_stt=True, has_llm=False) == {"TRANSCRIBE"}
 
     confirmed = _prod(ai_provider_terms_confirmed=True)
     assert (confirmed.ai_summary_active, confirmed.growth_ai_active) == (True, True)
-    assert isinstance(build_llm(confirmed), GeminiClient)
+    assert isinstance(build_llm(confirmed), OpenAiClient)
 
 
 def test_local_and_test_environments_are_unaffected() -> None:
@@ -55,4 +56,5 @@ async def test_ai_features_reports_reason_without_secrets(overrides, status) -> 
         body = (await client.get("/api/v1/meta/ai-features")).json()
     assert body["ai_summary_status"] == status
     assert body["ai_summary"] is (status == "ENABLED")
-    assert "test-key" not in str(body) and "GEMINI" not in str(body)
+    assert "test-key" not in str(body) and "KEY" not in str(body)
+    assert body["ai_provider"] == "openai"

@@ -49,6 +49,13 @@ jobs:
       # Supabase Session pooler 주소 (IPv4). 직접 연결 주소(db.<ref>.supabase.co)는 IPv6라 Actions에서 안 됨
       DATABASE_URL: ${{ secrets.WORKER_DATABASE_URL }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # v0.9.6 요약 제공자: openai(기본) | gemini. 키는 Secret에만 (API 서버·프론트에는 넣지 않음)
+      AI_PROVIDER: ${{ vars.AI_PROVIDER || 'openai' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # 비우면 앱 기본값(gpt-6.1-terra). 저비용: gpt-6-luna
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+      # OpenAI 데이터 무보관(ZDR) 승인 후에만 true → 만 13세 미만 전송 허용
+      AI_ZDR_APPROVED: ${{ vars.AI_ZDR_APPROVED || 'false' }}
       AI_SUMMARY_ENABLED: ${{ vars.AI_SUMMARY_ENABLED || 'false' }}
       GROWTH_AI_ENABLED: ${{ vars.GROWTH_AI_ENABLED || 'false' }}
       # 운영자 확인: Gemini 유료 등급 + 제공자 약관(연령 조항)·동의 범위 검토 (없으면 외부 AI 전송 안 함)

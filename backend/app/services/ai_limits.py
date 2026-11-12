@@ -27,10 +27,10 @@ STT_SETUP = (
 )
 SUMMARY_SETUP = (
     "AI summary requested but it is not active on the API service (Render). "
-    "Set AI_SUMMARY_ENABLED=true and, after confirming a paid Gemini tier and the provider terms "
-    "(age clause, guardian consent), AI_PROVIDER_TERMS_CONFIRMED=true on Render; in GitHub Actions "
-    "set variables AI_SUMMARY_ENABLED=true, AI_PROVIDER_TERMS_CONFIRMED=true and secret "
-    "GEMINI_API_KEY (summaries are processed by stt-worker)."
+    "Set AI_PROVIDER (openai), AI_SUMMARY_ENABLED=true and, after the operator has reviewed the "
+    "provider terms (minors, guardian consent, cross-border transfer, retention), "
+    "AI_PROVIDER_TERMS_CONFIRMED=true on Render; in GitHub Actions set the same variables and "
+    "secret OPENAI_API_KEY (GEMINI_API_KEY when AI_PROVIDER=gemini). Summaries run in stt-worker."
 )
 
 
