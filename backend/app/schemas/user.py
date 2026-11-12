@@ -16,6 +16,7 @@ from app.models.enums import PracticalType, StudentGrade, UserType
 from app.schemas.common import APIModel
 
 DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
+RealName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
 LearningGoal = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
 ]
@@ -37,6 +38,10 @@ class ProfileCreate(BaseModel):
         default=None,
         description="실기 유형 (선택). 선택지: GET /api/v1/meta/options 의 practical_types",
     )
+    real_name: RealName | None = Field(
+        default=None,
+        description="VER.2 실명 (선택, 본인에게만 보임). display_name은 공개 닉네임",
+    )
 
 
 class ProfileUpdate(BaseModel):
@@ -57,6 +62,9 @@ class ProfileUpdate(BaseModel):
         default=None, description="실기 유형. null이면 미선택으로 변경"
     )
     grade: StudentGrade | None = Field(default=None, description="학년 (v0.9). null이면 미선택")
+    real_name: RealName | None = Field(
+        default=None, description="VER.2 실명 (본인에게만 보임). null이면 삭제"
+    )
     learning_goal: LearningGoal | None = Field(
         default=None,
         description="개인 학습 목표 (v0.9, 500자). 바꾸면 수정일 갱신, null이면 삭제",
@@ -95,6 +103,22 @@ class ProfileRead(APIModel):
 
 
 class MeRead(ProfileRead):
+    real_name: str | None = Field(
+        default=None, description="VER.2 실명 (이 응답에만 포함, 공개 응답에는 없음)"
+    )
     email: str | None = Field(
         default=None, description="Supabase Auth 계정 이메일 (토큰에서 읽음, DB에 저장하지 않음)"
+    )
+
+
+# ============================================================================ VER.2 기본 시험 목표
+# 시간
+
+
+class UserExamDefaultsRead(BaseModel):
+    stages: list[dict] = Field(  # type: ignore[type-arg]
+        description="[{stage, target_minutes}] 순서대로 (ArtworkExamPlan과 같은 모양)"
+    )
+    source: Literal["ACCOUNT", "DEFAULT"] = Field(
+        description="ACCOUNT: 계정에 저장된 값 / DEFAULT: 아직 저장 안 함 (앱 기본값)"
     )

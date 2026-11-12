@@ -393,10 +393,22 @@ class CommunityService:
         work_categories: list[Any],
         academy_id: uuid.UUID | None,
         categories: list[PostCategory] | None = None,
+        query: str | None = None,
     ) -> tuple[list[PostRead], int]:
         stmt = self._visible_posts(viewer)
         if categories:
             stmt = stmt.where(CommunityPost.category.in_(categories))
+        if query:
+            # 제목·본문·질문 부분 일치 (대소문자 무시). LIKE 특수문자는 글자 그대로 찾는다
+            escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            stmt = stmt.where(
+                or_(
+                    CommunityPost.title.ilike(pattern, escape="\\"),
+                    CommunityPost.body.ilike(pattern, escape="\\"),
+                    CommunityPost.question.ilike(pattern, escape="\\"),
+                )
+            )
         if practical_types:
             stmt = stmt.where(CommunityPost.practical_type.in_(practical_types))
         if work_categories:
@@ -620,12 +632,16 @@ class CommunityService:
         *,
         adopted: bool | None = None,
     ) -> CommentRead:
+        mine = author.id == viewer.id
         return CommentRead(
             id=comment.id,
             post_id=comment.post_id,
             body=comment.body,
+            # 익명 댓글: 작성자 이름·ID를 응답에 넣지 않는다 (본인은 is_me로만 구분)
             author=AuthorRead(
-                display_name=author.display_name, is_anonymous=False, is_me=author.id == viewer.id
+                display_name=ANONYMOUS_NAME if comment.is_anonymous else author.display_name,
+                is_anonymous=comment.is_anonymous,
+                is_me=mine,
             ),
             comment_type=comment.comment_type,
             categories=list(comment.categories),
@@ -699,6 +715,7 @@ class CommunityService:
             body=data.body,
             comment_type=data.comment_type,
             categories=[c.value for c in data.categories],
+            is_anonymous=data.is_anonymous,
             status=CommentStatus.ACTIVE,
         )
         self.session.add(comment)
@@ -737,6 +754,8 @@ class CommunityService:
             comment.comment_type = data.comment_type
         if data.categories is not None:
             comment.categories = sorted({c.value for c in data.categories})
+        if data.is_anonymous is not None:
+            comment.is_anonymous = data.is_anonymous
         if comment.comment_type != CommentType.FEEDBACK and comment.categories:
             raise UnprocessableError("categories are only for FEEDBACK comments")
         await self.session.commit()
@@ -957,14 +976,17 @@ class CommunityService:
         return [await self._admin_report_read(r[0]) for r in rows], total
 
     async def _admin_report_read(self, report: CommunityReport) -> AdminReportRead:
+        target_author_id = None
         if report.target_type == ReportTarget.COMMENT:
             comment = await self.session.get(CommunityComment, report.comment_id)
             preview, target_status = (
                 (comment.body[:80], comment.status.value) if comment else ("", "DELETED")
             )
+            target_author_id = comment.author_id if comment else None
         else:
             post = await self.session.get(CommunityPost, report.post_id)
             preview, target_status = (post.title, post.status.value) if post else ("", "DELETED")
+            target_author_id = post.author_id if post else None
         return AdminReportRead(
             id=report.id,
             target_type=report.target_type,
@@ -974,6 +996,7 @@ class CommunityService:
             detail=report.detail,
             status=report.status,
             reporter_id=report.reporter_id,
+            target_author_id=target_author_id,
             target_status=target_status,
             target_preview=preview,
             open_report_count=await self._open_reports(
