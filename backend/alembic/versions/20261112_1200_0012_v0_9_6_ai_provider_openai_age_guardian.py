@@ -13,11 +13,11 @@ ai_processing_consents (기존 행은 그대로 — 새 컬럼은 모두 NULL �
 
 downgrade: 새 컬럼 삭제. provider CHECK 원복 전에 OPENAI 동의 행을 삭제한다 (복원 불가 → 주의).
 
-참고: 다른 브랜치(feature/ver2-p0-community-exam, PR #48)에 0011(down 0010)이 있다. 그 변경이
-main에 먼저 들어오면 이 파일의 down_revision을 "0011"로 바꾼다.
+계보 (v0.9.6 정리): 0010 → 0011(VER.2 P1, PR #48) → 0012. 처음에는 0010 위에 만들었으나 #48이
+main에 늦게 들어오면서 한 줄로 정리했다. 0011과 0012는 서로 다른 테이블만 바꾼다.
 
 Revision ID: 0012
-Revises: 0010
+Revises: 0011
 Create Date: 2026-11-12 12:00:00+00:00
 """
 
@@ -27,7 +27,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0012"
-down_revision: str | Sequence[str] | None = "0010"
+down_revision: str | Sequence[str] | None = "0011"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -164,3 +164,37 @@ def test_provider_selection_and_verified_models_only() -> None:
     assert build_llm(_settings(openai_model="gpt-6-luna")).model_name == "gpt-6-luna"
     with pytest.raises(ValidationError):
         make_settings(openai_model="gpt-unknown")  # 공식 확인 안 된 모델명 거부
+
+
+# 공식 Structured Outputs "Supported schemas" 키워드·한도 (2026-11 확인)
+SUPPORTED_KEYWORDS = {
+    "type", "properties", "required", "additionalProperties", "items", "enum", "anyOf",
+    "description", "minItems", "maxItems", "pattern", "format", "multipleOf", "maximum",
+    "exclusiveMaximum", "minimum", "exclusiveMinimum", "$ref", "$defs", "const",
+}  # fmt: skip
+
+
+def _walk(node, stats, depth=0):  # type: ignore[no-untyped-def]
+    if not isinstance(node, dict):
+        return
+    stats["keywords"] |= set(node) - ({"properties"} if "properties" in node else set())
+    stats["depth"] = max(stats["depth"], depth)
+    stats["enum"] += len(node.get("enum", []))
+    if "properties" in node:
+        assert node["additionalProperties"] is False
+        assert set(node["required"]) == set(node["properties"])
+        stats["props"] += len(node["properties"])
+        for child in node["properties"].values():
+            _walk(child, stats, depth + 1)
+    if "items" in node:
+        _walk(node["items"], stats, depth + 1)
+
+
+@pytest.mark.parametrize("schema", [RESPONSE_SCHEMA, NARRATIVE_SCHEMA, RECOMMEND_SCHEMA])
+def test_strict_schemas_use_only_supported_keywords(schema) -> None:  # type: ignore[no-untyped-def]
+    stats = {"keywords": set(), "depth": 0, "enum": 0, "props": 0}
+    strict = to_strict_schema(schema)
+    assert strict["type"] == "object"  # 최상위는 object여야 함
+    _walk(strict, stats)
+    assert stats["keywords"] <= SUPPORTED_KEYWORDS
+    assert stats["depth"] <= 10 and stats["props"] <= 5000 and stats["enum"] <= 1000

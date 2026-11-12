@@ -93,7 +93,9 @@ export default function AiConsentForm({ purpose = 'FEEDBACK_SUMMARY', status, on
   const [submitting, setSubmitting] = useState(false)
 
   const pending = result ?? (status.reason === 'GUARDIAN_PENDING' ? status : null)
-  const blocked = (result ?? status).reason === 'UNDER_13_BLOCKED'
+  const blockedReason = ['UNDER_13_BLOCKED', 'MINOR_BLOCKED'].find(
+    (reason) => reason === (result ?? status).reason,
+  )
   const canSubmit = agreed && year && month && !submitting
 
   async function handleSubmit() {
@@ -117,11 +119,11 @@ export default function AiConsentForm({ purpose = 'FEEDBACK_SUMMARY', status, on
     }
   }
 
-  if (blocked) {
+  if (blockedReason) {
     return (
       <div className={styles.form}>
         <h2 className={styles.title}>{copy.title}</h2>
-        <p className={styles.sub}>{consentReasonMessage('UNDER_13_BLOCKED')}</p>
+        <p className={styles.sub}>{consentReasonMessage(blockedReason)}</p>
       </div>
     )
   }

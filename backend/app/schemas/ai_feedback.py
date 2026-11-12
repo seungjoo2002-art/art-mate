@@ -72,10 +72,13 @@ class AiConsentStatus(BaseModel):
     purpose: AiConsentPurpose
     required_version: str
     is_valid: bool = Field(description="현재 버전에 유효한 동의가 있음 → AI 요약 요청 가능")
-    reason: Literal["NOT_CONSENTED", "GUARDIAN_PENDING", "UNDER_13_BLOCKED"] | None = Field(
+    reason: (
+        Literal["NOT_CONSENTED", "MINOR_BLOCKED", "GUARDIAN_PENDING", "UNDER_13_BLOCKED"] | None
+    ) = Field(
         default=None,
         description="유효하지 않은 이유: 동의 없음·이전 버전·다른 제공자 / 보호자 확인 대기 / "
-        "만 13세 미만(운영자 데이터 무보관 승인 전 전송 차단)",
+        "만 13세 미만(운영자 데이터 무보관 승인 전 전송 차단) / MINOR_BLOCKED 미성년자 전송을 "
+        "운영자가 아직 허용하지 않음(AI_MINORS_ENABLED)",
     )
     consent: AiConsentRead | None
     guardian_token: str | None = Field(

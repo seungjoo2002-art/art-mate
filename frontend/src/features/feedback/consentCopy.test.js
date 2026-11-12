@@ -17,6 +17,7 @@ describe('consentCopy (v0.9.6)', () => {
   it('explains why consent is not valid yet', () => {
     expect(consentReasonMessage('GUARDIAN_PENDING')).toContain('보호자')
     expect(consentReasonMessage('UNDER_13_BLOCKED')).toContain('만 13세 미만')
+    expect(consentReasonMessage('MINOR_BLOCKED')).toContain('만 18세 미만')
     expect(consentReasonMessage('NOT_CONSENTED')).toBeNull()
   })
 

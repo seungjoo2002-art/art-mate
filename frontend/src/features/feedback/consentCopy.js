@@ -75,6 +75,8 @@ export function consentCopy(purpose, provider = 'OPENAI') {
 /** 동의가 아직 유효하지 않은 이유 → 학생에게 보여 줄 문장 (null이면 일반 동의 화면) */
 export function consentReasonMessage(reason) {
   if (reason === 'GUARDIAN_PENDING') return '보호자 확인을 기다리고 있어요. 보호자가 링크에서 확인하면 AI 정리를 쓸 수 있어요.'
+  if (reason === 'MINOR_BLOCKED')
+    return '만 18세 미만은 아직 AI 첨삭 정리를 쓸 수 없어요. 준비가 끝나면 보호자 확인 후 쓸 수 있어요. 녹음과 대본은 그대로 쓸 수 있어요.'
   if (reason === 'UNDER_13_BLOCKED') return '만 13세 미만은 아직 AI 첨삭 정리를 쓸 수 없어요. 녹음과 대본은 그대로 쓸 수 있어요.'
   return null
 }

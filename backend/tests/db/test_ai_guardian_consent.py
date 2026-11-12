@@ -61,6 +61,11 @@ async def test_minor_needs_guardian_link_then_summary_works(  # type: ignore[no-
 ) -> None:
     student = await actors.signup("STUDENT")
     base = await _transcribed(client, app.state.audio_storage, student)
+    # 배포 기본값: 미성년자 전송 차단 (보호자 확인 전에도 후에도)
+    default = await client.post(CONSENTS, json=_grant("2010-03"), headers=student.headers)
+    assert (default.json()["is_valid"], default.json()["reason"]) == (False, "MINOR_BLOCKED")
+    # 아래는 운영자가 법률 검토 후 AI_MINORS_ENABLED를 켠 경우
+    app.state.settings = app.state.settings.model_copy(update={"ai_minors_enabled": True})
 
     granted = await client.post(CONSENTS, json=_grant("2010-03"), headers=student.headers)
     assert granted.status_code == 201, granted.text
@@ -116,6 +121,7 @@ async def test_under_13_blocked_until_operator_zdr(  # type: ignore[no-untyped-d
 ) -> None:
     student = await actors.signup("STUDENT")
     base = await _transcribed(client, app.state.audio_storage, student)
+    app.state.settings = app.state.settings.model_copy(update={"ai_minors_enabled": True})
     token = (await client.post(CONSENTS, json=_grant("2015-05"), headers=student.headers)).json()[
         "guardian_token"
     ]
@@ -157,6 +163,7 @@ async def test_adult_self_consent_provider_switch_and_links(  # type: ignore[no-
     app.state.settings = app.state.settings.model_copy(update={"ai_provider": "openai"})
 
     # 미성년자 링크 재발급: 이전 링크는 무효
+    app.state.settings = app.state.settings.model_copy(update={"ai_minors_enabled": True})
     other = await actors.signup("STUDENT")
     first = (await client.post(CONSENTS, json=_grant("2009-01"), headers=other.headers)).json()
     second = (await client.post(f"{CONSENTS}/me/guardian-link", headers=other.headers)).json()

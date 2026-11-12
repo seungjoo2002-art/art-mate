@@ -52,8 +52,23 @@ def _consent(**overrides) -> AiProcessingConsent:  # type: ignore[no-untyped-def
     return AiProcessingConsent(**(values | overrides))
 
 
+def test_minors_blocked_by_default_even_with_guardian() -> None:
+    now = dt.datetime(2026, 11, 12, tzinfo=dt.UTC)
+    default = make_settings()  # 배포 기본값: AI_MINORS_ENABLED=false
+    for band in (AiAgeBand.MINOR, AiAgeBand.UNDER_13):
+        for confirmed in (None, now):
+            consent = _consent(age_band=band, guardian_confirmed_at=confirmed)
+            state = policy.evaluate(consent, default, PURPOSE)
+            assert (state.is_valid, state.reason) == (False, "MINOR_BLOCKED")
+    # ZDR 승인만으로는 풀리지 않음
+    zdr_only = make_settings(ai_zdr_approved=True)
+    under13 = _consent(age_band=AiAgeBand.UNDER_13, guardian_confirmed_at=now)
+    assert policy.evaluate(under13, zdr_only, PURPOSE).reason == "MINOR_BLOCKED"
+    assert policy.evaluate(_consent(), default, PURPOSE).is_valid  # 성인은 그대로
+
+
 def test_evaluate_rules() -> None:
-    settings = make_settings()
+    settings = make_settings(ai_minors_enabled=True)  # 운영자가 미성년자 허용한 뒤의 규칙
     now = dt.datetime(2026, 11, 12, tzinfo=dt.UTC)
 
     def state(consent, s=settings):  # type: ignore[no-untyped-def]
@@ -75,7 +90,8 @@ def test_evaluate_rules() -> None:
     under13 = _consent(age_band=AiAgeBand.UNDER_13, guardian_confirmed_at=now)
     assert state(under13) == (False, "UNDER_13_BLOCKED")
     assert state(_consent(age_band=AiAgeBand.UNDER_13)) == (False, "GUARDIAN_PENDING")
-    assert state(under13, make_settings(ai_zdr_approved=True)) == (True, None)
+    zdr = make_settings(ai_minors_enabled=True, ai_zdr_approved=True)
+    assert state(under13, zdr) == (True, None)
     # 학년은 쓰지 않음: 판정에 grade 입력 자체가 없다
 
 

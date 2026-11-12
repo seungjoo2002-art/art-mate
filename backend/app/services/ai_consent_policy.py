@@ -15,6 +15,7 @@
 2. 연령 구간이 있음 (v2 동의서부터 기록 — 이전 동의는 무효)
 3. MINOR·UNDER_13은 보호자가 확인함 (guardian_confirmed_at)
 4. UNDER_13은 운영자가 ZDR 승인(AI_ZDR_APPROVED)을 켰을 때만
+0. 미성년자(MINOR·UNDER_13)는 운영자가 AI_MINORS_ENABLED를 켜기 전까지 모두 차단 (배포 기본값)
 학년(profiles.grade)은 판정에 쓰지 않는다 (중학생이어도 나이는 다를 수 있음).
 """
 
@@ -38,6 +39,7 @@ _BIRTH = re.compile(r"^(19|20)\d{2}-(0[1-9]|1[0-2])$")
 NOT_CONSENTED = "NOT_CONSENTED"  # 동의 없음·철회·이전 버전·다른 제공자
 GUARDIAN_PENDING = "GUARDIAN_PENDING"  # 보호자 확인 대기
 UNDER_13_BLOCKED = "UNDER_13_BLOCKED"  # 만 13세 미만 (ZDR 승인 전)
+MINOR_BLOCKED = "MINOR_BLOCKED"  # 미성년자 전송을 운영자가 아직 허용하지 않음
 
 
 def provider_for(settings: Settings) -> AiProvider:
@@ -95,6 +97,9 @@ def evaluate(
         or consent.age_band is None
     ):
         return ConsentState(False, NOT_CONSENTED)
+    # 운영자가 미성년자 전송을 허용하기 전(AI_MINORS_ENABLED=false)에는 보호자 확인과 관계없이 차단
+    if needs_guardian(consent.age_band) and not settings.ai_minors_enabled:
+        return ConsentState(False, MINOR_BLOCKED)
     if needs_guardian(consent.age_band) and consent.guardian_confirmed_at is None:
         return ConsentState(False, GUARDIAN_PENDING)
     if consent.age_band == AiAgeBand.UNDER_13 and not settings.ai_zdr_approved:

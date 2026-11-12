@@ -378,7 +378,7 @@ export default function RecordingAiStatus({ artworkId, recording }) {
             {consentReasonMessage(consent.reason) ??
               'AI 첨삭 정리를 하려면 AI 사용 동의가 필요해요. 동의하지 않아도 대본은 볼 수 있어요.'}
           </p>
-          {consent.reason !== 'UNDER_13_BLOCKED' && (
+          {!['UNDER_13_BLOCKED', 'MINOR_BLOCKED'].includes(consent.reason) && (
             <button
               type="button"
               className={styles.link}
