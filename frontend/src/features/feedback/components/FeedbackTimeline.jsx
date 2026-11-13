@@ -23,9 +23,9 @@ function sortByTime(items) {
 
 /**
  * 작품 상세의 타임라인: 단계 사진 카드(items: { key, time, node }), 피드백 녹음, 글 첨삭을 시간순으로 섞어 보여 줌
- * 아래에 피드백 녹음 · 글로 첨삭 남기기 버튼
+ * 아래에 피드백 녹음 · 글로 첨삭 남기기 버튼, 그 아래 actions(작품 쪽에서 넘긴 사진 추가 등)
  */
-export default function FeedbackTimeline({ artworkId, items }) {
+export default function FeedbackTimeline({ artworkId, items, actions = null }) {
   const options = useOptions()
   const load = useCallback(() => listRecordings(artworkId), [artworkId])
   const { data, reload } = useAsync(load)
@@ -104,6 +104,7 @@ export default function FeedbackTimeline({ artworkId, items }) {
           글로 첨삭 남기기
         </Link>
       </div>
+      {actions}
     </section>
   )
 }

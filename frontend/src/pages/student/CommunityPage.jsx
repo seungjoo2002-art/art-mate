@@ -3,7 +3,7 @@ import { Heart, LayoutGrid, List, Plus } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button, Card, Chip, PageIntro, SegmentedTabs } from '../../components/ui'
 import { listFeed } from '../../features/community/api'
-import { CATEGORY_FILTERS, matchesCategory, postCategory } from '../../features/community/labels'
+import { CATEGORY_FILTERS, postCategory } from '../../features/community/labels'
 import { useAsync } from '../../hooks/useAsync'
 import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './CommunityPage.module.css'
@@ -28,15 +28,19 @@ const VIEWS = [
   },
 ]
 
-// 디자인의 게시글 검색, "실기 질문"·"자유게시판"(사진 없는 글)은 백엔드가 없어 제외
+// 게시글 검색(q)은 VER.2 P1(백엔드 머지 전)이라 아직 제외
 export default function CommunityPage() {
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'gallery' ? 'gallery' : 'board'
-  const category = CATEGORY_FILTERS.some((c) => c.key === params.get('category'))
+  const category = CATEGORY_FILTERS.some((c) => c.code === params.get('category'))
     ? params.get('category')
     : 'all'
   const [limit, setLimit] = useState(PAGE)
-  const load = useCallback(() => listFeed({ limit }), [limit])
+  // 분류는 서버에서 거름 (VER.2 P0)
+  const load = useCallback(
+    () => listFeed({ limit, category: category === 'all' ? undefined : category }),
+    [limit, category],
+  )
   const { data, error, reload } = useAsync(load)
 
   const setParam = (key, value, fallback) => {
@@ -46,8 +50,9 @@ export default function CommunityPage() {
     setParams(next, { replace: true })
   }
 
-  // 분류는 서버 필터가 없어서 불러온 게시물 안에서 거름
-  const posts = (data?.items ?? []).filter((post) => matchesCategory(post, category))
+  const posts = data?.items ?? []
+  // 갤러리는 사진이 있는 게시물만
+  const visible = view === 'gallery' ? posts.filter((post) => post.image?.url) : posts
 
   return (
     <>
@@ -63,9 +68,9 @@ export default function CommunityPage() {
         <div className={styles.chips}>
           {CATEGORY_FILTERS.map((c) => (
             <Chip
-              key={c.key}
-              selected={category === c.key}
-              onClick={() => setParam('category', c.key, 'all')}
+              key={c.code}
+              selected={category === c.code}
+              onClick={() => setParam('category', c.code, 'all')}
             >
               {c.label}
             </Chip>
@@ -83,14 +88,18 @@ export default function CommunityPage() {
             다시 시도
           </Button>
         </Card>
-      ) : !data ? null : posts.length === 0 ? (
+      ) : !data ? null : visible.length === 0 ? (
         <div className={styles.empty}>
           <p className={styles.emptyTitle}>아직 게시물이 없습니다.</p>
-          <p className={styles.emptySub}>완성한 작품을 공유하고 의견을 나눠 보세요.</p>
+          <p className={styles.emptySub}>
+            {view === 'gallery'
+              ? '사진이 있는 게시물이 여기에 모여요.'
+              : '질문을 남기거나 작품을 공유해 보세요.'}
+          </p>
         </div>
       ) : view === 'board' ? (
         <ul className={styles.board}>
-          {posts.map((post) => (
+          {visible.map((post) => (
             <li key={post.id}>
               <Link to={`/community/posts/${post.id}`} className={styles.row}>
                 <span className={styles.rowText}>
@@ -107,6 +116,7 @@ export default function CommunityPage() {
                     <span>댓글 {post.comment_count}</span>
                   </span>
                 </span>
+                {/* 사진 없는 글(has_artwork=false)은 썸네일 없음 */}
                 {post.image?.url && (
                   <img src={post.image.url} alt="" className={styles.thumb} loading="lazy" />
                 )}
@@ -116,7 +126,7 @@ export default function CommunityPage() {
         </ul>
       ) : (
         <div className={styles.gallery}>
-          {posts.map((post) => (
+          {visible.map((post) => (
             <Link key={post.id} to={`/community/posts/${post.id}`} className={styles.tile}>
               {post.image?.url ? (
                 <img

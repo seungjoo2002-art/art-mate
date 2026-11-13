@@ -6,15 +6,11 @@ import TopBar from '../../components/layout/TopBar'
 import { Button, Card, Chip, Textarea } from '../../components/ui'
 import { deleteArtwork, getArtwork, uploadStagePhoto } from '../../features/artworks/api'
 import {
-  DEFAULT_STAGE_TARGETS,
-  EXAM_PHOTO_STAGES,
+  EXAM_PHOTO_STAGE,
   formatClock,
   formatDurationSeconds,
   formatMinutes,
-  loadExamSession,
-  newExamSession,
-  saveExamSession,
-  stageSeconds,
+  liveStageSeconds,
 } from '../../features/artworks/exam'
 import { createNote } from '../../features/feedback/notesApi'
 import { useAsync } from '../../hooks/useAsync'
@@ -26,7 +22,7 @@ import styles from './Exam.module.css'
 
 /**
  * 실기시험 진행 (/artworks/:artworkId/exam)
- * 전체 시간은 서버 타이머, 단계 구분은 이 기기의 시험 기록(exam session)으로 계산
+ * 전체 시간(타이머)과 단계 진행(/exam)은 모두 서버 기준 → 다른 기기에서 열어도 같은 단계·시간
  */
 export default function ExamProgressPage() {
   const { artworkId } = useParams()
@@ -42,7 +38,7 @@ export default function ExamProgressPage() {
       />
     )
   }
-  if (!artwork || !timer.timer) return <FullScreenStatus />
+  if (!artwork || !timer.exam) return <FullScreenStatus />
   if (timer.timer.state === 'STOPPED') {
     return <Navigate to={`/artworks/${artworkId}/exam/result`} replace />
   }
@@ -52,54 +48,34 @@ export default function ExamProgressPage() {
 function ExamProgress({ artwork, timer, onPhotoChanged }) {
   const navigate = useNavigate()
   const options = useOptions()
-  // 다른 기기에서 열었으면 기록이 없으니 기본 목표로 새로 시작 (단계 시작은 지금 경과 시간부터)
-  const [session, setSession] = useState(
-    () =>
-      loadExamSession(artwork.id) ?? {
-        ...newExamSession(DEFAULT_STAGE_TARGETS),
-        stageStarts: [timer.elapsed],
-      },
-  )
   const [memo, setMemo] = useState('')
   const [memoSource, setMemoSource] = useState('SELF_NOTE')
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [actionError, setActionError] = useState('')
 
-  const index = session.stageStarts.length - 1
-  const stage = session.targets[index]
-  const last = index === session.targets.length - 1
-  const { elapsed, limitSeconds } = timer
+  const { exam, elapsed, limitSeconds } = timer
+  const stages = exam.stages
+  // 예전 버전에서 계획 없이 시작한 시험이면 단계가 없음 → 전체 시간만 보여 주고 완료만 가능
+  const index = stages.findIndex((s) => s.status === 'ACTIVE')
+  const stage = stages[index] ?? null
+  const last = !stage || index === stages.length - 1
   const remaining = limitSeconds - elapsed
-  const stageElapsed = stageSeconds(session, elapsed)[index]
+  const stageElapsed = stage ? liveStageSeconds(exam, elapsed)[index] : 0
+  const stageLabel = stage?.label ?? '시험'
   const typeLabel =
     artwork.practical_type && options
       ? labelOf(options.practical_types, artwork.practical_type)
       : null
-  const photoStage = EXAM_PHOTO_STAGES[index]
+  const photoStage = EXAM_PHOTO_STAGE[stage?.stage] ?? 'FINAL'
   const summary = artwork.stages.find((s) => s.stage === photoStage)
   const photo = artwork.photos.find((p) => p.id === summary?.representative_photo_id)
 
-  const update = (next) => {
-    setSession(next)
-    saveExamSession(artwork.id, next)
-  }
-
-  /** 입력한 메모를 이 단계의 글 첨삭으로 저장 */
+  /** 입력한 메모를 글 첨삭으로 저장 (어느 단계 메모인지는 결과 화면에서 작성 시각으로 나눔) */
   async function saveMemo() {
-    if (!memo.trim()) return session
-    const note = await createNote(artwork.id, {
-      source: memoSource,
-      body: memo.trim(),
-      requestSummary: false,
-    })
+    if (!memo.trim()) return
+    await createNote(artwork.id, { source: memoSource, body: memo.trim(), requestSummary: false })
     setMemo('')
-    const next = {
-      ...session,
-      notes: { ...session.notes, [index]: [...(session.notes[index] ?? []), note.id] },
-    }
-    update(next)
-    return next
   }
 
   async function run(action) {
@@ -115,17 +91,22 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
 
   const nextStage = () =>
     run(async () => {
-      const saved = await saveMemo()
-      update({ ...saved, stageStarts: [...saved.stageStarts, elapsed] })
+      await saveMemo()
+      try {
+        await timer.next(stage.stage)
+      } catch (err) {
+        // 다른 기기·탭에서 이미 넘겼거나 마지막 단계면 서버 상태로 맞춤
+        if (['EXAM_STAGE_CONFLICT', 'EXAM_LAST_STAGE'].includes(err.code)) await timer.reload()
+        throw err
+      }
       setBusy(false)
       window.scrollTo({ top: 0 })
     })
 
   const finish = () =>
     run(async () => {
-      const saved = await saveMemo()
-      const stopped = await timer.send('STOP')
-      update({ ...saved, finishedElapsed: stopped.elapsed_seconds })
+      await saveMemo()
+      await timer.send('STOP')
       navigate(`/artworks/${artwork.id}/exam/result`, { replace: true })
     })
 
@@ -158,7 +139,7 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
       <TopBar title="실기시험 진행" belowHeader plain />
       <main className={styles.body}>
         <p className={styles.lead}>
-          {[artwork.title, typeLabel, `${index + 1}/${session.targets.length}단계`]
+          {[artwork.title, typeLabel, stage && `${index + 1}/${stages.length}단계`]
             .filter(Boolean)
             .join(' · ')}
         </p>
@@ -183,35 +164,43 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
           </span>
         </Card>
 
-        <div className={styles.stageChips} aria-label="시험 단계">
-          {session.targets.map((t, i) => (
-            <span
-              key={t.key}
-              className={`${styles.stageChip} ${i === index ? styles.current : ''} ${i < index ? styles.done : ''}`}
-            >
-              {i + 1}. {t.label}
-            </span>
-          ))}
-        </div>
+        {stage && (
+          <>
+            <div className={styles.stageChips} aria-label="시험 단계">
+              {stages.map((t, i) => (
+                <span
+                  key={t.stage}
+                  className={`${styles.stageChip} ${t.status === 'ACTIVE' ? styles.current : ''} ${t.status === 'DONE' ? styles.done : ''}`}
+                >
+                  {i + 1}. {t.label}
+                </span>
+              ))}
+            </div>
 
-        <Card className={styles.list}>
-          <div className={styles.row}>
-            <span className={styles.rowLabel}>현재 단계</span>
-            <strong>{stage.label}</strong>
-          </div>
-          <div className={styles.row}>
-            <span className={styles.rowLabel}>단계 목표 / 실제</span>
-            <span>
-              <strong>{formatMinutes(stage.minutes)}</strong> /{' '}
-              <span className={stageElapsed > stage.minutes * 60 ? styles.overText : styles.muted}>
-                {formatDurationSeconds(stageElapsed)}
-              </span>
-            </span>
-          </div>
-        </Card>
+            <Card className={styles.list}>
+              <div className={styles.row}>
+                <span className={styles.rowLabel}>현재 단계</span>
+                <strong>{stageLabel}</strong>
+              </div>
+              <div className={styles.row}>
+                <span className={styles.rowLabel}>단계 목표 / 실제</span>
+                <span>
+                  <strong>{formatMinutes(stage.target_minutes)}</strong> /{' '}
+                  <span
+                    className={
+                      stageElapsed > stage.target_minutes * 60 ? styles.overText : styles.muted
+                    }
+                  >
+                    {formatDurationSeconds(stageElapsed)}
+                  </span>
+                </span>
+              </div>
+            </Card>
+          </>
+        )}
 
         <section className={styles.section}>
-          <h2 className={styles.label}>{stage.label} 단계 사진</h2>
+          <h2 className={styles.label}>{stageLabel} 단계 사진</h2>
           <label className={styles.upload} aria-busy={uploading}>
             <input
               type="file"
@@ -221,7 +210,7 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
               disabled={uploading}
             />
             {photo?.url ? (
-              <img src={photo.url} alt={`${stage.label} 단계 사진`} className={styles.photo} />
+              <img src={photo.url} alt={`${stageLabel} 단계 사진`} className={styles.photo} />
             ) : (
               <>
                 <ImageIcon size={28} aria-hidden />
@@ -244,7 +233,7 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.label}>{stage.label} 단계 텍스트 메모</h2>
+          <h2 className={styles.label}>{stageLabel} 단계 텍스트 메모</h2>
           <div className={styles.chips} role="radiogroup" aria-label="메모 종류">
             <Chip
               role="radio"
@@ -264,7 +253,7 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
             </Chip>
           </div>
           <Textarea
-            aria-label={`${stage.label} 단계 메모`}
+            aria-label={`${stageLabel} 단계 메모`}
             rows={4}
             maxLength={5000}
             placeholder="선생님의 첨삭, 스스로 느낀 점 등을 기록하세요."
