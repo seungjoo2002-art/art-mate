@@ -68,6 +68,7 @@ from app.schemas.community import (
     SharingGrant,
     SharingStatus,
 )
+from app.services.artwork_stages import visible_stage_photo
 
 logger = logging.getLogger(__name__)
 
@@ -361,6 +362,7 @@ class SharingService:
                     ArtworkPhoto.stage == ArtworkStage.FINAL,
                     ArtworkPhoto.status == PhotoStatus.ACTIVE,
                     ArtworkPhoto.is_representative,
+                    visible_stage_photo(),
                 )
             )
         ).scalar_one_or_none()

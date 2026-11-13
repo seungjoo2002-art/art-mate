@@ -93,6 +93,8 @@ class Settings(BaseSettings):
         default_factory=lambda: ["image/jpeg", "image/png", "image/webp"]
     )
     artwork_max_photos_per_stage: int = Field(default=10, ge=1, le=50)
+    # v0.9.7 피드백 반영 수정 사진 (단계별 상한)
+    artwork_max_revision_photos_per_stage: int = Field(default=20, ge=1, le=100)
     # 디컴프레션 폭탄 방지: 이미지 최대 픽셀 수
     artwork_max_image_pixels: int = Field(default=50_000_000, ge=1_000_000, le=200_000_000)
 

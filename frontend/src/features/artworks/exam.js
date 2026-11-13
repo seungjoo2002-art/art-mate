@@ -13,6 +13,28 @@ export const DEFAULT_STAGE_TARGETS = [
 ]
 export const MAX_EXAM_MINUTES = 1440 // 서버 제한 (합계 1~1440분)
 
+// v0.9.7: 시험 단계 이름은 학생이 정하고 작품 단계(stage_plan)로 저장한다. 서버 시험 진행은 단계 코드
+// 최대 4개를 쓰므로, 시험 단계 i ↔ 작품 단계 i (같은 순서)로 대응하고 코드는 순서대로 붙인다
+export const EXAM_CODES = ['IDEA', 'SKETCH', 'COLOR', 'FINISH']
+export const MAX_EXAM_STAGES = EXAM_CODES.length
+
+/** 편집 목록 [{ name, minutes }] → 서버 시험 계획 [{ stage: 코드, target_minutes }] (순서대로) */
+export const rowsToPlan = (rows) =>
+  rows.map((row, i) => ({ stage: EXAM_CODES[i], target_minutes: row.minutes }))
+
+/**
+ * 시험 단계(서버)에 대응하는 작품 단계. 단계 수가 같을 때만 순서로 맞춤
+ * (예전 시험·단계를 나중에 바꾼 작품은 대응하지 않음 → 예전 고정 사진 단계로)
+ */
+export function artworkStageFor(artwork, examStages, index) {
+  const plan = artwork.stage_plan ?? []
+  return plan.length === examStages.length ? (plan[index] ?? null) : null
+}
+
+/** 화면에 보여 줄 시험 단계 이름: 대응하는 작품 단계 이름, 없으면 서버 이름 */
+export const examStageName = (artwork, examStages, index) =>
+  artworkStageFor(artwork, examStages, index)?.name ?? examStages[index]?.label ?? '시험'
+
 /** 서버 { stage, target_minutes }[] ↔ 화면 { key, label, minutes }[] */
 export const toTargets = (stages) =>
   stages.map((s) => ({

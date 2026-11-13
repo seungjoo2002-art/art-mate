@@ -7,6 +7,8 @@ import { Button, Card, Chip, Textarea } from '../../components/ui'
 import { deleteArtwork, getArtwork, uploadStagePhoto } from '../../features/artworks/api'
 import {
   EXAM_PHOTO_STAGE,
+  artworkStageFor,
+  examStageName,
   formatClock,
   formatDurationSeconds,
   formatMinutes,
@@ -62,19 +64,33 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
   const last = !stage || index === stages.length - 1
   const remaining = limitSeconds - elapsed
   const stageElapsed = stage ? liveStageSeconds(exam, elapsed)[index] : 0
-  const stageLabel = stage?.label ?? '시험'
+  // v0.9.7: 시험 단계 i = 작품 단계 i → 학생이 정한 이름, 사진·메모·녹음을 그 단계에 연결
+  const artworkStage = stage ? artworkStageFor(artwork, stages, index) : null
+  const stageId = artworkStage?.id
+  const stageLabel = stage ? examStageName(artwork, stages, index) : '시험'
   const typeLabel =
     artwork.practical_type && options
       ? labelOf(options.practical_types, artwork.practical_type)
       : null
-  const photoStage = EXAM_PHOTO_STAGE[stage?.stage] ?? 'FINAL'
-  const summary = artwork.stages.find((s) => s.stage === photoStage)
-  const photo = artwork.photos.find((p) => p.id === summary?.representative_photo_id)
+  // 대응하는 작품 단계가 없으면(예전 시험) 예전 고정 사진 단계
+  const photoStage = stageId ?? EXAM_PHOTO_STAGE[stage?.stage] ?? 'FINAL'
+  const photo = stageId
+    ? artwork.photos.find(
+        (p) => p.stage_id === stageId && (p.kind ?? 'STAGE') === 'STAGE' && p.is_representative,
+      )
+    : artwork.photos.find(
+        (p) => p.id === artwork.stages.find((s) => s.stage === photoStage)?.representative_photo_id,
+      )
 
-  /** 입력한 메모를 글 첨삭으로 저장 (어느 단계 메모인지는 결과 화면에서 작성 시각으로 나눔) */
+  /** 입력한 메모를 이 단계의 글 첨삭으로 저장 (단계 연결이 없으면 결과 화면에서 작성 시각으로 나눔) */
   async function saveMemo() {
     if (!memo.trim()) return
-    await createNote(artwork.id, { source: memoSource, body: memo.trim(), requestSummary: false })
+    await createNote(artwork.id, {
+      source: memoSource,
+      body: memo.trim(),
+      requestSummary: false,
+      stageId, // v0.9.7 이 단계의 피드백으로
+    })
     setMemo('')
   }
 
@@ -172,7 +188,7 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
                   key={t.stage}
                   className={`${styles.stageChip} ${t.status === 'ACTIVE' ? styles.current : ''} ${t.status === 'DONE' ? styles.done : ''}`}
                 >
-                  {i + 1}. {t.label}
+                  {i + 1}. {examStageName(artwork, stages, i)}
                 </span>
               ))}
             </div>
@@ -224,7 +240,13 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
 
         <section className={styles.section}>
           <h2 className={styles.label}>음성 첨삭 녹음</h2>
-          <Button onClick={() => navigate(`/artworks/${artwork.id}/recordings/new`)}>
+          <Button
+            onClick={() =>
+              navigate(
+                `/artworks/${artwork.id}/recordings/new${stageId ? `?stage=${stageId}` : ''}`,
+              )
+            }
+          >
             <Mic size={22} aria-hidden /> 음성 피드백 녹음하기
           </Button>
           <p className={styles.small}>

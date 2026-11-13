@@ -259,6 +259,10 @@ class FeedbackRead(BaseModel):
         description="INSTRUCTOR 강사 첨삭 / SELF_NOTE 자기 메모 / PEER 다른 학생 의견 (v0.9)",
     )
     artwork_id: uuid.UUID
+    stage_id: uuid.UUID | None = Field(
+        default=None, description="v0.9.7 원본 피드백(녹음·글)의 단계 (null = 작품 전체)"
+    )
+    stage_name: str | None = Field(default=None, description="v0.9.7 단계 이름")
     status: FeedbackStatus
     review_mode: ReviewMode
     version: int = Field(description="수정·승인 요청에 그대로 보낸다 (동시 수정 감지)")
@@ -379,6 +383,9 @@ class FeedbackNoteCreate(InputModel):
     )
     body: NoteBody = Field(description="첨삭 원문 (5000자). 문장 단위로 나눠 근거 번호를 붙인다")
     feedback_date: dt.date | None = Field(default=None, description="첨삭 받은 날 (기본 오늘)")
+    stage_id: uuid.UUID | None = Field(
+        default=None, description="v0.9.7 단계 피드백이면 작품 단계 id. 생략하면 작품 전체 피드백"
+    )
     request_summary: bool = Field(
         default=False,
         description="저장 후 AI 요약·분류를 바로 요청 (AI 전송 동의 필요, 없으면 저장만 하고 "
@@ -391,10 +398,13 @@ class FeedbackNoteUpdate(InputModel):
     source: FeedbackSource | None = None
     body: NoteBody | None = None
     feedback_date: dt.date | None = None
+    stage_id: uuid.UUID | None = Field(
+        default=None, description="v0.9.7 단계 변경. null을 보내면 작품 전체 피드백으로"
+    )
 
     @model_validator(mode="after")
     def _some(self) -> "FeedbackNoteUpdate":
-        if not ({"source", "body", "feedback_date"} & self.model_fields_set):
+        if not ({"source", "body", "feedback_date", "stage_id"} & self.model_fields_set):
             raise ValueError("Nothing to update")
         for name in ("source", "body", "feedback_date"):
             if name in self.model_fields_set and getattr(self, name) is None:
@@ -410,6 +420,9 @@ class NoteSegment(BaseModel):
 class FeedbackNoteRead(BaseModel):
     id: uuid.UUID
     artwork_id: uuid.UUID
+    stage_id: uuid.UUID | None = Field(
+        default=None, description="v0.9.7 연결된 작품 단계 (null = 작품 전체 피드백)"
+    )
     source: FeedbackSource
     body: str = Field(description="원문 (AI 결과와 별도로 보존)")
     segments: list[NoteSegment] = Field(description="문장 단위 구간 (AI 근거 번호)")

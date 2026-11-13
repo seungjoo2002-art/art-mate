@@ -38,6 +38,7 @@ from app.integrations.supabase.storage import (
     StorageObjectNotFound,
     StorageObjectTooLarge,
 )
+from app.models.artwork import ArtworkPhoto
 from app.models.enums import AiJobType, ConsentGrantor, ConsentType, RecordingStatus
 from app.models.membership import AcademyMembership
 from app.models.profile import Profile
@@ -48,11 +49,13 @@ from app.schemas.recordings import (
     RecordingConsentCreate,
     RecordingConsentRead,
     RecordingRead,
+    RecordingStageUpdate,
     RecordingUploadRequest,
     RecordingUploadTicket,
     RecordingUrl,
 )
 from app.services.ai_cleanup import cancel_jobs_for_owner, purge_for_recordings
+from app.services.artwork_stages import check_feedback_stage, check_revisions_follow
 from app.services.artworks import ArtworkService
 from app.services.audio import (
     check_declared_audio,
@@ -85,6 +88,7 @@ def recording_read(
     return RecordingRead(
         id=recording.id,
         artwork_id=recording.artwork_id,
+        stage_id=recording.stage_id,
         title=recording.title,
         status=recording.status,
         content_type=recording.content_type,
@@ -257,6 +261,7 @@ class RecordingService:
         )
         # 작품 행 잠금: 녹음 개수 제한을 직렬화
         artwork = await self.artworks.owned(owner, artwork_id, for_update=True)
+        stage_id = await check_feedback_stage(self.session, artwork, data.stage_id)
         now = clock.utc_now()
         await self._expire_pending(artwork.id, now)
         live = (
@@ -283,6 +288,7 @@ class RecordingService:
             speaker_notice_confirmed=True,
             speaker_consent_status=data.speaker_consent_status,
             title=data.title,
+            stage_id=stage_id,
             status=RecordingStatus.PENDING,
             storage_path=path,
             content_type=content_type,
@@ -422,6 +428,26 @@ class RecordingService:
     ) -> RecordingRead:
         artwork = await self.artworks.owned(owner, artwork_id)
         return recording_read(await self._recording(artwork.id, recording_id))
+
+    async def set_stage(
+        self,
+        owner: Profile,
+        artwork_id: uuid.UUID,
+        recording_id: uuid.UUID,
+        data: RecordingStageUpdate,
+    ) -> RecordingRead:
+        """녹음의 단계 연결 변경 (v0.9.7). 이미 연결된 수정 사진과 단계가 다르면 거부한다."""
+        artwork = await self.artworks.owned(owner, artwork_id, for_update=True)
+        recording = await self._recording(artwork.id, recording_id, for_update=True)
+        stage_id = await check_feedback_stage(self.session, artwork, data.stage_id)
+        if stage_id is not None:
+            await check_revisions_follow(
+                self.session, stage_id, ArtworkPhoto.feedback_recording_id == recording.id
+            )
+        recording.stage_id = stage_id
+        await self.session.commit()
+        await self.session.refresh(recording)
+        return recording_read(recording)
 
     async def url(self, artwork_id: uuid.UUID, recording_id: uuid.UUID, token: str) -> RecordingUrl:
         recording = await self._recording(artwork_id, recording_id)

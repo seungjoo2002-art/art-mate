@@ -61,6 +61,10 @@ class FeedbackRecording(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKeyConstraint(
             ["artwork_id", "owner_id"], ["artworks.id", "artworks.owner_id"], ondelete="CASCADE"
         ),
+        # v0.9.7 피드백 대상 단계 (NULL = 작품 전체). 같은 작품의 단계만
+        ForeignKeyConstraint(
+            ["stage_id", "artwork_id"], ["artwork_stages.id", "artwork_stages.artwork_id"]
+        ),
         CheckConstraint(
             "status <> 'ACTIVE' OR (uploaded_at IS NOT NULL AND size_bytes IS NOT NULL"
             " AND sha256 IS NOT NULL)",
@@ -94,6 +98,8 @@ class FeedbackRecording(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # 녹음한 학생 (= 작품 소유자)
     owner_id: Mapped[uuid.UUID]
     consent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("recording_consents.id"))
+    # v0.9.7 어느 단계에 대한 피드백인지 (NULL = 작품 전체)
+    stage_id: Mapped[uuid.UUID | None]
     # 녹음에 다른 사람(강사)의 목소리가 담긴다는 사실을 알렸다고 학생이 확인함
     speaker_notice_confirmed: Mapped[bool] = mapped_column(Boolean)
     # v0.9: 강사 고지·동의 상태 (학생 자기 신고값, 강사의 법적 동의를 대신하지 않음)

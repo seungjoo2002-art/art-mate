@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
 import { Button, Checkbox, Chip, Input, Textarea } from '../../../components/ui'
@@ -7,6 +7,7 @@ import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getAiConsent } from '../aiApi'
+import StagePicker from '../components/StagePicker'
 import { createNote, getNote, updateNote } from '../notesApi'
 import styles from './NoteFormPage.module.css'
 
@@ -45,6 +46,9 @@ function NoteForm({ artworkId, note }) {
   const [body, setBody] = useState(note?.body ?? '')
   const [feedbackDate, setFeedbackDate] = useState(note?.feedback_date ?? today())
   const [withAi, setWithAi] = useState(!note)
+  // v0.9.7 단계 피드백: 작품 화면의 단계에서 들어오면 ?stage=단계 id. '' = 작품 전체
+  const [params] = useSearchParams()
+  const [stageId, setStageId] = useState(note ? (note.stage_id ?? '') : (params.get('stage') ?? ''))
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const artworkPath = `/artworks/${artworkId}`
@@ -64,6 +68,8 @@ function NoteForm({ artworkId, note }) {
           source,
           body: body.trim(),
           feedbackDate,
+          // 단계는 바꾼 경우에만 보냄 (원문이 아니라 AI 정리는 그대로)
+          ...(stageId !== (note.stage_id ?? '') ? { stageId: stageId || null } : {}),
         })
         navigate(artworkPath, { replace: true })
         return
@@ -74,6 +80,7 @@ function NoteForm({ artworkId, note }) {
         source,
         body: body.trim(),
         feedbackDate,
+        stageId: stageId || undefined,
         requestSummary: withAi && consent.is_valid,
       })
       if (withAi && !consent.is_valid) {
@@ -112,6 +119,8 @@ function NoteForm({ artworkId, note }) {
             </p>
           )}
         </div>
+
+        <StagePicker artworkId={artworkId} value={stageId} onChange={setStageId} />
 
         <Textarea
           label="첨삭 내용"

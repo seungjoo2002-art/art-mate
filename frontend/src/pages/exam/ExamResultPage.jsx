@@ -3,7 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../components/layout/FullScreenStatus'
 import { Button, Card } from '../../components/ui'
 import { getArtwork, getExam, listArtworks } from '../../features/artworks/api'
-import { formatDurationSeconds, formatMinutes, stageOfNote } from '../../features/artworks/exam'
+import {
+  examStageName,
+  formatDurationSeconds,
+  formatMinutes,
+  stageOfNote,
+} from '../../features/artworks/exam'
 import { listNotes } from '../../features/feedback/notesApi'
 import { useAsync } from '../../hooks/useAsync'
 import { useOptions } from '../../hooks/useOptions'
@@ -62,8 +67,14 @@ export default function ExamResultPage() {
   const limitMinutes = artwork.time_limit_minutes ?? exam.total_target_minutes
   const notesByStage = {}
   const otherNotes = []
+  // v0.9.7: 단계에 연결된 메모는 그 단계로 (시험 단계 i = 작품 단계 i), 아니면 작성 시각으로
+  const plan = artwork.stage_plan ?? []
+  const codeOfStageId = (id) => {
+    const i = plan.length === exam.stages.length ? plan.findIndex((p) => p.id === id) : -1
+    return i >= 0 ? exam.stages[i].stage : null
+  }
   for (const n of notes) {
-    const stage = stageOfNote(stages, n)
+    const stage = (n.stage_id && codeOfStageId(n.stage_id)) || stageOfNote(stages, n)
     if (stage) (notesByStage[stage] ??= []).push(n)
     else otherNotes.push(n)
   }
@@ -110,7 +121,7 @@ export default function ExamResultPage() {
             <Card key={t.stage} className={styles.section}>
               <div className={styles.stageHead}>
                 <strong>
-                  {i + 1}. {t.label}
+                  {i + 1}. {examStageName(artwork, exam.stages, i)}
                 </strong>
                 <span className={`${styles.stageTime} ${t.over_target ? styles.overText : ''}`}>
                   실제 {formatDurationSeconds(t.elapsed_seconds)} / 목표{' '}

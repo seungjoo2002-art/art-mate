@@ -135,6 +135,7 @@ from app.schemas.tasks import TaskCreate
 from app.services.access import AccessService, is_admin, managed_student_ids, taught_class_ids
 from app.services.ai_cleanup import consent_version
 from app.services.ai_feedback import AiFeedbackService, job_read
+from app.services.artwork_stages import visible_stage_photo
 from app.services.artworks import summarize
 from app.services.growth_ai import RULE_TEMPLATE_VERSION, pick_template
 from app.services.growth_analytics import (
@@ -2266,6 +2267,7 @@ class GrowthService:
                 .where(
                     ArtworkPhoto.artwork_id.in_(artwork_ids),
                     ArtworkPhoto.status == PhotoStatus.ACTIVE,
+                    visible_stage_photo(),
                 )
                 .order_by(ArtworkPhoto.stage, ArtworkPhoto.uploaded_at)
             )

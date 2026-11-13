@@ -58,7 +58,7 @@ from app.models.ai_feedback import (
     FeedbackSummary,
     FeedbackTranscript,
 )
-from app.models.artwork import Artwork
+from app.models.artwork import Artwork, ArtworkStageDef
 from app.models.enums import (
     ACTIVE_JOB_STATUSES,
     CURRENT_FEEDBACK_STATUSES,
@@ -1022,15 +1022,45 @@ class AiFeedbackService:
             "updated_at": summary.updated_at,
         }
 
+    async def _stage_refs(
+        self, summaries: list[FeedbackSummary]
+    ) -> dict[uuid.UUID, dict[str, Any]]:
+        """요약 id → 원본 피드백(녹음·글)의 단계 id·이름 (v0.9.7)."""
+        rec_ids = [s.recording_id for s in summaries if s.recording_id]
+        note_ids = [s.note_id for s in summaries if s.note_id]
+        stage_of: dict[uuid.UUID, tuple[uuid.UUID, str]] = {}
+        for model, ids in ((FeedbackRecording, rec_ids), (FeedbackNote, note_ids)):
+            if not ids:
+                continue
+            rows = await self.session.execute(
+                select(model.id, ArtworkStageDef.id, ArtworkStageDef.name)
+                .join(ArtworkStageDef, ArtworkStageDef.id == model.stage_id)
+                .where(model.id.in_(ids))
+            )
+            for source_id, stage_id, name in rows:
+                stage_of[source_id] = (stage_id, name)
+        out: dict[uuid.UUID, dict[str, Any]] = {}
+        for s in summaries:
+            found = stage_of.get(s.recording_id or s.note_id)  # type: ignore[arg-type]
+            out[s.id] = {
+                "stage_id": found[0] if found else None,
+                "stage_name": found[1] if found else None,
+            }
+        return out
+
     async def _read(self, summary: FeedbackSummary, artwork: Artwork) -> dict[str, Any]:
         items, categories, segments, names = await self._parts([summary])
-        return self._read_dict(
-            summary,
-            artwork,
-            items[summary.id],
-            categories[summary.id],
-            segments.get(summary.id, {}),
-            names,
+        stages = await self._stage_refs([summary])
+        return (
+            self._read_dict(
+                summary,
+                artwork,
+                items[summary.id],
+                categories[summary.id],
+                segments.get(summary.id, {}),
+                names,
+            )
+            | stages[summary.id]
         )
 
     async def _reviewer_read(
@@ -1139,6 +1169,7 @@ class AiFeedbackService:
             ).scalars()
         )
         items, categories, segments, names = await self._parts(summaries)
+        stages = await self._stage_refs(summaries)
         return [
             FeedbackRead(
                 **self._read_dict(
@@ -1149,6 +1180,7 @@ class AiFeedbackService:
                     segments.get(s.id, {}),
                     names,
                 )
+                | stages[s.id]
             )
             for s in summaries
         ]

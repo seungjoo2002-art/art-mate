@@ -7,8 +7,14 @@ import styles from './AddPhotoButton.module.css'
 /**
  * 단계 사진을 한 장 더 올림 (대표 사진은 그대로, 타임라인에 올린 시각으로 들어감)
  * 파일 고르기 → 어느 단계 사진인지 고르기 → 올리기
+ * stages: [{ key, label }] — v0.9.7 작품 단계 (key = 단계 id). 없으면 예전 고정 3단계
  */
-export default function AddPhotoButton({ defaultStage = 'SKETCH', busy = false, onUpload }) {
+export default function AddPhotoButton({
+  stages = STAGES,
+  defaultStage = stages[0]?.key ?? 'SKETCH',
+  busy = false,
+  onUpload,
+}) {
   const [picked, setPicked] = useState(null) // { file, preview }
   const [stage, setStage] = useState(defaultStage)
   const file = picked?.file
@@ -56,7 +62,7 @@ export default function AddPhotoButton({ defaultStage = 'SKETCH', busy = false, 
         </div>
       </div>
       <div className={styles.chips} role="radiogroup" aria-label="사진 단계">
-        {STAGES.map((s) => (
+        {stages.map((s) => (
           <Chip
             key={s.key}
             role="radio"

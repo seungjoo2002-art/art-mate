@@ -18,9 +18,10 @@ def test_lineage_is_linear() -> None:
     history = _alembic("history")
     assert "0010 -> 0011" in history
     assert "0011 -> 0012" in history
-    assert "0012 -> 0013 (head)" in history
+    assert "0012 -> 0013" in history
+    assert "0013 -> 0014 (head)" in history
     heads = _alembic("heads")
-    assert heads.count("(head)") == 1 and "0013" in heads
+    assert heads.count("(head)") == 1 and "0014" in heads
 
 
 async def _consents(conn: asyncpg.Connection, user: uuid.UUID) -> list[asyncpg.Record]:

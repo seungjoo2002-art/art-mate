@@ -158,6 +158,13 @@ class ArtworkProgress(StrEnum):
     FINAL = "FINAL"
 
 
+class PhotoKind(StrEnum):
+    """작품 사진 종류 (v0.9.7)."""
+
+    STAGE = "STAGE"  # 단계 사진 (피드백 전·일반 기록)
+    REVISION = "REVISION"  # 피드백을 반영해 고친 뒤 올린 사진 (어떤 피드백의 결과인지 연결)
+
+
 class PhotoStatus(StrEnum):
     PENDING = "PENDING"  # 업로드 URL 발급됨, 완료 처리 전
     ACTIVE = "ACTIVE"  # 검증 완료, 작품에 연결됨
