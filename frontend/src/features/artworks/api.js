@@ -63,6 +63,22 @@ export const getTimer = (artworkId) => api(`/artworks/${artworkId}/timer`)
 export const sendTimerEvent = (artworkId, event) =>
   api(`/artworks/${artworkId}/timer/events`, { method: 'POST', body: { event } })
 
+/** VER.2 실기시험 단계 (서버 저장, 다른 기기에서도 같은 값) */
+export const getExam = (artworkId) => api(`/artworks/${artworkId}/exam`)
+
+/** stages: [{ stage: IDEA|SKETCH|COLOR|FINISH, target_minutes }] · 합계가 작품 제한 시간이 됨 */
+export const putExamPlan = (artworkId, stages) =>
+  api(`/artworks/${artworkId}/exam/plan`, { method: 'PUT', body: { stages } })
+
+/** 현재 단계를 끝내고 다음 단계 시작. 마지막 단계면 409 EXAM_LAST_STAGE (타이머 STOP으로 끝냄) */
+export const nextExamStage = (artworkId, currentStage) =>
+  api(`/artworks/${artworkId}/exam/next`, { method: 'POST', body: { current_stage: currentStage } })
+
+/** 내 기본 단계 목표 시간 (모든 기기 공통). 저장한 적 없으면 source=DEFAULT */
+export const getExamDefaults = () => api('/users/me/exam-defaults')
+export const putExamDefaults = (stages) =>
+  api('/users/me/exam-defaults', { method: 'PUT', body: { stages } })
+
 export const getPhotoUrl = (artworkId, photoId) =>
   api(`/artworks/${artworkId}/photos/${photoId}/url`)
 

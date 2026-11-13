@@ -1,18 +1,19 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../app/providers/AuthContext'
 import TopBar from '../../../components/layout/TopBar'
 import { Button, Card, Input, Select } from '../../../components/ui'
+import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { labelOf } from '../../../lib/options'
 import { toErrorMessage } from '../../../utils/errorMessages'
-import { createArtwork } from '../api'
+import { createArtwork, deleteArtwork, putExamPlan } from '../api'
 import ExamTargetsCard from '../components/ExamTargetsCard'
 import {
-  loadStageTargets,
-  newExamSession,
-  saveExamSession,
-  saveStageTargets,
+  DEFAULT_STAGE_TARGETS,
+  loadExamDefaults,
+  saveExamDefaults,
+  toPlan,
   totalMinutes,
 } from '../exam'
 import styles from './ArtworkPage.module.css'
@@ -35,7 +36,14 @@ export default function ArtworkCreatePage() {
   const [params] = useSearchParams()
   const recommendationId = params.get('recommendation')
   const exam = params.get('mode') === 'exam'
-  const [stageTargets, setStageTargets] = useState(loadStageTargets)
+  // 기본 목표는 계정에서 불러오고, 이 화면에서 바꾸면 그 값을 씀 (시작할 때 다음 시험 기본값으로 저장)
+  const loadDefaults = useCallback(
+    () => (exam ? loadExamDefaults() : Promise.resolve(null)),
+    [exam],
+  )
+  const { data: defaults } = useAsync(loadDefaults)
+  const [editedTargets, setStageTargets] = useState(null)
+  const stageTargets = editedTargets ?? defaults ?? DEFAULT_STAGE_TARGETS
   const [title, setTitle] = useState('')
   const [practicalType, setPracticalType] = useState(profile.practical_type ?? '')
   const [topic, setTopic] = useState('')
@@ -48,8 +56,9 @@ export default function ArtworkCreatePage() {
     setFormError('')
     const typeLabel =
       practicalType && options ? labelOf(options.practical_types, practicalType) : ''
-    if (exam) saveStageTargets(stageTargets) // 다음 시험 기본값
     try {
+      // 다음 시험 기본값 (실패해도 시험은 시작)
+      if (exam && editedTargets) await saveExamDefaults(editedTargets).catch(() => {})
       const artwork = await createArtwork({
         title: title.trim() || fallbackTitle(typeLabel, exam),
         topic: topic.trim(),
@@ -59,7 +68,13 @@ export default function ArtworkCreatePage() {
         timeLimitMinutes: exam ? totalMinutes(stageTargets) : undefined,
       })
       if (exam) {
-        saveExamSession(artwork.id, newExamSession(stageTargets))
+        // 단계 계획은 타이머 START 전에 저장해야 첫 단계가 함께 시작됨
+        try {
+          await putExamPlan(artwork.id, toPlan(stageTargets))
+        } catch (err) {
+          await deleteArtwork(artwork.id).catch(() => {})
+          throw err
+        }
         navigate(`/artworks/${artwork.id}/exam`, { replace: true })
       } else {
         navigate(`/artworks/${artwork.id}`, { replace: true })

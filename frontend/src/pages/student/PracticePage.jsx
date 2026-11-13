@@ -4,13 +4,14 @@ import { Link } from 'react-router-dom'
 import { Card, PageIntro } from '../../components/ui'
 import { listArtworks } from '../../features/artworks/api'
 import ArtworkCard from '../../features/artworks/components/ArtworkCard'
-import { formatMinutes, loadStageTargets, totalMinutes } from '../../features/artworks/exam'
+import { formatMinutes, loadExamDefaults, totalMinutes } from '../../features/artworks/exam'
 import { useAsync } from '../../hooks/useAsync'
 import { formatMonthDay } from '../../utils/date'
 import styles from './PracticePage.module.css'
 
-// 디자인의 "목표 변경"(기본 목표 시간 저장)과 아이디어·스케치·채색 단계별 목표 시간은 백엔드가 없어 제외
+// 시험 기본 목표 시간은 계정에 저장 (/users/me/exam-defaults), 시험 준비 화면에서 바꿀 수 있음
 export default function PracticePage() {
+  const { data: targets } = useAsync(loadExamDefaults)
   return (
     <>
       <PageIntro title="실기" description="작품을 자유롭게 기록하거나 실기시험을 진행하세요." />
@@ -21,7 +22,9 @@ export default function PracticePage() {
         to="/artworks/new?mode=exam"
         title="실기시험 모드"
         description="아이디어·스케치·채색 목표 시간을 설정하고 단계별 사진, 메모와 녹음을 남깁니다."
-        action={`목표 ${formatMinutes(totalMinutes(loadStageTargets()))} · 시험 시작하기`}
+        action={
+          targets ? `목표 ${formatMinutes(totalMinutes(targets))} · 시험 시작하기` : '시험 시작하기'
+        }
       />
       <ModeCard
         to="/artworks/new"

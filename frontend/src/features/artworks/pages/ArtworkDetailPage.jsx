@@ -17,7 +17,9 @@ import {
 } from '../api'
 import StagePhotoCard from '../components/StagePhotoCard'
 import StageStepper from '../components/StageStepper'
-import { hasFinalPhoto, isCompleted, stagesWithPhotos } from '../stages'
+import AddPhotoButton from '../components/AddPhotoButton'
+import ExtraPhotoCard from '../components/ExtraPhotoCard'
+import { STAGES, hasFinalPhoto, isCompleted, stagesWithPhotos } from '../stages'
 import { formatMinutes } from '../exam'
 import styles from './ArtworkPage.module.css'
 
@@ -48,6 +50,8 @@ export default function ArtworkDetailPage({ renderTimeline }) {
   const stages = stagesWithPhotos(artwork)
   const completed = isCompleted(artwork)
   const finalPhoto = hasFinalPhoto(artwork)
+  // VER.2 P0: 커뮤니티 공유는 단계 사진 1장만 있어도 가능 (공유할 사진은 글쓰기에서 고름)
+  const hasAnyPhoto = (artwork.photos?.length ?? 0) > 0
 
   async function runStageAction(stage, action) {
     if (busyStage) return
@@ -101,6 +105,58 @@ export default function ArtworkDetailPage({ renderTimeline }) {
     }
   }
 
+  // 대표가 아닌 추가 사진 (피드백 받은 뒤 고쳐서 다시 찍은 사진 등) → 올린 시각으로 타임라인에
+  const extraPhotos = artwork.photos.filter((p) => !p.is_representative && p.status === 'ACTIVE')
+  // 추가 사진 기본 단계: 가장 최근에 사진을 올린 단계
+  const latestStage =
+    [...stages]
+      .filter((s) => s.photo)
+      .sort((a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt))[0]?.key ?? 'SKETCH'
+
+  async function handleAddPhoto(stageKey, file) {
+    setBusyStage('extra')
+    setActionError('')
+    try {
+      await uploadStagePhoto(artwork.id, stageKey, file)
+      reload()
+      return true
+    } catch (err) {
+      setActionError(toErrorMessage(err))
+      return false
+    } finally {
+      setBusyStage(null)
+    }
+  }
+
+  async function handleDeleteExtra(photo) {
+    if (!window.confirm('이 추가 사진을 삭제할까요?')) return
+    setBusyStage(photo.id)
+    setActionError('')
+    try {
+      await deletePhoto(artwork.id, photo.id)
+      reload()
+    } catch (err) {
+      setActionError(toErrorMessage(err))
+    } finally {
+      setBusyStage(null)
+    }
+  }
+
+  const extraItems = extraPhotos.map((photo) => ({
+    key: photo.id,
+    time: photo.uploaded_at ?? photo.created_at,
+    node: (
+      <ExtraPhotoCard
+        artworkId={artwork.id}
+        photo={photo}
+        stageLabel={STAGES.find((s) => s.key === photo.stage)?.label ?? photo.stage}
+        locked={completed}
+        busy={busyStage === photo.id}
+        onDelete={() => handleDeleteExtra(photo)}
+      />
+    ),
+  }))
+
   // 타임라인 항목: 사진이 있는 단계는 업로드 시각, 빈 단계는 시각 없음(맨 뒤)
   const stageItems = stages.map((stage, index) => ({
     key: stage.key,
@@ -153,7 +209,19 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         <StageStepper stages={stages} />
 
         {renderTimeline ? (
-          renderTimeline({ artworkId: artwork.id, items: stageItems })
+          renderTimeline({
+            artworkId: artwork.id,
+            items: [...stageItems, ...extraItems],
+            // 완료한 작품은 사진을 바꿀 수 없음 (서버도 409 ARTWORK_COMPLETED)
+            actions: completed ? null : (
+              <AddPhotoButton
+                key={latestStage}
+                defaultStage={latestStage}
+                busy={busyStage === 'extra'}
+                onUpload={handleAddPhoto}
+              />
+            ),
+          })
         ) : (
           <div className={styles.stageList}>{stageItems.map((item) => item.node)}</div>
         )}
@@ -178,7 +246,7 @@ export default function ArtworkDetailPage({ renderTimeline }) {
             )}
           </>
         )}
-        {finalPhoto && (
+        {hasAnyPhoto && (
           <Button variant="soft" onClick={() => navigate(`/community/write?artwork=${artwork.id}`)}>
             커뮤니티에 공유하기
           </Button>

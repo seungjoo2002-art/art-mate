@@ -1,14 +1,16 @@
-// 백엔드에는 게시판 분류가 없어서, 작품 질문(question)이 있으면 "피드백 요청", 없으면 "작품 공유"로 표시
-export const postCategory = (post) => (post.question ? '피드백 요청' : '작품 공유')
-
-export const CATEGORY_FILTERS = [
-  { key: 'all', label: '전체' },
-  { key: 'feedback', label: '피드백 요청' },
-  { key: 'share', label: '작품 공유' },
+// 게시판 분류 (VER.2 P0, 서버의 post.category)
+export const CATEGORIES = [
+  { code: 'PRACTICE_QUESTION', label: '실기 질문' },
+  { code: 'FEEDBACK_REQUEST', label: '피드백 요청' },
+  { code: 'ARTWORK_SHARE', label: '작품 공유' }, // 작품(사진) 필수
+  { code: 'FREE', label: '자유게시판' },
 ]
 
-export const matchesCategory = (post, key) =>
-  key === 'all' || (key === 'feedback' ? Boolean(post.question) : !post.question)
+export const postCategory = (post) =>
+  CATEGORIES.find((c) => c.code === post.category)?.label ?? '게시물'
+
+/** 목록 칩: 전체 + 분류 4개 (서버 category 필터) */
+export const CATEGORY_FILTERS = [{ code: 'all', label: '전체' }, ...CATEGORIES]
 
 export const REPORT_REASONS = [
   { code: 'SPAM', label: '스팸·광고' },

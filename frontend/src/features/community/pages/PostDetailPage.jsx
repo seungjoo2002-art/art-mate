@@ -89,7 +89,15 @@ export default function PostDetailPage() {
           )}
         </div>
 
-        {post.image?.url && <img src={post.image.url} alt={post.title} className={styles.image} />}
+        {post.image?.url ? (
+          <img src={post.image.url} alt={post.title} className={styles.image} />
+        ) : (
+          post.has_artwork && (
+            <p className={styles.imageGone}>
+              공유한 사진이 내려갔어요. 원본 사진을 지우면 공개용 이미지도 함께 내려가요.
+            </p>
+          )
+        )}
         {post.body && <p className={styles.text}>{post.body}</p>}
         {post.question && (
           <Card variant="soft" className={styles.question}>
