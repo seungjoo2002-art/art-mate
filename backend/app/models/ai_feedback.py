@@ -49,6 +49,7 @@ from app.models.enums import (
     FeedbackSource,
     FeedbackStatus,
     GuardianRelationship,
+    ImageRefStatus,
     ReviewAction,
     ReviewMode,
     WeaknessCategory,
@@ -248,6 +249,16 @@ class FeedbackNote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     owner_id: Mapped[uuid.UUID]
     # v0.9.7 어느 단계에 대한 피드백인지 (NULL = 작품 전체)
     stage_id: Mapped[uuid.UUID | None]
+    # v0.9.8 피드백 기준 이미지 확인 상태 (기준 사진은 feedback_image_refs)
+    image_ref_status: Mapped[ImageRefStatus] = mapped_column(
+        enum_column(ImageRefStatus, "image_ref_status"),
+        server_default=ImageRefStatus.NONE.value,
+        default=ImageRefStatus.NONE,
+    )
+    image_ref_confirmed_at: Mapped[datetime | None]
+    image_ref_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("profiles.id", ondelete="SET NULL")
+    )
     source: Mapped[FeedbackSource] = mapped_column(enum_column(FeedbackSource, "source"))
     body: Mapped[str] = mapped_column(Text)
     # [{"index": 0, "text": "..."}] — 문장 단위

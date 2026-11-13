@@ -61,6 +61,7 @@ export default function ArtworkCreatePage() {
   const [title, setTitle] = useState('')
   const [practicalType, setPracticalType] = useState(profile.practical_type ?? '')
   const [topic, setTopic] = useState('')
+  const [examMaterials, setExamMaterials] = useState('')
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -89,6 +90,7 @@ export default function ArtworkCreatePage() {
       const artwork = await createArtwork({
         title: title.trim() || fallbackTitle(typeLabel, exam),
         topic: topic.trim(),
+        examMaterials: examMaterials.trim() || undefined,
         recommendationId,
         practicalType: practicalType || undefined,
         workCategory: exam ? 'MOCK_EXAM' : undefined,
@@ -144,6 +146,13 @@ export default function ArtworkCreatePage() {
           maxLength={200}
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
+        />
+        <Input
+          label="제시물 (선택)"
+          placeholder="예: 유리컵, 사과 2개, 흰 천"
+          maxLength={500}
+          value={examMaterials}
+          onChange={(e) => setExamMaterials(e.target.value)}
         />
 
         <StageEditor

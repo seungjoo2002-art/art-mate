@@ -24,6 +24,7 @@ export const createArtwork = ({
   workCategory,
   timeLimitMinutes,
   stages,
+  examMaterials,
 }) =>
   api('/artworks', {
     method: 'POST',
@@ -31,6 +32,7 @@ export const createArtwork = ({
       title,
       description: description || null,
       ...(topic ? { topic } : {}), // 주제·소재 (v0.9 F-2)
+      ...(examMaterials ? { exam_materials: examMaterials } : {}), // 시험 제시물 (v0.9.8)
       ...(recommendationId ? { recommendation_id: recommendationId } : {}),
       ...(practicalType ? { practical_type: practicalType } : {}),
       ...(workCategory ? { work_category: workCategory } : {}),
@@ -50,6 +52,25 @@ export const replaceStages = (artworkId, stages) =>
   api(`/artworks/${artworkId}/stages`, { method: 'PUT', body: { stages } })
 
 export const deleteArtwork = (artworkId) => api(`/artworks/${artworkId}`, { method: 'DELETE' })
+
+/** 단계 대표 사진으로 지정 (같은 단계의 기존 대표는 해제) */
+export const setRepresentativePhoto = (artworkId, photoId) =>
+  api(`/artworks/${artworkId}/photos/${photoId}`, {
+    method: 'PATCH',
+    body: { is_representative: true },
+  })
+
+/**
+ * 피드백 기준 이미지 저장 (v0.9.8). feedback: { type: 'NOTE' | 'RECORDING', id }
+ * photoIds 빈 배열 + confirmed = 사진 없이 받은 피드백이라고 확인
+ */
+export const saveFeedbackImageRefs = (artworkId, feedback, photoIds, confirmed = true) =>
+  api(
+    feedback.type === 'NOTE'
+      ? `/feedback-notes/${feedback.id}/image-refs`
+      : `/artworks/${artworkId}/recordings/${feedback.id}/image-refs`,
+    { method: 'PUT', body: { photo_ids: photoIds, confirmed } },
+  )
 
 export const deletePhoto = (artworkId, photoId) =>
   api(`/artworks/${artworkId}/photos/${photoId}`, { method: 'DELETE' })

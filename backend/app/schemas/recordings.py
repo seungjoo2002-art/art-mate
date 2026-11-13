@@ -13,6 +13,7 @@ from app.models.enums import (
 )
 from app.schemas.artworks import UploadTarget
 from app.schemas.fields import InputModel
+from app.schemas.image_refs import ImageRefsRead
 
 RecordingTitle = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
@@ -62,6 +63,17 @@ class RecordingUploadRequest(InputModel):
     recorded_at: AwareDatetime | None = Field(default=None, description="녹음 시작 시각")
     stage_id: uuid.UUID | None = Field(
         default=None, description="v0.9.7 단계 피드백이면 작품 단계 id. 생략하면 작품 전체 피드백"
+    )
+    # v0.9.8 피드백 기준 이미지
+    reference_photo_ids: list[uuid.UUID] | None = Field(
+        default=None,
+        max_length=10,
+        description=(
+            "이 피드백을 받을 때 본 작품 사진. 생략하면 지금 최신 사진을 제안(SUGGESTED)으로"
+        ),
+    )
+    reference_confirmed: bool = Field(
+        default=False, description="reference_photo_ids를 확인함 → CONFIRMED (학습 데이터 조건)"
     )
     speaker_notice_confirmed: Literal[True] = Field(
         description="녹음되는 강사에게 녹음 사실을 알렸음 (true만 허용)"
@@ -114,6 +126,9 @@ class RecordingRead(BaseModel):
     )
     url: str | None = Field(default=None, description="include_urls=true일 때 재생용 Signed URL")
     url_expires_at: dt.datetime | None = None
+    image_refs: ImageRefsRead = Field(
+        default_factory=ImageRefsRead, description="v0.9.8 피드백 기준 이미지"
+    )
 
 
 class RecordingUploadTicket(BaseModel):

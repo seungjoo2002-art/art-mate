@@ -810,3 +810,33 @@ EXAM_STAGE_LABELS: dict[ArtworkExamStageCode, str] = {
     ArtworkExamStageCode.COLOR: "채색",
     ArtworkExamStageCode.FINISH: "마무리",
 }
+
+
+# ------------------------------------------------------ v0.9.8 피드백 기준 이미지·데이터셋
+
+
+class ImageRefStatus(StrEnum):
+    """피드백(녹음·글 첨삭)이 어떤 작품 사진을 보고 작성됐는지의 확인 상태 (v0.9.8)."""
+
+    NONE = "NONE"  # 기준 사진 없음 (사진 없이 받은 피드백, 또는 아직 모름)
+    SUGGESTED = "SUGGESTED"  # 시스템이 제안(피드백 시점 최신 사진) — 사용자가 확인하지 않음
+    CONFIRMED = "CONFIRMED"  # 사용자가 기준 사진을 고르거나 제안을 확인함
+
+
+class LabelOrigin(StrEnum):
+    """피드백 구조화 레이블의 출처 (v0.9.8). 원문과 분리해 저장한다."""
+
+    AI = "AI"  # AI가 원문에서 추정
+    EXPERT = "EXPERT"  # 강사(전문가)가 직접 작성
+    STUDENT = "STUDENT"  # 학생이 정리 (전문가 확인 전까지 정답 아님)
+
+
+class LabelVerification(StrEnum):
+    UNVERIFIED = "UNVERIFIED"
+    CONFIRMED = "CONFIRMED"  # 강사(전문가)가 확인
+    REJECTED = "REJECTED"  # 강사가 틀렸다고 표시 (학습에서 제외, 기록은 보존)
+
+
+class DatasetConsentStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    REVOKED = "REVOKED"

@@ -50,10 +50,12 @@ from app.schemas.ai_feedback import (
     JobRead,
     NoteSegment,
 )
+from app.schemas.image_refs import ImageRefsUpdate
 from app.services.ai_feedback import AiFeedbackService, job_read, review_mode_for
 from app.services.ai_limits import check_summary_quota, log_summary_disabled
 from app.services.ai_summary import split_segments
 from app.services.artwork_stages import check_feedback_stage, check_revisions_follow
+from app.services.feedback_image_refs import initial_refs, refs_for, replace_refs
 
 MAX_NOTES_PER_ARTWORK = 50
 
@@ -123,6 +125,7 @@ class FeedbackNoteService:
             id=note.id,
             artwork_id=note.artwork_id,
             stage_id=note.stage_id,
+            image_refs=await refs_for(self.session, note),
             source=note.source,
             body=note.body,
             segments=[NoteSegment(**s) for s in note.segments],
@@ -194,6 +197,16 @@ class FeedbackNoteService:
             stage_id=stage_id,
         )
         self.session.add(note)
+        await self.session.flush()
+        # v0.9.8 기준 이미지: 작성 시점에 고정 (이후 사진이 추가돼도 바뀌지 않음)
+        await initial_refs(
+            self.session,
+            artwork,
+            note,
+            data.reference_photo_ids,
+            confirmed=data.reference_confirmed,
+            actor=owner,
+        )
         await self.session.commit()
         if data.request_summary and await self._can_summarize(owner.id):
             await self._queue(note.id, note.artwork_id, owner, note.version)
@@ -241,6 +254,18 @@ class FeedbackNoteService:
                 )
             note.stage_id = stage_id
         note.version += 1
+        await self.session.commit()
+        note, artwork = await self._note(owner, note_id)
+        return await self._read(note, artwork)
+
+    async def set_image_refs(
+        self, owner: Profile, note_id: uuid.UUID, data: ImageRefsUpdate
+    ) -> FeedbackNoteRead:
+        """기준 이미지 확인·변경 (v0.9.8). 원문이 아니므로 AI 요약은 그대로 둔다."""
+        note, artwork = await self._note(owner, note_id, for_update=True)
+        await replace_refs(
+            self.session, artwork, note, data.photo_ids, confirmed=data.confirmed, actor=owner
+        )
         await self.session.commit()
         note, artwork = await self._note(owner, note_id)
         return await self._read(note, artwork)

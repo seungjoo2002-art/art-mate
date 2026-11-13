@@ -396,19 +396,24 @@ async def test_stage_and_overall_feedback_with_revision_photos(  # type: ignore[
         ),
     ):
         assert (await _photo(client, storage, student, artwork["id"], **body)).status_code == code
+    # v0.9.8: 피드백 뒤에 올린 사진도 일반 단계 사진과 같다 (대표 지정 가능, 사진 수에 포함)
+    photo_url = f"{API}/artworks/{artwork['id']}/photos"
     rep = await client.patch(
-        f"{API}/artworks/{artwork['id']}/photos/{rev1.json()['id']}",
+        f"{photo_url}/{rev1.json()['id']}",
         json={"is_representative": True},
         headers=student.headers,
     )
-    assert rep.status_code == 422
+    assert rep.status_code == 200 and rep.json()["is_representative"] is True
+    back = await client.patch(
+        f"{photo_url}/{before['id']}", json={"is_representative": True}, headers=student.headers
+    )
+    assert back.status_code == 200
 
-    # 대표·진행도·사진 수는 단계 사진 기준 (수정 사진 제외)
     detail = await _detail(client, student, artwork["id"])
-    assert detail["photo_count"] == 1
+    assert detail["photo_count"] == 5  # 단계 사진 1 + 피드백 뒤 사진 4 (같은 사진으로 셈)
     reps = [p["id"] for p in detail["photos"] if p["is_representative"]]
-    assert reps == [before["id"]]
-    assert len(detail["photos"]) == 5  # 단계 사진 1 + 수정 사진 4
+    assert sorted(reps) == sorted([before["id"], rev3.json()["id"]])  # 단계마다 대표 1장
+    assert len(detail["photos"]) == 5
 
     history = await _history(client, student, artwork["id"])
     s0, s1, s2 = history["stages"]

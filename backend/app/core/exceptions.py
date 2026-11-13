@@ -88,6 +88,9 @@ class ErrorCode(StrEnum):
     AI_CONSENT_REQUIRED = "AI_CONSENT_REQUIRED"
     # v0.9.6 연령·보호자 동의
     AI_AGE_REQUIRED = "AI_AGE_REQUIRED"  # 동의 시 생년월(연령 확인) 필요
+    # v0.9.8 AI 학습 활용 동의·데이터셋
+    DATASET_CONSENT_UNAVAILABLE = "DATASET_CONSENT_UNAVAILABLE"  # 만 14세 미만 (보호자 절차 전)
+    DATASET_EXPORT_DISABLED = "DATASET_EXPORT_DISABLED"  # 가명 처리 키가 없어 내보내기 꺼짐
     GUARDIAN_LINK_INVALID = "GUARDIAN_LINK_INVALID"  # 보호자 확인 링크가 없거나 만료·사용됨
     RECORDING_TOO_LONG = "RECORDING_TOO_LONG"
     TRANSCRIPT_NOT_READY = "TRANSCRIPT_NOT_READY"
@@ -257,6 +260,11 @@ class StorageUnavailableError(ServiceUnavailableError):
 class SttNotConfiguredError(ServiceUnavailableError):
     code = ErrorCode.STT_NOT_CONFIGURED
     message = "Speech-to-text processing is not enabled"
+
+
+class DatasetExportDisabledError(ServiceUnavailableError):
+    code = ErrorCode.DATASET_EXPORT_DISABLED
+    message = "Training dataset export is not configured"
 
 
 class AiNotConfiguredError(ServiceUnavailableError):

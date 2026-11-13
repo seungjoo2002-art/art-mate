@@ -12,8 +12,6 @@ export const STAGES = [
   { key: 'FINAL', label: '완성', photoLabel: '완성 사진' },
 ]
 
-const isStagePhoto = (photo) => (photo.kind ?? 'STAGE') === 'STAGE'
-
 /**
  * 작품의 단계마다 대표 사진을 붙여서 돌려줌.
  * { key, id(단계 id, 예전 응답이면 null), legacy, label, photoLabel, photo, uploadedAt, targetMinutes }
@@ -36,7 +34,8 @@ export function stagesWithPhotos(artwork) {
     })
   }
   return plan.map((stage) => {
-    const photos = artwork.photos.filter((p) => p.stage_id === stage.id && isStagePhoto(p))
+    // v0.9.8: 피드백 뒤에 올린 사진도 같은 단계 사진 (대표 지정 가능)
+    const photos = artwork.photos.filter((p) => p.stage_id === stage.id)
     const photo = photos.find((p) => p.is_representative) ?? photos[0] ?? null
     return {
       key: stage.id,
@@ -51,39 +50,17 @@ export function stagesWithPhotos(artwork) {
   })
 }
 
-/** 피드백(글 첨삭 또는 녹음)을 반영한 수정 사진 (올린 순) */
-export function revisionPhotosOf(artwork, { type, id }) {
-  const field = type === 'NOTE' ? 'feedback_note_id' : 'feedback_recording_id'
-  return artwork.photos
-    .filter((p) => p.kind === 'REVISION' && p[field] === id)
-    .sort(
-      (a, b) =>
-        Date.parse(a.uploaded_at ?? a.created_at) - Date.parse(b.uploaded_at ?? b.created_at),
-    )
-}
+/** 사진을 올린 시각 (타임라인 정렬) */
+export const photoTime = (photo) => photo.uploaded_at ?? photo.created_at
 
 /**
- * 대표가 아닌 단계 사진 (VER.2 추가 사진: 피드백 전·작업 중 여러 장). 수정 사진(REVISION)은 제외.
- * stageId가 없으면(예전 응답) 모든 추가 사진
+ * 단계의 사진 전부 (v0.9.8 타임라인): 올린 시각 순. 피드백 뒤에 올린 사진(예전 수정 사진 포함)도
+ * 일반 단계 사진과 같게 보여 준다. stageId가 없으면(예전 응답) 작품의 모든 사진
  */
-export const extraStagePhotos = (artwork, stageId) =>
-  artwork.photos.filter(
-    (p) =>
-      isStagePhoto(p) &&
-      !p.is_representative &&
-      p.status === 'ACTIVE' &&
-      (stageId == null || p.stage_id === stageId),
-  )
-
-/** 연결된 피드백이 지워진 수정 사진 (사진은 남아 있음) */
-export const unlinkedRevisions = (artwork, stageId) =>
-  artwork.photos.filter(
-    (p) =>
-      p.kind === 'REVISION' &&
-      p.stage_id === stageId &&
-      !p.feedback_note_id &&
-      !p.feedback_recording_id,
-  )
+export const stagePhotos = (artwork, stageId) =>
+  artwork.photos
+    .filter((p) => p.status === 'ACTIVE' && (stageId == null || p.stage_id === stageId))
+    .sort((a, b) => Date.parse(photoTime(a)) - Date.parse(photoTime(b)))
 
 let seq = 0
 /** 단계 편집 목록의 한 줄. id는 서버 단계 id (새 단계면 없음), key는 화면용 */

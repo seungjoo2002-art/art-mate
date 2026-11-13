@@ -27,6 +27,7 @@ from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
 from app.models.enums import (
     ConsentGrantor,
     ConsentType,
+    ImageRefStatus,
     RecordingStatus,
     SpeakerConsentStatus,
     TranscriptionStatus,
@@ -100,6 +101,16 @@ class FeedbackRecording(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     consent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("recording_consents.id"))
     # v0.9.7 어느 단계에 대한 피드백인지 (NULL = 작품 전체)
     stage_id: Mapped[uuid.UUID | None]
+    # v0.9.8 피드백 기준 이미지 확인 상태 (기준 사진은 feedback_image_refs)
+    image_ref_status: Mapped[ImageRefStatus] = mapped_column(
+        enum_column(ImageRefStatus, "image_ref_status"),
+        server_default=ImageRefStatus.NONE.value,
+        default=ImageRefStatus.NONE,
+    )
+    image_ref_confirmed_at: Mapped[datetime | None]
+    image_ref_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("profiles.id", ondelete="SET NULL")
+    )
     # 녹음에 다른 사람(강사)의 목소리가 담긴다는 사실을 알렸다고 학생이 확인함
     speaker_notice_confirmed: Mapped[bool] = mapped_column(Boolean)
     # v0.9: 강사 고지·동의 상태 (학생 자기 신고값, 강사의 법적 동의를 대신하지 않음)

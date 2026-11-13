@@ -120,6 +120,8 @@ class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     completed_at: Mapped[datetime | None]
     # v0.9 F-2 작품 정보·시간 기록 (모두 선택)
     topic: Mapped[str | None] = mapped_column(String(200))  # 실기 주제 (시험 제시어 등)
+    # v0.9.8 시험 제시물 (예: "유리컵, 사과 2개, 흰 천"). 데이터셋 메타데이터
+    exam_materials: Mapped[str | None] = mapped_column(String(500))
     work_method: Mapped[str | None] = mapped_column(String(100))  # 작업 방식 (재료·기법)
     actual_minutes: Mapped[int | None] = mapped_column(Integer)  # 실제 소요 시간 (분)
     time_limit_minutes: Mapped[int | None] = mapped_column(Integer)  # 제한 시간 (분, 모의시험)
@@ -263,10 +265,9 @@ class ArtworkPhoto(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKeyConstraint(
             ["stage_id", "artwork_id"], ["artwork_stages.id", "artwork_stages.artwork_id"]
         ),
-        # 수정 사진은 대표가 될 수 없고, 단계 사진은 피드백에 연결하지 않는다
-        CheckConstraint(
-            "kind = 'STAGE' OR NOT is_representative", name="revision_not_representative"
-        ),
+        # v0.9.8: 피드백 기준 이미지·레이블의 (photo_id, artwork_id) 복합 FK 대상
+        UniqueConstraint("id", "artwork_id"),
+        # 단계 사진은 피드백에 연결하지 않는다 (v0.9.8부터 수정 사진도 일반 사진과 같게 대표 가능)
         CheckConstraint(
             "feedback_note_id IS NULL OR feedback_recording_id IS NULL", name="one_feedback_ref"
         ),

@@ -38,6 +38,7 @@ const API_MESSAGES = {
   RECORDING_LIMIT_REACHED: '작품당 녹음은 20개까지 올릴 수 있어요.',
   // AI 첨삭 (docs/frontend-integration-v0.6.md §7)
   AI_CONSENT_REQUIRED: 'AI 정리 동의가 필요해요.',
+  DATASET_CONSENT_UNAVAILABLE: '만 14세 미만은 아직 학습 활용 동의를 할 수 없어요.',
   TRANSCRIPT_NOT_READY: '녹음을 글로 바꾸는 중이에요. 끝난 뒤 다시 시도해 주세요.',
   JOB_NOT_RETRYABLE: '지금은 다시 시도할 수 없어요. 화면을 새로고침해 주세요.',
   FEEDBACK_ALREADY_APPROVED: '이미 확정된 정리예요. 확정을 취소한 뒤 수정해 주세요.',

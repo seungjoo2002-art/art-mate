@@ -22,11 +22,15 @@ from app.models.enums import (
     TranscriptionStatus,
 )
 from app.schemas.fields import InputModel, PatchModel, Title
+from app.schemas.image_refs import ImageRefsRead
 from app.schemas.students import StudentRef
 
 ArtworkDescription = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
 FileName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
 Topic = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+ExamMaterials = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
+]
 WorkMethod = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 Minutes = Annotated[int, Field(ge=1, le=MAX_WORK_MINUTES)]
 StageName = Annotated[
@@ -95,6 +99,9 @@ class ArtworkCreate(InputModel):
     )
     # v0.9 F-2
     topic: Topic | None = Field(default=None, description="실기 주제 (시험 제시어 등)")
+    exam_materials: ExamMaterials | None = Field(
+        default=None, description="v0.9.8 시험 제시물 (예: 유리컵, 사과 2개, 흰 천)"
+    )
     work_method: WorkMethod | None = Field(default=None, description="작업 방식 (재료·기법)")
     actual_minutes: Minutes | None = Field(
         default=None, description="실제 소요 시간(분, 1~1440). 타이머를 쓰면 종료 시 자동 기록"
@@ -125,6 +132,7 @@ class ArtworkUpdate(PatchModel):
     practical_type: PracticalType | None = Field(default=None, description="null이면 미분류")
     work_category: ArtworkWorkCategory | None = Field(default=None, description="null이면 미분류")
     topic: Topic | None = None
+    exam_materials: ExamMaterials | None = Field(default=None, description="v0.9.8 시험 제시물")
     work_method: WorkMethod | None = None
     actual_minutes: Minutes | None = Field(
         default=None, description="직접 입력(time_source=MANUAL). null이면 삭제"
@@ -172,6 +180,7 @@ class ArtworkRead(BaseModel):
     cover_photo_id: uuid.UUID | None = Field(description="대표 사진 (가장 늦은 단계의 대표 사진)")
     # v0.9 F-2
     topic: str | None = None
+    exam_materials: str | None = None
     work_method: str | None = None
     actual_minutes: int | None = Field(default=None, description="실제 소요 시간 (분)")
     time_limit_minutes: int | None = Field(default=None, description="제한 시간 (분)")
@@ -370,12 +379,30 @@ class StageFeedbackEntry(BaseModel):
     transcription_status: TranscriptionStatus | None = Field(description="녹음 STT 상태")
     ai_feedback_id: uuid.UUID | None = Field(description="현재 AI 요약 (DRAFT/IN_REVIEW/APPROVED)")
     ai_feedback_status: FeedbackStatus | None
-    revisions: list[PhotoRead] = Field(description="이 피드백을 반영한 수정 사진 (올린 순)")
+    revisions: list[PhotoRead] = Field(
+        description="[호환] 이 피드백 뒤에 올린 사진으로 기록된 예전 수정 사진 (올린 순)"
+    )
     revision_count: int
+    image_refs: ImageRefsRead = Field(
+        default_factory=ImageRefsRead, description="v0.9.8 이 피드백의 기준 이미지"
+    )
+
+
+class TimelineItem(BaseModel):
+    """단계 타임라인 항목 (v0.9.8). 사진과 피드백을 올린 시각 순으로 섞는다."""
+
+    type: Literal["PHOTO", "FEEDBACK"]
+    at: dt.datetime
+    photo: PhotoRead | None = None
+    feedback: StageFeedbackEntry | None = None
 
 
 class StageHistoryEntry(BaseModel):
     stage: ArtworkStageRead
+    timeline: list[TimelineItem] = Field(
+        default_factory=list,
+        description="v0.9.8 이 단계의 사진(종류 무관)과 단계 피드백을 시각 순으로",
+    )
     photos: list[PhotoRead] = Field(description="단계 사진 (피드백 전·일반 기록)")
     feedback: list[StageFeedbackEntry] = Field(description="이 단계의 피드백 (오래된 순)")
     unlinked_revisions: list[PhotoRead] = Field(

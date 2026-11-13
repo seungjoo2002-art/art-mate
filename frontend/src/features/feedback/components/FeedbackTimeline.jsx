@@ -16,19 +16,20 @@ import styles from './FeedbackTimeline.module.css'
 const byTime = (a, b) => Date.parse(a.time) - Date.parse(b.time)
 
 /**
- * 작품 상세의 단계별 기록 (v0.9.7)
- * 단계마다 [단계 사진(section.node) → 그 단계의 피드백(녹음·글 첨삭) → 피드백별 수정 사진],
+ * 작품 상세의 단계별 타임라인 (v0.9.7, v0.9.8)
+ * 단계마다 [단계 머리(section.node) → 그 단계의 사진(section.items)과 피드백(녹음·글 첨삭)을 시각 순으로],
  * 맨 아래에 단계를 정하지 않은 '작품 전체 피드백'.
  * sections: [{ key, stageId, title, node, items? }] — stageId가 없으면(예전 응답) 모든 피드백이 전체 피드백으로
  *   items: 그 단계의 추가 사진 등 [{ key, time, node }] → 그 단계 피드백과 함께 올린 시각 순으로 섞음
- * renderRevisions({ type, id }, stageId): 피드백 아래 수정 사진 영역 (작품 기능에서 주입)
+ * renderFeedbackExtras({ type, id, image_refs }, stageId, reload): 피드백 아래 영역
+ *   (작품 기능에서 주입: 피드백 기준 이미지). reload는 피드백 목록을 다시 불러옴
  * extraItems: 단계를 알 수 없는 항목 (예전 응답의 추가 사진) → 전체 피드백과 함께 시간순
  * actions: 맨 아래 (작품 쪽에서 넘긴 사진 추가 등, VER.2)
  */
 export default function FeedbackTimeline({
   artworkId,
   sections,
-  renderRevisions,
+  renderFeedbackExtras,
   extraItems = [],
   actions = null,
 }) {
@@ -71,7 +72,7 @@ export default function FeedbackTimeline({
     key: recording.id,
     stageId: stageOf(recording),
     time: recording.recorded_at ?? recording.uploaded_at ?? recording.created_at,
-    feedback: { type: 'RECORDING', id: recording.id },
+    feedback: { type: 'RECORDING', id: recording.id, image_refs: recording.image_refs },
     node: (
       <div className={styles.recording}>
         <span className={styles.label}>
@@ -117,14 +118,19 @@ export default function FeedbackTimeline({
     key: note.id,
     stageId: stageOf(note),
     time: note.created_at,
-    feedback: { type: 'NOTE', id: note.id },
+    feedback: { type: 'NOTE', id: note.id, image_refs: note.image_refs },
     node: <NoteCard note={note} options={options} onChanged={reloadNotes} />,
   }))
 
   const all = [...recordingItems, ...noteItems]
   const feedbackOf = (stageId) => all.filter((item) => item.stageId === stageId).sort(byTime)
 
-  // 피드백과 (작품 쪽에서 넘긴) 추가 사진을 올린 시각 순으로. 피드백 아래에는 그 피드백의 수정 사진
+  const reloadAll = () => {
+    reload()
+    reloadNotes()
+  }
+
+  // 피드백과 (작품 쪽에서 넘긴) 사진을 올린 시각 순으로. 피드백 아래에는 그 피드백의 기준 사진
   const feedbackList = (items, stageId) =>
     items.length > 0 && (
       <ol className={styles.timeline}>
@@ -133,7 +139,7 @@ export default function FeedbackTimeline({
             {item.time && <span className={styles.time}>{formatUploadedAt(item.time)}</span>}
             <div className={styles.feedback}>
               {item.node}
-              {item.feedback && renderRevisions?.(item.feedback, stageId)}
+              {item.feedback && renderFeedbackExtras?.(item.feedback, stageId, reloadAll)}
             </div>
           </li>
         ))}

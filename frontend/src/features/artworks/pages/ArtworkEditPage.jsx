@@ -46,6 +46,7 @@ function ArtworkEditForm({ artwork, stagePlan }) {
     practical_type: artwork.practical_type ?? '',
     work_category: artwork.work_category ?? '',
     topic: artwork.topic ?? '',
+    exam_materials: artwork.exam_materials ?? '',
     work_method: artwork.work_method ?? '',
     actual_minutes: artwork.actual_minutes ?? '',
     time_limit_minutes: artwork.time_limit_minutes ?? '',
@@ -91,6 +92,7 @@ function ArtworkEditForm({ artwork, stagePlan }) {
         practical_type: form.practical_type || null,
         work_category: form.work_category || null,
         topic: form.topic.trim() || null,
+        exam_materials: form.exam_materials.trim() || null,
         work_method: form.work_method.trim() || null,
         actual_minutes: minutes[0],
         time_limit_minutes: minutes[1],
@@ -131,6 +133,13 @@ function ArtworkEditForm({ artwork, stagePlan }) {
           placeholder="예: 유리컵과 운동화"
           value={form.topic}
           onChange={set('topic')}
+        />
+        <Input
+          label="제시물 (선택)"
+          maxLength={500}
+          placeholder="예: 유리컵, 사과 2개, 흰 천"
+          value={form.exam_materials}
+          onChange={set('exam_materials')}
         />
         <Input
           label="작업 방식 (선택)"

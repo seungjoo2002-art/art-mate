@@ -44,6 +44,7 @@ from app.models.membership import AcademyMembership
 from app.models.profile import Profile
 from app.models.recording import FeedbackRecording, RecordingConsent
 from app.schemas.artworks import UploadTarget
+from app.schemas.image_refs import ImageRefsRead, ImageRefsUpdate
 from app.schemas.recordings import (
     ConsentStatus,
     RecordingConsentCreate,
@@ -62,6 +63,13 @@ from app.services.audio import (
     inspect_audio,
     normalize_content_type,
     storage_extension,
+)
+from app.services.feedback_image_refs import (
+    initial_refs,
+    refs_by_feedback,
+    refs_for,
+    refs_read,
+    replace_refs,
 )
 from app.services.retention import expire_recording_audio
 
@@ -83,7 +91,10 @@ def consent_read(consent: RecordingConsent) -> RecordingConsentRead:
 
 
 def recording_read(
-    recording: FeedbackRecording, url: str | None = None, expires: datetime | None = None
+    recording: FeedbackRecording,
+    url: str | None = None,
+    expires: datetime | None = None,
+    refs: ImageRefsRead | None = None,
 ) -> RecordingRead:
     return RecordingRead(
         id=recording.id,
@@ -106,6 +117,7 @@ def recording_read(
         transcription_status=recording.transcription_status,
         url=url,
         url_expires_at=expires if url else None,
+        image_refs=refs or ImageRefsRead(status=recording.image_ref_status),
     )
 
 
@@ -219,6 +231,26 @@ class RecordingService:
         )
         return list((await self.session.execute(stmt)).scalars())
 
+    async def _read(self, recording: FeedbackRecording) -> RecordingRead:
+        return recording_read(recording, refs=await refs_for(self.session, recording))
+
+    async def set_image_refs(
+        self,
+        owner: Profile,
+        artwork_id: uuid.UUID,
+        recording_id: uuid.UUID,
+        data: ImageRefsUpdate,
+    ) -> RecordingRead:
+        """기준 이미지 확인·변경 (v0.9.8). 전사·AI 요약은 이 연결을 그대로 따른다."""
+        artwork = await self.artworks.owned(owner, artwork_id, for_update=True)
+        recording = await self._recording(artwork.id, recording_id, for_update=True)
+        await replace_refs(
+            self.session, artwork, recording, data.photo_ids, confirmed=data.confirmed, actor=owner
+        )
+        await self.session.commit()
+        await self.session.refresh(recording)
+        return await self._read(recording)
+
     async def _reads(
         self, recordings: list[FeedbackRecording], token: str, include_urls: bool
     ) -> list[RecordingRead]:
@@ -227,7 +259,11 @@ class RecordingService:
         playable = [r for r in recordings if r.audio_deleted_at is None]
         if include_urls and playable:
             urls = await self._sign([r.storage_path for r in playable], token)
-        return [recording_read(r, urls.get(r.storage_path), expires) for r in recordings]
+        refs = await refs_by_feedback(self.session, recording_ids=[r.id for r in recordings])
+        return [
+            recording_read(r, urls.get(r.storage_path), expires, refs_read(r, refs.get(r.id, [])))
+            for r in recordings
+        ]
 
     async def _sign(self, paths: list[str], token: str) -> dict[str, str]:
         try:
@@ -297,6 +333,16 @@ class RecordingService:
             upload_expires_at=now + timedelta(seconds=settings.recording_upload_ttl_seconds),
         )
         self.session.add(recording)
+        await self.session.flush()
+        # v0.9.8 기준 이미지: 녹음을 시작한 시점에 고정 (이후 사진이 추가돼도 바뀌지 않음)
+        await initial_refs(
+            self.session,
+            artwork,
+            recording,
+            data.reference_photo_ids,
+            confirmed=data.reference_confirmed,
+            actor=owner,
+        )
         await self.session.commit()  # Storage 정책이 녹음 행을 확인하므로 URL 발급 전에 커밋
         try:
             signed = await storage.create_upload_url(path, access_token=token)
@@ -307,7 +353,7 @@ class RecordingService:
         await self.session.refresh(recording)
         await self.cleanup_storage(owner, token)
         return RecordingUploadTicket(
-            recording=recording_read(recording),
+            recording=await self._read(recording),
             upload=UploadTarget(
                 bucket=storage.bucket,
                 path=path,
@@ -348,7 +394,7 @@ class RecordingService:
         artwork = await self.artworks.owned(owner, artwork_id, for_update=True)
         recording = await self._recording(artwork.id, recording_id, for_update=True)
         if recording.status == RecordingStatus.ACTIVE:
-            return recording_read(recording)  # 재시도·중복 호출 (멱등)
+            return await self._read(recording)  # 재시도·중복 호출 (멱등)
         if recording.upload_expires_at <= clock.utc_now():
             await self._discard(owner, recording, token)
             raise ConflictError(
@@ -411,7 +457,7 @@ class RecordingService:
             recording.duration_ms = info.duration_ms  # WAV: 서버 계산값으로 보정
         await self.session.commit()
         await self.session.refresh(recording)
-        return recording_read(recording)
+        return await self._read(recording)
 
     async def list_mine(
         self, owner: Profile, artwork_id: uuid.UUID, token: str, include_urls: bool
@@ -427,7 +473,7 @@ class RecordingService:
         self, owner: Profile, artwork_id: uuid.UUID, recording_id: uuid.UUID
     ) -> RecordingRead:
         artwork = await self.artworks.owned(owner, artwork_id)
-        return recording_read(await self._recording(artwork.id, recording_id))
+        return await self._read(await self._recording(artwork.id, recording_id))
 
     async def set_stage(
         self,
@@ -447,7 +493,7 @@ class RecordingService:
         recording.stage_id = stage_id
         await self.session.commit()
         await self.session.refresh(recording)
-        return recording_read(recording)
+        return await self._read(recording)
 
     async def url(self, artwork_id: uuid.UUID, recording_id: uuid.UUID, token: str) -> RecordingUrl:
         recording = await self._recording(artwork_id, recording_id)
@@ -527,7 +573,7 @@ class RecordingService:
         recording = await self._recording(artwork.id, recording_id)
         if recording.status != RecordingStatus.ACTIVE:
             raise NotFoundError("Recording not found")
-        return recording_read(recording)
+        return await self._read(recording)
 
     async def staff_url(
         self, actor: AcademyMembership, artwork_id: uuid.UUID, recording_id: uuid.UUID, token: str

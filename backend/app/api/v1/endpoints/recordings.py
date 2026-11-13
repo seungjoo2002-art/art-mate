@@ -18,6 +18,7 @@ from app.api.responses import AUTH_ERRORS, error_responses
 from app.core.security import CurrentUser
 from app.models.enums import UserType
 from app.models.profile import Profile
+from app.schemas.image_refs import ImageRefsUpdate
 from app.schemas.recordings import (
     ConsentStatus,
     RecordingConsentCreate,
@@ -176,6 +177,28 @@ async def update_recording_stage(
     storage: AudioStorage,
 ) -> RecordingRead:
     return await _service(session, settings, storage).set_stage(
+        owner, artwork_id, recording_id, data
+    )
+
+
+@router.put(
+    "/{recording_id}/image-refs",
+    summary="녹음 피드백의 기준 이미지 확인·변경",
+    description=(
+        "이 피드백을 받을 때 본 작품 사진 (v0.9.8). 확인(confirmed)해야 학습 데이터 조건을 갖춘다."
+    ),
+    responses=WRITE_ERRORS,
+)
+async def set_recording_image_refs(
+    artwork_id: uuid.UUID,
+    recording_id: uuid.UUID,
+    data: ImageRefsUpdate,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+    storage: AudioStorage,
+) -> RecordingRead:
+    return await _service(session, settings, storage).set_image_refs(
         owner, artwork_id, recording_id, data
     )
 

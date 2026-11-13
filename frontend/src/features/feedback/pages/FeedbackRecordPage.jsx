@@ -12,7 +12,9 @@ import { ACCEPT } from '../audioFile'
 import { judgeSignal } from '../audioSignal'
 import BrowserSttStatus from '../components/BrowserSttStatus'
 import ConsentForm from '../components/ConsentForm'
+import ReferencePicker from '../components/ReferencePicker'
 import StagePicker from '../components/StagePicker'
+import { EMPTY_REFS, referenceBody } from '../imageRefs'
 import { getPreference, resolvePlan, setPreference } from '../stt/browserStt'
 import { startDeviceJob } from '../stt/deviceJobs'
 import { useModelPrewarm } from '../stt/useBrowserStt'
@@ -77,6 +79,8 @@ function Recorder({ artworkId }) {
   // 작품 화면의 단계에서 들어오면 ?stage=단계 id (v0.9.7). 비우면 작품 전체 피드백
   const [params] = useSearchParams()
   const [stageId, setStageId] = useState(params.get('stage') ?? '')
+  // v0.9.8 이 피드백을 받을 때 본 작품 사진
+  const [refs, setRefs] = useState(EMPTY_REFS)
   const { status, elapsedMs, result, error, silentInput, start, stop, reset, loadFile } =
     useAudioRecorder()
   const prewarm = useModelPrewarm()
@@ -112,7 +116,11 @@ function Recorder({ artworkId }) {
     setUploadError('')
     let saved
     try {
-      saved = await uploadRecording(artworkId, { ...result, stageId: stageId || undefined })
+      saved = await uploadRecording(artworkId, {
+        ...result,
+        stageId: stageId || undefined,
+        references: referenceBody(refs),
+      })
     } catch (err) {
       // 녹음 파일은 그대로 두고 다시 저장할 수 있게 함
       setUploadError(toErrorMessage(err))
@@ -207,6 +215,12 @@ function Recorder({ artworkId }) {
             artworkId={artworkId}
           />
           <StagePicker artworkId={artworkId} value={stageId} onChange={setStageId} />
+          <ReferencePicker
+            artworkId={artworkId}
+            stageId={stageId}
+            value={refs}
+            onChange={setRefs}
+          />
           {uploadError && <p className={styles.error}>{uploadError}</p>}
           {signal !== 'silent' && (
             <Button onClick={() => handleSave({ withAi: true })} disabled={uploading}>

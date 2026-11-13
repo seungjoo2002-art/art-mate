@@ -167,6 +167,8 @@ export default function FeedbackReviewPage() {
               <Badge>
                 {feedback.stage_name ? `${feedback.stage_name} 단계 피드백` : '작품 전체 피드백'}
               </Badge>
+              {/* v0.9.8 원본 피드백의 기준 사진 (전사·요약도 같은 연결) */}
+              <Badge>{refsLabel(feedback.image_refs)}</Badge>
             </div>
 
             <section className={styles.section}>
@@ -277,4 +279,12 @@ export default function FeedbackReviewPage() {
       </main>
     </>
   )
+}
+
+/** 기준 사진 상태 한 줄 (사진은 작품 화면에서 확인·변경) */
+function refsLabel(refs) {
+  const count = refs?.photos?.length ?? 0
+  if (refs?.status === 'CONFIRMED') return `기준 사진 ${count}장 · 확인됨`
+  if (refs?.status === 'SUGGESTED') return `기준 사진 ${count}장 · 확인 필요`
+  return '기준 사진 없음'
 }

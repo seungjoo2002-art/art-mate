@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../app/providers/AuthContext'
 import { Button, Card, PageIntro } from '../../components/ui'
 import { listTargetUniversities } from '../../features/auth/api'
+import DatasetConsentCard from '../../features/dataset/DatasetConsentCard'
 import { getAiConsent, revokeAiConsent } from '../../features/feedback/aiApi'
 import { getConsent, revokeConsent } from '../../features/feedback/api'
 import NotificationSettings from '../../features/notifications/components/NotificationSettings'
@@ -95,6 +96,11 @@ export default function MyPage() {
             confirmMessage={AI_REVOKE_MESSAGE}
           />
         </Card>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.heading}>AI 첨삭 학습 데이터 (선택)</h2>
+        <DatasetConsentCard />
       </section>
 
       <section className={styles.section}>

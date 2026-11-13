@@ -107,6 +107,7 @@ from app.schemas.ai_feedback import (
     TranscriptRead,
 )
 from app.schemas.common import PaginationParams
+from app.schemas.image_refs import ImageRefsRead
 from app.schemas.students import student_ref
 from app.services import ai_consent_policy as consent_policy
 from app.services.access import managed_student_ids
@@ -117,6 +118,7 @@ from app.services.ai_cleanup import (
 )
 from app.services.ai_limits import check_summary_quota, log_stt_disabled, log_summary_disabled
 from app.services.artworks import ArtworkService
+from app.services.feedback_image_refs import refs_by_feedback, refs_read
 
 KIND_ORDER = (
     FeedbackItemKind.STRENGTH,
@@ -1025,26 +1027,35 @@ class AiFeedbackService:
     async def _stage_refs(
         self, summaries: list[FeedbackSummary]
     ) -> dict[uuid.UUID, dict[str, Any]]:
-        """요약 id → 원본 피드백(녹음·글)의 단계 id·이름 (v0.9.7)."""
+        """요약 id → 원본 피드백(녹음·글)의 단계 id·이름 (v0.9.7), 기준 이미지 (v0.9.8)."""
         rec_ids = [s.recording_id for s in summaries if s.recording_id]
         note_ids = [s.note_id for s in summaries if s.note_id]
         stage_of: dict[uuid.UUID, tuple[uuid.UUID, str]] = {}
+        sources: dict[uuid.UUID, FeedbackRecording | FeedbackNote] = {}
         for model, ids in ((FeedbackRecording, rec_ids), (FeedbackNote, note_ids)):
             if not ids:
                 continue
             rows = await self.session.execute(
-                select(model.id, ArtworkStageDef.id, ArtworkStageDef.name)
-                .join(ArtworkStageDef, ArtworkStageDef.id == model.stage_id)
+                select(model, ArtworkStageDef.id, ArtworkStageDef.name)
+                .outerjoin(ArtworkStageDef, ArtworkStageDef.id == model.stage_id)
                 .where(model.id.in_(ids))
             )
-            for source_id, stage_id, name in rows:
-                stage_of[source_id] = (stage_id, name)
+            for source, stage_id, name in rows:
+                sources[source.id] = source
+                if stage_id is not None:
+                    stage_of[source.id] = (stage_id, name)
+        refs = await refs_by_feedback(self.session, recording_ids=rec_ids, note_ids=note_ids)
         out: dict[uuid.UUID, dict[str, Any]] = {}
         for s in summaries:
-            found = stage_of.get(s.recording_id or s.note_id)  # type: ignore[arg-type]
+            key = s.recording_id or s.note_id
+            found = stage_of.get(key)  # type: ignore[arg-type]
+            source = sources.get(key)  # type: ignore[arg-type]
             out[s.id] = {
                 "stage_id": found[0] if found else None,
                 "stage_name": found[1] if found else None,
+                "image_refs": refs_read(source, refs.get(source.id, []))
+                if source is not None
+                else ImageRefsRead(),
             }
         return out
 

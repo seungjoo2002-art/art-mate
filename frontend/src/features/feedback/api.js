@@ -25,7 +25,7 @@ export const getRecordingUrl = (artworkId, recordingId) =>
 /** 사진 업로드와 같은 절차: 업로드 요청 → Storage 업로드 → 완료 처리 (v0.5 문서 §2.1) */
 export async function uploadRecording(
   artworkId,
-  { blob, mimeType, durationMs, recordedAt, fileName, stageId },
+  { blob, mimeType, durationMs, recordedAt, fileName, stageId, references = {} },
 ) {
   const ticket = await api(`/artworks/${artworkId}/recordings`, {
     method: 'POST',
@@ -36,6 +36,7 @@ export async function uploadRecording(
       recorded_at: recordedAt, // 저장한 시각이 아니라 녹음을 시작한 시각
       ...(fileName ? { file_name: fileName } : {}), // 파일 업로드면 확장자 검증용 (서버에 저장 안 됨)
       ...(stageId ? { stage_id: stageId } : {}), // v0.9.7 단계 피드백 (없으면 작품 전체)
+      ...references, // v0.9.8 기준 이미지 (reference_photo_ids, reference_confirmed)
       speaker_notice_confirmed: true, // 녹음 동의 화면에서 '선생님께 알리기'에 동의한 사용자만 녹음 가능
     },
   })
@@ -59,3 +60,7 @@ export const setRecordingStage = (artworkId, recordingId, stageId) =>
     method: 'PATCH',
     body: { stage_id: stageId },
   })
+
+/** 작품 사진 (피드백 기준 이미지 고르기용, 숨긴 단계 제외, 미리보기 URL 포함) */
+export const listArtworkPhotos = (artworkId) =>
+  api(`/artworks/${artworkId}/photos?include_urls=true`)
