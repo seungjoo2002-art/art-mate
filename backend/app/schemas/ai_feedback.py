@@ -24,6 +24,7 @@ from app.models.enums import (
     WeaknessCategory,
 )
 from app.schemas.fields import InputModel
+from app.schemas.image_refs import ImageRefsRead
 from app.schemas.students import StudentRef
 
 # ----------------------------------------------------------------------------- consent
@@ -263,6 +264,10 @@ class FeedbackRead(BaseModel):
         default=None, description="v0.9.7 원본 피드백(녹음·글)의 단계 (null = 작품 전체)"
     )
     stage_name: str | None = Field(default=None, description="v0.9.7 단계 이름")
+    image_refs: ImageRefsRead = Field(
+        default_factory=ImageRefsRead,
+        description="v0.9.8 원본 피드백(녹음·글)의 기준 이미지 (전사·요약도 같은 연결)",
+    )
     status: FeedbackStatus
     review_mode: ReviewMode
     version: int = Field(description="수정·승인 요청에 그대로 보낸다 (동시 수정 감지)")
@@ -386,6 +391,15 @@ class FeedbackNoteCreate(InputModel):
     stage_id: uuid.UUID | None = Field(
         default=None, description="v0.9.7 단계 피드백이면 작품 단계 id. 생략하면 작품 전체 피드백"
     )
+    # v0.9.8 피드백 기준 이미지
+    reference_photo_ids: list[uuid.UUID] | None = Field(
+        default=None,
+        max_length=10,
+        description="이 첨삭을 받을 때 본 작품 사진. 생략하면 지금 최신 사진을 제안(SUGGESTED)으로",
+    )
+    reference_confirmed: bool = Field(
+        default=False, description="reference_photo_ids를 확인함 → CONFIRMED (학습 데이터 조건)"
+    )
     request_summary: bool = Field(
         default=False,
         description="저장 후 AI 요약·분류를 바로 요청 (AI 전송 동의 필요, 없으면 저장만 하고 "
@@ -422,6 +436,9 @@ class FeedbackNoteRead(BaseModel):
     artwork_id: uuid.UUID
     stage_id: uuid.UUID | None = Field(
         default=None, description="v0.9.7 연결된 작품 단계 (null = 작품 전체 피드백)"
+    )
+    image_refs: ImageRefsRead = Field(
+        default_factory=ImageRefsRead, description="v0.9.8 피드백 기준 이미지"
     )
     source: FeedbackSource
     body: str = Field(description="원문 (AI 결과와 별도로 보존)")

@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import ColumnElement, and_, exists, func, select, update
+from sqlalchemy import ColumnElement, exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import timezone as clock
@@ -280,5 +280,5 @@ def in_active_stage() -> ColumnElement[bool]:
 
 
 def visible_stage_photo() -> ColumnElement[bool]:
-    """숨기지 않은 단계의 단계 사진 (수정 사진 제외)."""
-    return and_(ArtworkPhoto.kind == PhotoKind.STAGE, in_active_stage())
+    """숨기지 않은 단계의 사진 (v0.9.8부터 피드백 뒤 사진도 일반 사진과 같음)."""
+    return in_active_stage()

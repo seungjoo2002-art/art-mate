@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     artworks,
     classes,
     community,
+    dataset,
     growth,
     health,
     lesson_topics,
@@ -31,6 +32,8 @@ from app.api.v1.endpoints import (
 api_v1_router = APIRouter()
 api_v1_router.include_router(academies.router)
 api_v1_router.include_router(admin.router)
+api_v1_router.include_router(dataset.consents)
+api_v1_router.include_router(dataset.admin)
 api_v1_router.include_router(ai_feedback.consents)
 api_v1_router.include_router(ai_feedback.guardian_consents)
 api_v1_router.include_router(ai_feedback.owner_processing)

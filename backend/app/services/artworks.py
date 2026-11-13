@@ -151,7 +151,8 @@ def _stage_rank(stage: ArtworkStage) -> int:
 
 
 def summarize(artwork: Artwork, photos: list[ArtworkPhoto]) -> ArtworkProgressRead:
-    active = [p for p in photos if p.status == PhotoStatus.ACTIVE and p.kind == PhotoKind.STAGE]
+    # v0.9.8: 피드백 뒤에 올린 사진(예전 REVISION)도 일반 단계 사진과 같게 센다
+    active = [p for p in photos if p.status == PhotoStatus.ACTIVE]
     stages = []
     for stage in ARTWORK_STAGE_ORDER:
         items = sorted((p for p in active if p.stage == stage), key=lambda p: (p.uploaded_at, p.id))
@@ -243,6 +244,7 @@ def artwork_read(  # type: ignore[type-arg]
         "recording_count": recording_count,
         "cover_photo_id": cover,
         "topic": artwork.topic,
+        "exam_materials": artwork.exam_materials,
         "work_method": artwork.work_method,
         "actual_minutes": artwork.actual_minutes,
         "time_limit_minutes": artwork.time_limit_minutes,
@@ -363,7 +365,6 @@ class ArtworkService:
             photos,
             key=lambda p: (
                 rank.get(p.stage_id, 99) if rank else _stage_rank(p.stage),
-                p.kind != PhotoKind.STAGE,
                 not p.is_representative,
                 p.uploaded_at,
             ),
@@ -483,6 +484,7 @@ class ArtworkService:
             work_category=data.work_category,
             work_status=ArtworkWorkStatus.IN_PROGRESS,
             topic=data.topic,
+            exam_materials=data.exam_materials,
             work_method=data.work_method,
             actual_minutes=data.actual_minutes,
             time_limit_minutes=data.time_limit_minutes,
@@ -556,6 +558,7 @@ class ArtworkService:
             "practical_type",
             "work_category",
             "topic",
+            "exam_materials",
             "work_method",
             "time_limit_minutes",
         ):
@@ -582,7 +585,6 @@ class ArtworkService:
                     .where(
                         ArtworkPhoto.artwork_id == artwork.id,
                         ArtworkPhoto.stage == ArtworkStage.FINAL,
-                        ArtworkPhoto.kind == PhotoKind.STAGE,
                         ArtworkPhoto.status == PhotoStatus.ACTIVE,
                         ArtworkStageDef.archived_at.is_(None),
                     )
@@ -991,9 +993,7 @@ class ArtworkService:
         photo.width = info.width
         photo.height = info.height
         photo.sha256 = info.sha256
-        photo.is_representative = photo.kind == PhotoKind.STAGE and (
-            inherit or not has_representative
-        )
+        photo.is_representative = inherit or not has_representative
         await self.session.commit()
         await self.session.refresh(photo)
         if replaced is not None:
@@ -1012,8 +1012,6 @@ class ArtworkService:
             raise UnprocessableError(
                 "Choose another photo as representative instead of unsetting it"
             )
-        if photo.kind != PhotoKind.STAGE:
-            raise UnprocessableError("A revision photo cannot be the stage representative")
         if not photo.is_representative:
             await self.session.execute(
                 update(ArtworkPhoto)
@@ -1049,7 +1047,6 @@ class ArtworkService:
                     select(ArtworkPhoto)
                     .where(
                         ArtworkPhoto.stage_id == photo.stage_id,
-                        ArtworkPhoto.kind == PhotoKind.STAGE,
                         ArtworkPhoto.status == PhotoStatus.ACTIVE,
                     )
                     .order_by(ArtworkPhoto.uploaded_at, ArtworkPhoto.id)

@@ -92,7 +92,8 @@ class Settings(BaseSettings):
     artwork_allowed_content_types: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["image/jpeg", "image/png", "image/webp"]
     )
-    artwork_max_photos_per_stage: int = Field(default=10, ge=1, le=50)
+    # v0.9.8 단계 타임라인: 한 단계에 여러 장 (피드백 전후 사진 포함)
+    artwork_max_photos_per_stage: int = Field(default=30, ge=1, le=100)
     # v0.9.7 피드백 반영 수정 사진 (단계별 상한)
     artwork_max_revision_photos_per_stage: int = Field(default=20, ge=1, le=100)
     # 디컴프레션 폭탄 방지: 이미지 최대 픽셀 수
@@ -209,6 +210,14 @@ class Settings(BaseSettings):
     ai_consent_version: str = Field(
         default="2026-12-ai-v2", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
     )
+
+    # --- AI 첨삭 학습 데이터셋 (v0.9.8) --------------------------------------
+    # AI 학습 활용 동의서 버전 (AI 요약 동의와 별개). 바꾸면 다시 동의해야 학습 데이터에 포함된다
+    dataset_consent_version: str = Field(
+        default="2026-11-ds-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+    )
+    # 학습 데이터 내보내기용 가명 처리 키 (HMAC). 없으면 내보내기(샘플)는 꺼지고 통계만 볼 수 있다
+    dataset_pseudonym_key: SecretStr | None = None
 
     # --- 성장 코치 (v0.7) ----------------------------------------------------
     # 성장 리포트 설명문·AI 연습 과제 (Gemini). 통계·규칙 기반 추천은 이 설정과 무관하게 동작

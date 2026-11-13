@@ -61,6 +61,7 @@ from app.schemas.ai_feedback import (
     TranscriptRead,
 )
 from app.schemas.common import Page, PaginationQuery
+from app.schemas.image_refs import ImageRefsUpdate
 from app.services.ai_feedback import AiFeedbackService
 from app.services.feedback_notes import FeedbackNoteService
 from app.services.worker_dispatch import sweep_with_new_session
@@ -936,6 +937,24 @@ async def update_note(
     settings: AppSettings,
 ) -> FeedbackNoteRead:
     return await _notes(session, settings).update(owner, note_id, data)
+
+
+@notes.put(
+    "/{note_id}/image-refs",
+    summary="텍스트 첨삭의 기준 이미지 확인·변경",
+    description=(
+        "이 첨삭을 받을 때 본 작품 사진 (v0.9.8). 확인(confirmed)해야 학습 데이터 조건을 갖춘다."
+    ),
+    responses=WRITE,
+)
+async def set_note_image_refs(
+    note_id: uuid.UUID,
+    data: ImageRefsUpdate,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> FeedbackNoteRead:
+    return await _notes(session, settings).set_image_refs(owner, note_id, data)
 
 
 @notes.delete(

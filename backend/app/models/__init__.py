@@ -37,6 +37,7 @@ from app.models.community import (
     ReferenceRecommendation,
     SharedArtworkImage,
 )
+from app.models.dataset import DatasetConsent, FeedbackImageRef, FeedbackLabel
 from app.models.exam import (
     ExamParticipant,
     ExamSession,
@@ -81,13 +82,16 @@ __all__ = [
     "CommunityModerationLog",
     "CommunityPost",
     "CommunityReport",
+    "DatasetConsent",
     "ExamParticipant",
     "ExamSession",
     "ExamSessionStage",
     "ExamStageTarget",
     "ExamTemplate",
     "FeedbackCategory",
+    "FeedbackImageRef",
     "FeedbackItem",
+    "FeedbackLabel",
     "FeedbackNote",
     "FeedbackRecording",
     "FeedbackReviewHistory",

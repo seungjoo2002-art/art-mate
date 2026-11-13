@@ -26,9 +26,11 @@ from app.schemas.artworks import (
     PhotoRead,
     StageFeedbackEntry,
     StageHistoryEntry,
+    TimelineItem,
 )
 from app.services.artwork_stages import all_stages, ensure_stages
 from app.services.artworks import ArtworkService, stage_read
+from app.services.feedback_image_refs import refs_by_feedback, refs_read
 
 _NOTE_TITLE = 40
 
@@ -101,6 +103,12 @@ class StageHistoryService:
             if key is not None:
                 current[key] = s
 
+        refs = await refs_by_feedback(
+            self.session,
+            recording_ids=[r.id for r in recordings],
+            note_ids=[n.id for n in notes],
+        )
+
         # 수정 사진: 피드백별 / 피드백이 지워진 것은 단계별
         revisions: dict[uuid.UUID, list[PhotoRead]] = defaultdict(list)
         unlinked: dict[uuid.UUID, list[PhotoRead]] = defaultdict(list)
@@ -133,6 +141,7 @@ class StageHistoryService:
                 ai_feedback_status=summary.status if summary else None,
                 revisions=revisions.get(r.id, []),
                 revision_count=len(revisions.get(r.id, [])),
+                image_refs=refs_read(r, refs.get(r.id, [])),
             )
 
         def entry_of_note(n: FeedbackNote) -> StageFeedbackEntry:
@@ -148,6 +157,7 @@ class StageHistoryService:
                 ai_feedback_status=summary.status if summary else None,
                 revisions=revisions.get(n.id, []),
                 revision_count=len(revisions.get(n.id, [])),
+                image_refs=refs_read(n, refs.get(n.id, [])),
             )
 
         by_stage: dict[uuid.UUID | None, list[StageFeedbackEntry]] = defaultdict(list)
@@ -159,11 +169,29 @@ class StageHistoryService:
         def _when(e: StageFeedbackEntry) -> str:
             return e.feedback_at.isoformat()
 
+        # v0.9.8 단계 타임라인: 사진(종류 무관)과 단계 피드백을 시각 순으로
+        photos_in: dict[uuid.UUID, list[PhotoRead]] = defaultdict(list)
+        for p in photos:
+            photos_in[p.stage_id].append(read_of[p.id])
+        created_of = {r.id: r.created_at for r in recordings} | {n.id: n.created_at for n in notes}
+
+        def timeline(stage_id: uuid.UUID) -> list[TimelineItem]:
+            items = [
+                TimelineItem(type="PHOTO", at=p.uploaded_at or p.created_at, photo=p)
+                for p in photos_in.get(stage_id, [])
+            ]
+            for entry in by_stage.get(stage_id, []):
+                # 녹음은 녹음 시각, 글 첨삭은 작성 시각 (받은 날은 날짜뿐이라 순서에 쓰지 않음)
+                at = entry.feedback_at if entry.type == "RECORDING" else created_of[entry.id]
+                items.append(TimelineItem(type="FEEDBACK", at=at, feedback=entry))
+            return sorted(items, key=lambda item: item.at)
+
         return ArtworkStageHistory(
             artwork_id=artwork.id,
             stages=[
                 StageHistoryEntry(
                     stage=stage_read(stage),
+                    timeline=timeline(stage.id),
                     photos=stage_photos.get(stage.id, []),
                     feedback=sorted(by_stage.get(stage.id, []), key=_when),
                     unlinked_revisions=unlinked.get(stage.id, []),
