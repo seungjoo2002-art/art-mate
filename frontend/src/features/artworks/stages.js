@@ -9,7 +9,8 @@ export function stagesWithPhotos(artwork) {
   return STAGES.map((stage) => {
     const summary = artwork.stages.find((s) => s.stage === stage.key)
     const photo = artwork.photos.find((p) => p.id === summary?.representative_photo_id) ?? null
-    return { ...stage, photo, uploadedAt: summary?.last_uploaded_at ?? null }
+    // 타임라인 시각은 이 사진을 올린 시각 (단계의 last_uploaded_at은 추가 사진 시각일 수 있음)
+    return { ...stage, photo, uploadedAt: photo ? (photo.uploaded_at ?? photo.created_at) : null }
   })
 }
 

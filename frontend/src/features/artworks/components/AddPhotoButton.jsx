@@ -5,7 +5,7 @@ import { STAGES } from '../stages'
 import styles from './AddPhotoButton.module.css'
 
 /**
- * 피드백 받은 뒤 고친 사진 등을 "추가"로 올림 (대표 사진은 그대로, 타임라인에 올린 시각으로 들어감)
+ * 단계 사진을 한 장 더 올림 (대표 사진은 그대로, 타임라인에 올린 시각으로 들어감)
  * 파일 고르기 → 어느 단계 사진인지 고르기 → 올리기
  */
 export default function AddPhotoButton({ defaultStage = 'SKETCH', busy = false, onUpload }) {
@@ -41,7 +41,7 @@ export default function AddPhotoButton({ defaultStage = 'SKETCH', busy = false, 
           disabled={busy}
         />
         <ImagePlus size={22} aria-hidden />
-        피드백 후 사진 추가
+        사진 추가
       </label>
     )
   }

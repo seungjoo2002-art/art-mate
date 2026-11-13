@@ -105,13 +105,16 @@ export default function ArtworkDetailPage({ renderTimeline }) {
     }
   }
 
-  // 대표가 아닌 추가 사진 (피드백 받은 뒤 고쳐서 다시 찍은 사진 등) → 올린 시각으로 타임라인에
+  // 대표가 아닌 추가 사진 → 올린 시각으로 타임라인에 (녹음·첨삭과 함께 시간순)
   const extraPhotos = artwork.photos.filter((p) => !p.is_representative && p.status === 'ACTIVE')
   // 추가 사진 기본 단계: 가장 최근에 사진을 올린 단계
   const latestStage =
-    [...stages]
-      .filter((s) => s.photo)
-      .sort((a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt))[0]?.key ?? 'SKETCH'
+    artwork.photos
+      .filter((p) => p.status === 'ACTIVE')
+      .sort(
+        (a, b) =>
+          Date.parse(b.uploaded_at ?? b.created_at) - Date.parse(a.uploaded_at ?? a.created_at),
+      )[0]?.stage ?? 'SKETCH'
 
   async function handleAddPhoto(stageKey, file) {
     setBusyStage('extra')
