@@ -4,18 +4,22 @@ from typing import Annotated, ClassVar, Literal
 
 from pydantic import AwareDatetime, BaseModel, Field, StringConstraints, model_validator
 
-from app.models.artwork import MAX_WORK_MINUTES
+from app.models.artwork import MAX_ARTWORK_STAGES, MAX_STAGE_NAME, MAX_WORK_MINUTES
 from app.models.enums import (
     ArtworkExamStageCode,
     ArtworkProgress,
     ArtworkStage,
     ArtworkWorkCategory,
     ArtworkWorkStatus,
+    FeedbackSource,
+    FeedbackStatus,
+    PhotoKind,
     PhotoStatus,
     PracticalType,
     TimerEventType,
     TimerState,
     TimeSource,
+    TranscriptionStatus,
 )
 from app.schemas.fields import InputModel, PatchModel, Title
 from app.schemas.students import StudentRef
@@ -25,6 +29,50 @@ FileName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1,
 Topic = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 WorkMethod = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 Minutes = Annotated[int, Field(ge=1, le=MAX_WORK_MINUTES)]
+StageName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_STAGE_NAME)
+]
+
+
+class StageSpecIn(InputModel):
+    """작품 단계 1개 (v0.9.7). 배열 순서 = 단계 순서."""
+
+    id: uuid.UUID | None = Field(
+        default=None,
+        description="기존 단계 (이름·순서 변경, 숨긴 단계 복원). 새 단계면 생략",
+    )
+    name: StageName = Field(examples=["스케치"], description=f"1~{MAX_STAGE_NAME}자")
+    target_minutes: Minutes | None = Field(default=None, description="시험 모드 단계 목표 시간(분)")
+
+
+StageList = Annotated[list[StageSpecIn], Field(min_length=1, max_length=MAX_ARTWORK_STAGES)]
+
+
+class ArtworkStageRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    position: int = Field(description="0부터. 숨긴 단계는 의미 없음")
+    target_minutes: int | None
+    archived: bool = Field(description="연결된 데이터가 있어 지우지 않고 숨긴 단계")
+    legacy_stage: ArtworkStage = Field(
+        description="[호환] 위치로 정한 이전 고정 단계: 첫 SKETCH / 중간 PROGRESS / 마지막 FINAL"
+    )
+
+
+class ArtworkStagesUpdate(InputModel):
+    stages: StageList = Field(
+        description=(
+            "바꿀 단계 목록 (순서대로). 빠진 기존 단계는 데이터가 있으면 숨기고, 없으면 지운다"
+        )
+    )
+
+
+class ArtworkStagesResult(BaseModel):
+    stages: list[ArtworkStageRead] = Field(description="활성 단계 (순서대로)")
+    archived_stage_ids: list[uuid.UUID] = Field(
+        description="사진·피드백이 있어 지우지 않고 숨긴 단계 (다시 목록에 넣으면 복원)"
+    )
+    deleted_stage_ids: list[uuid.UUID] = Field(description="연결된 데이터가 없어 지운 단계")
 
 
 class ArtworkCreate(InputModel):
@@ -53,6 +101,10 @@ class ArtworkCreate(InputModel):
     )
     time_limit_minutes: Minutes | None = Field(
         default=None, description="제한 시간(분, 1~1440). 모의 실기시험이면 입력"
+    )
+    # v0.9.7 사용자 정의 단계 (생략하면 스케치 / 채색 / 완성)
+    stages: StageList | None = Field(
+        default=None, description="작품 제작 단계 (1~10개, 순서대로). 생략하면 스케치·채색·완성"
     )
     # v0.9 F-8
     recommendation_id: uuid.UUID | None = Field(
@@ -138,7 +190,17 @@ class StaffArtworkRead(ArtworkRead):
 class PhotoRead(BaseModel):
     id: uuid.UUID
     artwork_id: uuid.UUID
-    stage: ArtworkStage
+    stage: ArtworkStage = Field(description="[호환] 이전 고정 단계 (stage_id의 위치로 계산)")
+    stage_id: uuid.UUID | None = Field(default=None, description="작품 단계 (v0.9.7)")
+    kind: PhotoKind = Field(
+        default=PhotoKind.STAGE, description="STAGE 단계 사진 / REVISION 피드백 반영 수정 사진"
+    )
+    feedback_note_id: uuid.UUID | None = Field(
+        default=None, description="수정 사진이 반영한 글 첨삭"
+    )
+    feedback_recording_id: uuid.UUID | None = Field(
+        default=None, description="수정 사진이 반영한 녹음 첨삭"
+    )
     status: PhotoStatus
     content_type: str
     size_bytes: int | None
@@ -153,7 +215,10 @@ class PhotoRead(BaseModel):
 
 class ArtworkDetail(ArtworkRead):
     stages: list[StageSummary]
-    photos: list[PhotoRead]
+    photos: list[PhotoRead] = Field(description="활성 단계의 사진 (단계 사진·수정 사진)")
+    stage_plan: list[ArtworkStageRead] = Field(
+        default_factory=list, description="작품 제작 단계 (v0.9.7, 활성 단계만 순서대로)"
+    )
 
 
 class StaffArtworkDetail(ArtworkDetail):
@@ -162,7 +227,17 @@ class StaffArtworkDetail(ArtworkDetail):
 
 class UploadRequest(InputModel):
     stage: ArtworkStage | None = Field(
-        default=None, description="SKETCH / PROGRESS / FINAL. 교체(replaces_photo_id)면 생략 가능"
+        default=None,
+        description="[호환] SKETCH / PROGRESS / FINAL → 그 위치의 단계. v0.9.7부터는 stage_id 사용",
+    )
+    stage_id: uuid.UUID | None = Field(default=None, description="작품 단계 (v0.9.7, 우선)")
+    kind: PhotoKind = Field(
+        default=PhotoKind.STAGE,
+        description="STAGE 단계 사진 / REVISION 피드백 반영 수정 사진 (피드백 1개 필수)",
+    )
+    feedback_note_id: uuid.UUID | None = Field(default=None, description="REVISION: 반영한 글 첨삭")
+    feedback_recording_id: uuid.UUID | None = Field(
+        default=None, description="REVISION: 반영한 녹음 첨삭"
     )
     content_type: str = Field(examples=["image/jpeg"])
     file_size: int = Field(gt=0, description="바이트")
@@ -279,3 +354,41 @@ class ArtworkExamRead(BaseModel):
     current_stage: ArtworkExamStageCode | None
     total_target_minutes: int
     timer: TimerRead = Field(description="기존 작품 타이머 상태 (같은 값)")
+
+
+# ------------------------------------------------------------------ v0.9.7 단계 이력
+
+
+class StageFeedbackEntry(BaseModel):
+    """단계(또는 작품 전체)에 연결된 피드백 1개와 그 피드백을 반영한 수정 사진."""
+
+    type: Literal["RECORDING", "NOTE"]
+    id: uuid.UUID = Field(description="녹음 id 또는 글 첨삭 id")
+    title: str | None = Field(description="녹음 제목 / 글 첨삭 첫 줄 (40자)")
+    source: FeedbackSource | None = Field(description="글 첨삭의 출처 (녹음은 null)")
+    feedback_at: dt.datetime | dt.date = Field(description="녹음 시각(업로드) / 첨삭 받은 날")
+    transcription_status: TranscriptionStatus | None = Field(description="녹음 STT 상태")
+    ai_feedback_id: uuid.UUID | None = Field(description="현재 AI 요약 (DRAFT/IN_REVIEW/APPROVED)")
+    ai_feedback_status: FeedbackStatus | None
+    revisions: list[PhotoRead] = Field(description="이 피드백을 반영한 수정 사진 (올린 순)")
+    revision_count: int
+
+
+class StageHistoryEntry(BaseModel):
+    stage: ArtworkStageRead
+    photos: list[PhotoRead] = Field(description="단계 사진 (피드백 전·일반 기록)")
+    feedback: list[StageFeedbackEntry] = Field(description="이 단계의 피드백 (오래된 순)")
+    unlinked_revisions: list[PhotoRead] = Field(
+        description="연결된 피드백이 삭제된 수정 사진 (사진은 보존)"
+    )
+    revision_count: int = Field(description="이 단계에 올린 수정 사진 수")
+
+
+class ArtworkStageHistory(BaseModel):
+    """단계별 [사진 → 피드백 → 수정 사진] 이력. 수정이 잘 됐는지는 판단하지 않는다."""
+
+    artwork_id: uuid.UUID
+    stages: list[StageHistoryEntry] = Field(description="활성 단계 순서대로, 그 뒤 숨긴 단계")
+    overall_feedback: list[StageFeedbackEntry] = Field(
+        description="작품 전체 피드백 (단계 미지정). 수정 사진은 어느 단계에 있든 함께 표시"
+    )

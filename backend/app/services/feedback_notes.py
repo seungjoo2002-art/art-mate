@@ -34,7 +34,7 @@ from app.core.exceptions import (
     NotFoundError,
 )
 from app.models.ai_feedback import AiProcessingJob, FeedbackNote, FeedbackSummary
-from app.models.artwork import Artwork
+from app.models.artwork import Artwork, ArtworkPhoto
 from app.models.enums import (
     ACTIVE_JOB_STATUSES,
     CURRENT_FEEDBACK_STATUSES,
@@ -53,6 +53,7 @@ from app.schemas.ai_feedback import (
 from app.services.ai_feedback import AiFeedbackService, job_read, review_mode_for
 from app.services.ai_limits import check_summary_quota, log_summary_disabled
 from app.services.ai_summary import split_segments
+from app.services.artwork_stages import check_feedback_stage, check_revisions_follow
 
 MAX_NOTES_PER_ARTWORK = 50
 
@@ -121,6 +122,7 @@ class FeedbackNoteService:
         return FeedbackNoteRead(
             id=note.id,
             artwork_id=note.artwork_id,
+            stage_id=note.stage_id,
             source=note.source,
             body=note.body,
             segments=[NoteSegment(**s) for s in note.segments],
@@ -175,6 +177,7 @@ class FeedbackNoteService:
                 f"Up to {MAX_NOTES_PER_ARTWORK} text feedback notes per artwork",
                 code=ErrorCode.FEEDBACK_NOTE_LIMIT,
             )
+        stage_id = await check_feedback_stage(self.session, artwork, data.stage_id)
         segments = split_segments(data.body)
         note = FeedbackNote(
             id=uuid.uuid4(),
@@ -188,6 +191,7 @@ class FeedbackNoteService:
             version=1,
             community_comment_id=community_comment_id,
             created_by=owner.id,
+            stage_id=stage_id,
         )
         self.session.add(note)
         await self.session.commit()
@@ -228,6 +232,14 @@ class FeedbackNoteService:
             note.source = data.source
         if "feedback_date" in data.model_fields_set and data.feedback_date is not None:
             note.feedback_date = data.feedback_date
+        if "stage_id" in data.model_fields_set:
+            # 단계 연결은 원문이 아니므로 AI 요약을 무효화하지 않는다
+            stage_id = await check_feedback_stage(self.session, artwork, data.stage_id)
+            if stage_id is not None:
+                await check_revisions_follow(
+                    self.session, stage_id, ArtworkPhoto.feedback_note_id == note.id
+                )
+            note.stage_id = stage_id
         note.version += 1
         await self.session.commit()
         note, artwork = await self._note(owner, note_id)

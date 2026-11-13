@@ -36,6 +36,7 @@ from app.models.enums import (
     ArtworkStage,
     ArtworkWorkCategory,
     ArtworkWorkStatus,
+    PhotoKind,
     PhotoStatus,
     PracticalType,
     TimerEventType,
@@ -44,6 +45,9 @@ from app.models.enums import (
 
 # 작업 시간·제한 시간 상한 (분). 하루를 넘는 기록은 입력 오류로 본다
 MAX_WORK_MINUTES = 1440
+# 작품 단계 (v0.9.7) 개수·이름 길이
+MAX_ARTWORK_STAGES = 10
+MAX_STAGE_NAME = 30
 
 
 class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -188,6 +192,51 @@ class ArtworkExamStage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     ended_at: Mapped[datetime | None]
 
 
+class ArtworkStageDef(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """작품별 제작 단계 (v0.9.7). 학생이 개수·이름·순서를 정한다 (기본: 스케치·채색·완성).
+
+    - 사진·녹음·글 첨삭이 stage_id로 연결된다. 연결된 데이터가 있는 단계를 빼면 지우지 않고
+      archived_at만 기록해 숨긴다 (데이터 보존, 다시 넣으면 복원).
+    - legacy_stage: 이전 고정 3단계(SKETCH·PROGRESS·FINAL)와의 호환 값. 위치로 정한다
+      (첫 단계 SKETCH, 마지막 단계 FINAL, 나머지 PROGRESS)
+      → 진행도·작품 완료 조건 등 기존 기능 유지.
+    - target_minutes: 시험 모드의 단계 목표 시간 (선택).
+    """
+
+    __tablename__ = "artwork_stages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["artwork_id", "owner_id"], ["artworks.id", "artworks.owner_id"], ondelete="CASCADE"
+        ),
+        # 사진·녹음·글 첨삭의 (stage_id, artwork_id) 복합 FK 대상 → 다른 작품의 단계에 연결 불가
+        UniqueConstraint("id", "artwork_id"),
+        Index(
+            "uq_artwork_stages_active_position",
+            "artwork_id",
+            "position",
+            unique=True,
+            postgresql_where=text("archived_at IS NULL"),
+        ),
+        CheckConstraint("position >= 0", name="position_nonnegative"),
+        CheckConstraint(
+            f"length(btrim(name)) > 0 AND char_length(name) <= {MAX_STAGE_NAME}",
+            name="name_length",
+        ),
+        CheckConstraint(
+            f"target_minutes IS NULL OR target_minutes BETWEEN 1 AND {MAX_WORK_MINUTES}",
+            name="target_minutes_range",
+        ),
+    )
+
+    artwork_id: Mapped[uuid.UUID]
+    owner_id: Mapped[uuid.UUID]
+    position: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(String(MAX_STAGE_NAME))
+    legacy_stage: Mapped[ArtworkStage] = mapped_column(enum_column(ArtworkStage, "legacy_stage"))
+    target_minutes: Mapped[int | None] = mapped_column(Integer)
+    archived_at: Mapped[datetime | None]
+
+
 class ArtworkPhoto(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """작품 단계 사진 1장. 업로드 요청(PENDING) → 완료 검증(ACTIVE) → 삭제·교체(DELETED)."""
 
@@ -204,14 +253,28 @@ class ArtworkPhoto(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "NOT is_representative OR status = 'ACTIVE'", name="representative_is_active"
         ),
-        # 단계별 대표 사진은 최대 1장
+        # 단계별 대표 사진은 최대 1장 (v0.9.7: 사용자 정의 단계 기준)
         Index(
             "uq_artwork_photos_representative",
-            "artwork_id",
-            "stage",
+            "stage_id",
             unique=True,
             postgresql_where=text("is_representative"),
         ),
+        ForeignKeyConstraint(
+            ["stage_id", "artwork_id"], ["artwork_stages.id", "artwork_stages.artwork_id"]
+        ),
+        # 수정 사진은 대표가 될 수 없고, 단계 사진은 피드백에 연결하지 않는다
+        CheckConstraint(
+            "kind = 'STAGE' OR NOT is_representative", name="revision_not_representative"
+        ),
+        CheckConstraint(
+            "feedback_note_id IS NULL OR feedback_recording_id IS NULL", name="one_feedback_ref"
+        ),
+        CheckConstraint(
+            "kind = 'REVISION' OR (feedback_note_id IS NULL AND feedback_recording_id IS NULL)",
+            name="stage_photo_no_feedback_ref",
+        ),
+        Index("ix_artwork_photos_stage", "stage_id", "kind", "status"),
         # 같은 작품에 같은 파일(내용 해시) 중복 업로드 방지
         Index(
             "uq_artwork_photos_active_sha256",
@@ -230,7 +293,22 @@ class ArtworkPhoto(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     artwork_id: Mapped[uuid.UUID]
     owner_id: Mapped[uuid.UUID]
+    # 이전 고정 3단계 값 (호환용). v0.9.7부터 stage_id의 위치로 계산해 함께 저장한다
     stage: Mapped[ArtworkStage] = mapped_column(enum_column(ArtworkStage, "artwork_stage"))
+    # v0.9.7 사용자 정의 단계·사진 종류·연결된 피드백
+    stage_id: Mapped[uuid.UUID]
+    kind: Mapped[PhotoKind] = mapped_column(
+        enum_column(PhotoKind, "photo_kind"),
+        server_default=PhotoKind.STAGE.value,
+        default=PhotoKind.STAGE,
+    )
+    # 수정 사진이 반영한 피드백 (피드백을 지워도 사진은 남는다 → SET NULL)
+    feedback_note_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("feedback_notes.id", ondelete="SET NULL")
+    )
+    feedback_recording_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("feedback_recordings.id", ondelete="SET NULL")
+    )
     status: Mapped[PhotoStatus] = mapped_column(
         enum_column(PhotoStatus, "photo_status"), default=PhotoStatus.PENDING
     )

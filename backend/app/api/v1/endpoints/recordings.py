@@ -22,6 +22,7 @@ from app.schemas.recordings import (
     ConsentStatus,
     RecordingConsentCreate,
     RecordingRead,
+    RecordingStageUpdate,
     RecordingUploadRequest,
     RecordingUploadTicket,
     RecordingUrl,
@@ -157,6 +158,26 @@ async def get_recording(
     storage: AudioStorage,
 ) -> RecordingRead:
     return await _service(session, settings, storage).get_mine(owner, artwork_id, recording_id)
+
+
+@router.patch(
+    "/{recording_id}",
+    summary="녹음의 단계 연결 변경",
+    description="stage_id: 작품 단계 id, null이면 작품 전체 피드백 (v0.9.7)",
+    responses=WRITE_ERRORS,
+)
+async def update_recording_stage(
+    artwork_id: uuid.UUID,
+    recording_id: uuid.UUID,
+    data: RecordingStageUpdate,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+    storage: AudioStorage,
+) -> RecordingRead:
+    return await _service(session, settings, storage).set_stage(
+        owner, artwork_id, recording_id, data
+    )
 
 
 @router.get(

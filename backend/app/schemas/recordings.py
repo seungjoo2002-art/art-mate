@@ -60,6 +60,9 @@ class RecordingUploadRequest(InputModel):
     file_name: FileName | None = Field(default=None, description="확장자 검증용 (저장하지 않음)")
     title: RecordingTitle | None = Field(default=None, examples=["11/4 명암 첨삭"])
     recorded_at: AwareDatetime | None = Field(default=None, description="녹음 시작 시각")
+    stage_id: uuid.UUID | None = Field(
+        default=None, description="v0.9.7 단계 피드백이면 작품 단계 id. 생략하면 작품 전체 피드백"
+    )
     speaker_notice_confirmed: Literal[True] = Field(
         description="녹음되는 강사에게 녹음 사실을 알렸음 (true만 허용)"
     )
@@ -72,9 +75,18 @@ class RecordingUploadRequest(InputModel):
     )
 
 
+class RecordingStageUpdate(InputModel):
+    """녹음을 어느 단계의 피드백으로 볼지 (v0.9.7). null이면 작품 전체 피드백."""
+
+    stage_id: uuid.UUID | None
+
+
 class RecordingRead(BaseModel):
     id: uuid.UUID
     artwork_id: uuid.UUID
+    stage_id: uuid.UUID | None = Field(
+        default=None, description="v0.9.7 연결된 작품 단계 (null = 작품 전체 피드백)"
+    )
     title: str | None
     status: RecordingStatus
     content_type: str

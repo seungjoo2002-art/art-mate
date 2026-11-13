@@ -57,7 +57,8 @@ from app.integrations.supabase.storage import (
     StorageObjectTooLarge,
 )
 from app.models.academy_class import AcademyClass
-from app.models.artwork import Artwork, ArtworkPhoto
+from app.models.ai_feedback import FeedbackNote
+from app.models.artwork import MAX_WORK_MINUTES, Artwork, ArtworkPhoto, ArtworkStageDef
 from app.models.community import SharedArtworkImage
 from app.models.enums import (
     ARTWORK_STAGE_ORDER,
@@ -68,6 +69,7 @@ from app.models.enums import (
     ClassMemberRole,
     MembershipRole,
     MembershipStatus,
+    PhotoKind,
     PhotoStatus,
     PracticalType,
     RecordingStatus,
@@ -84,6 +86,9 @@ from app.schemas.artworks import (
     ArtworkDetail,
     ArtworkProgressRead,
     ArtworkRead,
+    ArtworkStageRead,
+    ArtworkStagesResult,
+    ArtworkStagesUpdate,
     ArtworkUpdate,
     PhotoRead,
     SignedUrl,
@@ -95,6 +100,15 @@ from app.schemas.artworks import (
 from app.schemas.common import PaginationParams
 from app.services.access import AccessService, managed_student_ids
 from app.services.ai_cleanup import purge_for_recordings
+from app.services.artwork_stages import (
+    StageSpec,
+    active_stages,
+    all_stages,
+    create_stages,
+    ensure_stages,
+    replace_stages,
+    resolve_stage,
+)
 from app.services.images import check_declared_file, inspect_image, storage_extension
 from app.services.practice_links import link_artwork
 from app.services.sharing import retire_post_images, withdraw_artwork_sharing
@@ -137,7 +151,7 @@ def _stage_rank(stage: ArtworkStage) -> int:
 
 
 def summarize(artwork: Artwork, photos: list[ArtworkPhoto]) -> ArtworkProgressRead:
-    active = [p for p in photos if p.status == PhotoStatus.ACTIVE]
+    active = [p for p in photos if p.status == PhotoStatus.ACTIVE and p.kind == PhotoKind.STAGE]
     stages = []
     for stage in ARTWORK_STAGE_ORDER:
         items = sorted((p for p in active if p.stage == stage), key=lambda p: (p.uploaded_at, p.id))
@@ -169,6 +183,10 @@ def photo_read(photo: ArtworkPhoto, url: str | None = None, expires: datetime | 
         id=photo.id,
         artwork_id=photo.artwork_id,
         stage=photo.stage,
+        stage_id=photo.stage_id,
+        kind=photo.kind,
+        feedback_note_id=photo.feedback_note_id,
+        feedback_recording_id=photo.feedback_recording_id,
         status=photo.status,
         content_type=photo.content_type,
         size_bytes=photo.size_bytes,
@@ -179,6 +197,17 @@ def photo_read(photo: ArtworkPhoto, url: str | None = None, expires: datetime | 
         created_at=photo.created_at,
         url=url,
         url_expires_at=expires if url else None,
+    )
+
+
+def stage_read(stage: ArtworkStageDef) -> ArtworkStageRead:
+    return ArtworkStageRead(
+        id=stage.id,
+        name=stage.name,
+        position=stage.position,
+        target_minutes=stage.target_minutes,
+        archived=stage.archived_at is not None,
+        legacy_stage=stage.legacy_stage,
     )
 
 
@@ -240,8 +269,14 @@ class ArtworkService:
         result: dict[uuid.UUID, list[ArtworkPhoto]] = defaultdict(list)
         if not artwork_ids:
             return result
-        stmt = select(ArtworkPhoto).where(
-            ArtworkPhoto.artwork_id.in_(artwork_ids), ArtworkPhoto.status == PhotoStatus.ACTIVE
+        stmt = (
+            select(ArtworkPhoto)
+            .join(ArtworkStageDef, ArtworkStageDef.id == ArtworkPhoto.stage_id)
+            .where(
+                ArtworkPhoto.artwork_id.in_(artwork_ids),
+                ArtworkPhoto.status == PhotoStatus.ACTIVE,
+                ArtworkStageDef.archived_at.is_(None),
+            )
         )
         for photo in (await self.session.execute(stmt)).scalars():
             result[photo.artwork_id].append(photo)
@@ -311,14 +346,27 @@ class ArtworkService:
         photos = (await self._photos([artwork.id]))[artwork.id]
         counts = await self.recording_counts([artwork.id])
         data = artwork_read(artwork, photos, counts.get(artwork.id, 0))
-        data["photos"] = await self._photo_reads(photos, viewer_token, include_urls)
+        stages = await active_stages(self.session, artwork.id)  # 읽기 전용 (생성은 쓰기 경로)
+        rank = {stage.id: stage.position for stage in stages}
+        data["photos"] = await self._photo_reads(photos, viewer_token, include_urls, rank)
+        data["stage_plan"] = [stage_read(stage) for stage in stages]
         return data
 
     async def _photo_reads(
-        self, photos: list[ArtworkPhoto], token: str, include_urls: bool
+        self,
+        photos: list[ArtworkPhoto],
+        token: str,
+        include_urls: bool,
+        rank: dict[uuid.UUID, int] | None = None,
     ) -> list[PhotoRead]:
         ordered = sorted(
-            photos, key=lambda p: (_stage_rank(p.stage), not p.is_representative, p.uploaded_at)
+            photos,
+            key=lambda p: (
+                rank.get(p.stage_id, 99) if rank else _stage_rank(p.stage),
+                p.kind != PhotoKind.STAGE,
+                not p.is_representative,
+                p.uploaded_at,
+            ),
         )
         urls: dict[str, str] = {}
         expires = clock.utc_now() + timedelta(seconds=self.settings.storage_signed_url_seconds)
@@ -442,12 +490,31 @@ class ArtworkService:
             **links,
         )
         self.session.add(artwork)
+        await self.session.flush()
+        stage_rows = create_stages(
+            artwork,
+            [StageSpec(s.name, s.target_minutes) for s in data.stages] if data.stages else None,
+        )
+        self.session.add_all(stage_rows)
+        if (
+            data.time_limit_minutes is None
+            and data.stages
+            and all(s.target_minutes for s in data.stages)
+        ):
+            # 시험 모드: 단계 목표 시간의 합을 제한 시간으로
+            artwork.time_limit_minutes = min(
+                sum(s.target_minutes or 0 for s in data.stages), MAX_WORK_MINUTES
+            )
         if data.recommendation_id is not None:
             await self.session.flush()
             await link_artwork(self.session, owner, data.recommendation_id, artwork)
         await self.session.commit()
         await self.session.refresh(artwork)
-        return ArtworkDetail(**artwork_read(artwork, []), photos=[])
+        return ArtworkDetail(
+            **artwork_read(artwork, []),
+            photos=[],
+            stage_plan=[stage_read(stage) for stage in stage_rows],
+        )
 
     async def list_mine(
         self, owner: Profile, params: PaginationParams, filters: ArtworkFilters
@@ -511,10 +578,13 @@ class ArtworkService:
             has_final = (
                 await self.session.execute(
                     select(ArtworkPhoto.id)
+                    .join(ArtworkStageDef, ArtworkStageDef.id == ArtworkPhoto.stage_id)
                     .where(
                         ArtworkPhoto.artwork_id == artwork.id,
                         ArtworkPhoto.stage == ArtworkStage.FINAL,
+                        ArtworkPhoto.kind == PhotoKind.STAGE,
                         ArtworkPhoto.status == PhotoStatus.ACTIVE,
+                        ArtworkStageDef.archived_at.is_(None),
                     )
                     .limit(1)
                 )
@@ -628,34 +698,48 @@ class ArtworkService:
         now = clock.utc_now()
         await self._expire_pending(artwork.id, now)
 
-        stage = data.stage
+        kind = data.kind
+        note_id, recording_id = data.feedback_note_id, data.feedback_recording_id
         if data.replaces_photo_id is not None:
             target = await self._photo(artwork.id, data.replaces_photo_id)
             if target.status != PhotoStatus.ACTIVE:
                 raise ConflictError(
                     "Only uploaded photos can be replaced", code=ErrorCode.PHOTO_NOT_ACTIVE
                 )
-            if stage is not None and stage != target.stage:
+            if (data.stage is not None and data.stage != target.stage) or (
+                data.stage_id is not None and data.stage_id != target.stage_id
+            ):
                 raise UnprocessableError("A replacement must keep the same stage")
-            stage = target.stage
-        if stage is None:
-            raise UnprocessableError("stage is required")
+            # 교체는 같은 단계·종류·피드백 연결을 이어받는다
+            stage_row = await resolve_stage(self.session, artwork, target.stage_id)
+            kind = target.kind
+            note_id, recording_id = target.feedback_note_id, target.feedback_recording_id
+        else:
+            stage_row = await resolve_stage(self.session, artwork, data.stage_id, data.stage)
+            await self._check_revision_ref(artwork, stage_row.id, kind, note_id, recording_id)
 
+        limit_of = {
+            PhotoKind.STAGE: settings.artwork_max_photos_per_stage,
+            PhotoKind.REVISION: settings.artwork_max_revision_photos_per_stage,
+        }
         live = (
             await self.session.execute(
                 select(func.count()).where(
                     ArtworkPhoto.artwork_id == artwork.id,
-                    ArtworkPhoto.stage == stage,
+                    ArtworkPhoto.stage_id == stage_row.id,
+                    ArtworkPhoto.kind == kind,
                     ArtworkPhoto.status.in_(_LIVE),
                 )
             )
         ).scalar_one()
-        limit = settings.artwork_max_photos_per_stage + (1 if data.replaces_photo_id else 0)
+        limit = limit_of[kind] + (1 if data.replaces_photo_id else 0)
         if live >= limit:
             raise ConflictError(
-                f"Up to {settings.artwork_max_photos_per_stage} photos per stage",
+                f"Up to {limit_of[kind]} photos per stage",
                 code=ErrorCode.PHOTO_LIMIT_REACHED,
+                details={"kind": kind.value},
             )
+        stage = stage_row.legacy_stage
 
         photo_id = uuid.uuid4()
         # 경로는 서버가 만든다 (사용자 파일명 미사용 → 경로 조작·충돌 방지)
@@ -665,6 +749,10 @@ class ArtworkService:
             artwork_id=artwork.id,
             owner_id=owner.id,
             stage=stage,
+            stage_id=stage_row.id,
+            kind=kind,
+            feedback_note_id=note_id,
+            feedback_recording_id=recording_id,
             status=PhotoStatus.PENDING,
             storage_path=path,
             content_type=content_type,
@@ -693,6 +781,85 @@ class ArtworkService:
                 expires_at=photo.upload_expires_at,
             ),
         )
+
+    async def _check_revision_ref(
+        self,
+        artwork: Artwork,
+        stage_id: uuid.UUID,
+        kind: PhotoKind,
+        note_id: uuid.UUID | None,
+        recording_id: uuid.UUID | None,
+    ) -> None:
+        """수정 사진은 같은 작품의 피드백 1개(녹음 또는 글)에 연결.
+
+        단계 피드백이면 같은 단계여야 한다.
+        """
+        if kind == PhotoKind.STAGE:
+            if note_id is not None or recording_id is not None:
+                raise UnprocessableError("Only a revision photo is linked to feedback")
+            return
+        if (note_id is None) == (recording_id is None):
+            raise UnprocessableError(
+                "A revision photo needs exactly one feedback (feedback_note_id or "
+                "feedback_recording_id)"
+            )
+        if note_id is not None:
+            row = (
+                await self.session.execute(
+                    select(FeedbackNote.stage_id).where(
+                        FeedbackNote.id == note_id, FeedbackNote.artwork_id == artwork.id
+                    )
+                )
+            ).first()
+        else:
+            row = (
+                await self.session.execute(
+                    select(FeedbackRecording.stage_id).where(
+                        FeedbackRecording.id == recording_id,
+                        FeedbackRecording.artwork_id == artwork.id,
+                        FeedbackRecording.status == RecordingStatus.ACTIVE,
+                    )
+                )
+            ).first()
+        if row is None:
+            raise NotFoundError("Feedback not found for this artwork")
+        if row[0] is not None and row[0] != stage_id:
+            raise UnprocessableError(
+                "A revision photo must be in the same stage as its feedback",
+                details={"feedback_stage_id": str(row[0])},
+            )
+
+    async def replace_stages(
+        self, owner: Profile, artwork_id: uuid.UUID, data: ArtworkStagesUpdate
+    ) -> ArtworkStagesResult:
+        """단계 이름·순서·개수 변경 (v0.9.7). 데이터가 있는 단계는 지우지 않고 숨긴다."""
+        artwork = await self.owned(owner, artwork_id, for_update=True)
+        await ensure_stages(self.session, artwork)
+        result = await replace_stages(
+            self.session,
+            artwork,
+            [StageSpec(s.name, s.target_minutes, s.id) for s in data.stages],
+        )
+        if artwork.work_category == ArtworkWorkCategory.MOCK_EXAM and all(
+            s.target_minutes for s in data.stages
+        ):
+            artwork.time_limit_minutes = min(
+                sum(s.target_minutes or 0 for s in data.stages), MAX_WORK_MINUTES
+            )
+        await self.session.commit()
+        stages = await active_stages(self.session, artwork.id)
+        return ArtworkStagesResult(
+            stages=[stage_read(stage) for stage in stages],
+            archived_stage_ids=result.archived,
+            deleted_stage_ids=result.deleted,
+        )
+
+    async def stage_plan(self, owner: Profile, artwork_id: uuid.UUID) -> list[ArtworkStageRead]:
+        """숨긴 단계까지 (활성 단계 순서대로, 그 뒤에 숨긴 단계)."""
+        artwork = await self.owned(owner, artwork_id)
+        await ensure_stages(self.session, artwork)
+        await self.session.commit()
+        return [stage_read(stage) for stage in await all_stages(self.session, artwork.id)]
 
     async def _expire_pending(self, artwork_id: uuid.UUID, now: datetime) -> None:
         await self.session.execute(
@@ -813,8 +980,7 @@ class ArtworkService:
         has_representative = (
             await self.session.execute(
                 select(ArtworkPhoto.id).where(
-                    ArtworkPhoto.artwork_id == artwork.id,
-                    ArtworkPhoto.stage == photo.stage,
+                    ArtworkPhoto.stage_id == photo.stage_id,
                     ArtworkPhoto.is_representative,
                 )
             )
@@ -825,7 +991,9 @@ class ArtworkService:
         photo.width = info.width
         photo.height = info.height
         photo.sha256 = info.sha256
-        photo.is_representative = inherit or not has_representative
+        photo.is_representative = photo.kind == PhotoKind.STAGE and (
+            inherit or not has_representative
+        )
         await self.session.commit()
         await self.session.refresh(photo)
         if replaced is not None:
@@ -844,12 +1012,13 @@ class ArtworkService:
             raise UnprocessableError(
                 "Choose another photo as representative instead of unsetting it"
             )
+        if photo.kind != PhotoKind.STAGE:
+            raise UnprocessableError("A revision photo cannot be the stage representative")
         if not photo.is_representative:
             await self.session.execute(
                 update(ArtworkPhoto)
                 .where(
-                    ArtworkPhoto.artwork_id == artwork.id,
-                    ArtworkPhoto.stage == photo.stage,
+                    ArtworkPhoto.stage_id == photo.stage_id,
                     ArtworkPhoto.is_representative,
                 )
                 .values(is_representative=False, updated_at=func.now())
@@ -879,8 +1048,8 @@ class ArtworkService:
                 await self.session.execute(
                     select(ArtworkPhoto)
                     .where(
-                        ArtworkPhoto.artwork_id == artwork.id,
-                        ArtworkPhoto.stage == photo.stage,
+                        ArtworkPhoto.stage_id == photo.stage_id,
+                        ArtworkPhoto.kind == PhotoKind.STAGE,
                         ArtworkPhoto.status == PhotoStatus.ACTIVE,
                     )
                     .order_by(ArtworkPhoto.uploaded_at, ArtworkPhoto.id)

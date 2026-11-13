@@ -36,6 +36,10 @@ from app.schemas.artworks import (
     ArtworkExamRead,
     ArtworkProgressRead,
     ArtworkRead,
+    ArtworkStageHistory,
+    ArtworkStageRead,
+    ArtworkStagesResult,
+    ArtworkStagesUpdate,
     ArtworkUpdate,
     PhotoRead,
     PhotoUpdate,
@@ -54,6 +58,7 @@ from app.services.artworks import ArtworkFilters, ArtworkService
 from app.services.exam_stages import ExamStageService
 from app.services.recordings import RecordingService
 from app.services.sharing import SharingService
+from app.services.stage_history import StageHistoryService
 
 router = APIRouter(prefix="/artworks", tags=["artworks"])
 staff_router = APIRouter(prefix="/academies/{academy_id}/artworks", tags=["artworks"])
@@ -250,6 +255,65 @@ async def artwork_progress(
     storage: OptionalStorage,
 ) -> ArtworkProgressRead:
     return await _service(session, settings, storage).progress(owner, artwork_id)
+
+
+@router.get(
+    "/{artwork_id}/stages",
+    summary="작품 단계 목록 (숨긴 단계 포함)",
+    responses=READ_ERRORS,
+)
+async def list_stages(
+    artwork_id: uuid.UUID,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+    storage: OptionalStorage,
+) -> list[ArtworkStageRead]:
+    """활성 단계를 순서대로, 그 뒤에 숨긴 단계(archived=true)."""
+    return await _service(session, settings, storage).stage_plan(owner, artwork_id)
+
+
+@router.put(
+    "/{artwork_id}/stages",
+    summary="작품 단계 변경 (추가·삭제·이름·순서)",
+    responses=WRITE_ERRORS,
+)
+async def replace_stages(
+    artwork_id: uuid.UUID,
+    data: ArtworkStagesUpdate,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+    storage: OptionalStorage,
+) -> ArtworkStagesResult:
+    """단계 목록 전체를 순서대로 보낸다. 기존 단계는 id를 넣는다.
+
+    빠진 단계에 사진·녹음·글 첨삭이 있으면 지우지 않고 숨긴다 (데이터 보존, id를 다시 넣으면 복원).
+    """
+    return await _service(session, settings, storage).replace_stages(owner, artwork_id, data)
+
+
+@router.get(
+    "/{artwork_id}/stage-history",
+    summary="단계별 사진·피드백·수정 사진 이력",
+    responses=READ_ERRORS,
+)
+async def stage_history(
+    artwork_id: uuid.UUID,
+    owner: Student,
+    user: CurrentUser,
+    session: DbSession,
+    settings: AppSettings,
+    storage: OptionalStorage,
+    include_urls: IncludeUrls = False,
+) -> ArtworkStageHistory:
+    """단계마다 [사진 → 단계 피드백 → 피드백별 수정 사진], 마지막에 작품 전체 피드백.
+
+    수정이 잘 됐는지는 판단하지 않는다 (연결과 개수만).
+    """
+    return await StageHistoryService(session, _service(session, settings, storage)).history(
+        owner, artwork_id, user.access_token, include_urls
+    )
 
 
 @router.get(

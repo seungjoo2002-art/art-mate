@@ -225,6 +225,10 @@ class FeedbackNote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKeyConstraint(
             ["artwork_id", "owner_id"], ["artworks.id", "artworks.owner_id"], ondelete="CASCADE"
         ),
+        # v0.9.7 피드백 대상 단계 (NULL = 작품 전체). 같은 작품의 단계만
+        ForeignKeyConstraint(
+            ["stage_id", "artwork_id"], ["artwork_stages.id", "artwork_stages.artwork_id"]
+        ),
         CheckConstraint("length(btrim(body)) > 0", name="body_not_blank"),
         CheckConstraint("char_length(body) <= 5000", name="body_length"),
         CheckConstraint("version >= 1", name="version_positive"),
@@ -242,6 +246,8 @@ class FeedbackNote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     artwork_id: Mapped[uuid.UUID]
     owner_id: Mapped[uuid.UUID]
+    # v0.9.7 어느 단계에 대한 피드백인지 (NULL = 작품 전체)
+    stage_id: Mapped[uuid.UUID | None]
     source: Mapped[FeedbackSource] = mapped_column(enum_column(FeedbackSource, "source"))
     body: Mapped[str] = mapped_column(Text)
     # [{"index": 0, "text": "..."}] — 문장 단위

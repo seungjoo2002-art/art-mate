@@ -73,6 +73,7 @@ from app.schemas.community import (
 )
 from app.schemas.students import student_ref
 from app.services.access import AccessService, managed_student_ids
+from app.services.artwork_stages import visible_stage_photo
 from app.services.growth import GrowthService, Scope
 from app.services.reference_engine import (
     ENGINE_VERSION,
@@ -140,6 +141,7 @@ class ReferenceService:
                     ArtworkPhoto.artwork_id == artwork.id,
                     ArtworkPhoto.stage == ArtworkStage.FINAL,
                     ArtworkPhoto.status == PhotoStatus.ACTIVE,
+                    visible_stage_photo(),
                 )
             )
         ).first()
