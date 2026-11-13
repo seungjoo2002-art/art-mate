@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { artworkStageFor, examStageName, rowsToPlan } from './exam'
 import {
-  extraStagePhotos,
   newStageRow,
-  revisionPhotosOf,
   stageListError,
+  stagePhotos,
   stagesWithPhotos,
   toStageSpecs,
-  unlinkedRevisions,
 } from './stages'
 
 const plan = [
@@ -56,39 +54,36 @@ describe('stagesWithPhotos', () => {
   })
 })
 
-describe('revision photos', () => {
-  const artwork = {
-    photos: [
-      photo('r2', {
-        kind: 'REVISION',
-        stage_id: 's1',
-        feedback_note_id: 'n1',
-        uploaded_at: '2026-11-13T03:00:00Z',
-      }),
-      photo('r1', {
-        kind: 'REVISION',
-        stage_id: 's1',
-        feedback_note_id: 'n1',
-        uploaded_at: '2026-11-13T02:00:00Z',
-      }),
-      photo('r3', { kind: 'REVISION', stage_id: 's1', feedback_recording_id: 'rec1' }),
-      photo('r4', { kind: 'REVISION', stage_id: 's1' }),
-      photo('p1', { stage_id: 's1' }),
-    ],
-  }
-
-  it('groups revision photos by feedback in upload order', () => {
-    expect(revisionPhotosOf(artwork, { type: 'NOTE', id: 'n1' }).map((p) => p.id)).toEqual([
-      'r1',
-      'r2',
-    ])
-    expect(revisionPhotosOf(artwork, { type: 'RECORDING', id: 'rec1' }).map((p) => p.id)).toEqual([
-      'r3',
-    ])
+describe('stagePhotos (v0.9.8 timeline)', () => {
+  it('lists every active photo of the stage in upload order, old revisions included', () => {
+    const artwork = {
+      photos: [
+        photo('p2', { stage_id: 's1', status: 'ACTIVE', uploaded_at: '2026-11-13T02:00:00Z' }),
+        photo('r1', {
+          stage_id: 's1',
+          kind: 'REVISION',
+          status: 'ACTIVE',
+          feedback_note_id: 'n1',
+          uploaded_at: '2026-11-13T03:00:00Z',
+        }),
+        photo('p1', { stage_id: 's1', status: 'ACTIVE', uploaded_at: '2026-11-13T01:00:00Z' }),
+        photo('d1', { stage_id: 's1', status: 'DELETED' }),
+        photo('x1', { stage_id: 's2', status: 'ACTIVE' }),
+      ],
+    }
+    expect(stagePhotos(artwork, 's1').map((p) => p.id)).toEqual(['p1', 'p2', 'r1'])
+    expect(stagePhotos(artwork, null)).toHaveLength(4)
   })
 
-  it('keeps revisions whose feedback was deleted', () => {
-    expect(unlinkedRevisions(artwork, 's1').map((p) => p.id)).toEqual(['r4'])
+  it('lets a photo taken after feedback be the stage representative', () => {
+    const artwork = {
+      stage_plan: plan.slice(0, 1),
+      photos: [
+        photo('p1', { stage_id: 's1' }),
+        photo('r1', { stage_id: 's1', kind: 'REVISION', is_representative: true }),
+      ],
+    }
+    expect(stagesWithPhotos(artwork)[0].photo.id).toBe('r1')
   })
 })
 
@@ -147,21 +142,5 @@ describe('exam stages ↔ artwork stages', () => {
     expect(artworkStageFor(artwork, exam, 0)).toBeNull()
     expect(examStageName(artwork, exam, 0)).toBe('아이디어')
     expect(examStageName({}, exam, 2)).toBe('채색')
-  })
-})
-
-describe('extraStagePhotos', () => {
-  it('lists non-representative stage photos but not revisions', () => {
-    const artwork = {
-      photos: [
-        photo('p1', { stage_id: 's1', is_representative: true, status: 'ACTIVE' }),
-        photo('p2', { stage_id: 's1', status: 'ACTIVE' }),
-        photo('p3', { stage_id: 's2', status: 'ACTIVE' }),
-        photo('r1', { stage_id: 's1', kind: 'REVISION', status: 'ACTIVE', feedback_note_id: 'n' }),
-        photo('d1', { stage_id: 's1', status: 'DELETED' }),
-      ],
-    }
-    expect(extraStagePhotos(artwork, 's1').map((p) => p.id)).toEqual(['p2'])
-    expect(extraStagePhotos(artwork, null).map((p) => p.id)).toEqual(['p2', 'p3'])
   })
 })

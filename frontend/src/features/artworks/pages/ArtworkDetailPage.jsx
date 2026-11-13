@@ -13,29 +13,21 @@ import {
   deletePhoto,
   getArtwork,
   reopenArtwork,
+  setRepresentativePhoto,
   uploadStagePhoto,
 } from '../api'
-import AddPhotoButton from '../components/AddPhotoButton'
-import ExtraPhotoCard from '../components/ExtraPhotoCard'
-import RevisionPhotos from '../components/RevisionPhotos'
-import StagePhotoCard from '../components/StagePhotoCard'
+import FeedbackRefs from '../components/FeedbackRefs'
+import StageHeader from '../components/StageHeader'
 import StageStepper from '../components/StageStepper'
-import {
-  STAGES,
-  extraStagePhotos,
-  hasFinalPhoto,
-  isCompleted,
-  revisionPhotosOf,
-  stagesWithPhotos,
-  unlinkedRevisions,
-} from '../stages'
+import TimelinePhotoCard from '../components/TimelinePhotoCard'
+import { hasFinalPhoto, isCompleted, photoTime, stagePhotos, stagesWithPhotos } from '../stages'
 import { formatMinutes } from '../exam'
 import styles from './ArtworkPage.module.css'
 
 /**
- * renderTimeline({ artworkId, sections, renderRevisions, extraItems, actions }): 단계마다
- * [사진 카드 → 단계 피드백·추가 사진(시간순) → 피드백별 수정 사진], 맨 아래 작품 전체 피드백과
- * 사진 추가 버튼을 그리는 함수 (v0.9.7 + VER.2 추가 사진).
+ * renderTimeline({ artworkId, sections, renderFeedbackExtras }): 단계마다
+ * [단계 머리 → 그 단계의 사진과 단계 피드백을 올린 시각 순으로(피드백 아래 기준 사진)],
+ * 맨 아래 작품 전체 피드백을 그리는 함수 (v0.9.8 단계별 사진 타임라인).
  * features끼리 직접 import하지 않도록 라우터에서 주입. 없으면 단계 사진만 순서대로 그림
  */
 export default function ArtworkDetailPage({ renderTimeline }) {
@@ -65,9 +57,10 @@ export default function ArtworkDetailPage({ renderTimeline }) {
   const hasAnyPhoto = (artwork.photos?.length ?? 0) > 0
   const custom = stages.some((s) => s.id) // v0.9.7 작품 단계가 있는 응답
 
-  async function runStageAction(stage, action) {
+  // 사진 올리기·삭제·대표 지정 (busyStage: 단계 key 또는 사진 id)
+  async function run(key, action) {
     if (busyStage) return
-    setBusyStage(stage.key)
+    setBusyStage(key)
     setActionError('')
     try {
       await action()
@@ -79,18 +72,17 @@ export default function ArtworkDetailPage({ renderTimeline }) {
     }
   }
 
-  // 단계당 대표 사진 1장으로 보여 주므로, 이미 있으면 교체 (단계 id가 없으면 예전 고정 단계 값)
-  const handleSelectFile = (stage, file) =>
-    runStageAction(stage, () =>
-      uploadStagePhoto(artwork.id, stage.id ?? stage.legacy, file, {
-        replacesPhotoId: stage.photo?.id,
-      }),
-    )
+  // 사진은 교체하지 않고 단계에 계속 쌓는다 (단계 id가 없으면 예전 고정 단계 값)
+  const handleUpload = (stage, file) =>
+    run(stage.key, () => uploadStagePhoto(artwork.id, stage.id ?? stage.legacy, file))
 
-  function handleDeletePhoto(stage) {
-    if (!window.confirm(`${stage.photoLabel}을 삭제할까요?`)) return
-    runStageAction(stage, () => deletePhoto(artwork.id, stage.photo.id))
+  function handleDeletePhoto(photo) {
+    if (!window.confirm('이 사진을 삭제할까요? 이 사진을 기준으로 한 피드백 기록은 남아요.')) return
+    run(photo.id, () => deletePhoto(artwork.id, photo.id))
   }
+
+  const handleRepresentative = (photo) =>
+    run(photo.id, () => setRepresentativePhoto(artwork.id, photo.id))
 
   /** 작품 완료 / 작업 재개 */
   async function setStatus(action) {
@@ -119,116 +111,59 @@ export default function ArtworkDetailPage({ renderTimeline }) {
     }
   }
 
-  // 추가 사진 기본 단계: 가장 최근에 단계 사진을 올린 단계 (VER.2)
-  const latestPhoto = artwork.photos
-    .filter((p) => p.status === 'ACTIVE' && (p.kind ?? 'STAGE') === 'STAGE')
-    .sort(
-      (a, b) =>
-        Date.parse(b.uploaded_at ?? b.created_at) - Date.parse(a.uploaded_at ?? a.created_at),
-    )[0]
-  const latestStage = custom
-    ? (stages.find((s) => s.id === latestPhoto?.stage_id) ?? stages[0]).key
-    : (latestPhoto?.stage ?? 'SKETCH')
-
-  async function handleAddPhoto(stageKey, file) {
-    setBusyStage('extra')
-    setActionError('')
-    try {
-      await uploadStagePhoto(artwork.id, stageKey, file)
-      reload()
-      return true
-    } catch (err) {
-      setActionError(toErrorMessage(err))
-      return false
-    } finally {
-      setBusyStage(null)
-    }
-  }
-
-  async function handleDeleteExtra(photo) {
-    if (!window.confirm('이 추가 사진을 삭제할까요?')) return
-    setBusyStage(photo.id)
-    setActionError('')
-    try {
-      await deletePhoto(artwork.id, photo.id)
-      reload()
-    } catch (err) {
-      setActionError(toErrorMessage(err))
-    } finally {
-      setBusyStage(null)
-    }
-  }
-
-  // 대표가 아닌 추가 사진 → 올린 시각으로 (그 단계의 피드백과 함께 시간순, VER.2)
-  const extraItem = (photo, stageLabel) => ({
+  // 단계 타임라인의 사진 항목 (올린 시각으로 피드백과 함께 정렬)
+  const photoItem = (photo, stageLabel) => ({
     key: photo.id,
-    time: photo.uploaded_at ?? photo.created_at,
+    time: photoTime(photo),
     node: (
-      <ExtraPhotoCard
+      <TimelinePhotoCard
         artworkId={artwork.id}
         photo={photo}
         stageLabel={stageLabel}
         locked={completed}
         busy={busyStage === photo.id}
-        onDelete={() => handleDeleteExtra(photo)}
+        onMakeRepresentative={() => handleRepresentative(photo)}
+        onDelete={() => handleDeletePhoto(photo)}
       />
     ),
   })
-  // 예전 응답(단계 id 없음)은 추가 사진을 작품 전체 타임라인에
-  const legacyExtras = custom
-    ? []
-    : extraStagePhotos(artwork, null).map((photo) =>
-        extraItem(photo, STAGES.find((s) => s.key === photo.stage)?.label ?? photo.stage),
-      )
 
-  // 단계마다 사진 카드 (+ 피드백이 지워져 연결이 끊긴 수정 사진) + 그 단계의 추가 사진
   const sections = stages.map((stage, index) => {
-    const orphans = stage.id ? unlinkedRevisions(artwork, stage.id) : []
+    // 예전 응답(단계 id 없음)은 예전 고정 단계 값으로 묶음
+    const photos = stage.id
+      ? stagePhotos(artwork, stage.id)
+      : stagePhotos(artwork, null).filter((p) => p.stage === stage.legacy)
     return {
       key: stage.key,
       stageId: stage.id,
       title: stage.label,
-      items: stage.id
-        ? extraStagePhotos(artwork, stage.id).map((photo) => extraItem(photo, stage.label))
-        : [],
+      items: photos.map((photo) => photoItem(photo, stage.label)),
       node: (
-        <>
-          <StagePhotoCard
-            artworkId={artwork.id}
-            stage={stage}
-            index={index}
-            busy={busyStage === stage.key}
-            locked={completed}
-            onSelectFile={(file) => handleSelectFile(stage, file)}
-            onDelete={() => handleDeletePhoto(stage)}
-          />
-          {orphans.length > 0 && (
-            <RevisionPhotos
-              artworkId={artwork.id}
-              feedback={{ type: 'NOTE', id: null }}
-              photos={orphans}
-              stageId={stage.id}
-              stages={stages}
-              locked
-              label="연결된 피드백이 삭제된 수정 사진"
-              onChanged={reload}
-            />
-          )}
-        </>
+        <StageHeader
+          stage={stage}
+          index={index}
+          photoCount={photos.length}
+          busy={busyStage === stage.key}
+          locked={completed}
+          onSelectFile={(file) => handleUpload(stage, file)}
+        />
       ),
     }
   })
 
-  const renderRevisions = (feedback, stageId) =>
+  // 피드백 아래: 이 피드백이 근거로 삼은 사진 (확인·변경)
+  const refsKey = (feedback) =>
+    [feedback.id, feedback.image_refs?.status]
+      .concat((feedback.image_refs?.photos ?? []).map((p) => p.photo_id))
+      .join('-')
+  const renderFeedbackExtras = (feedback, stageId, reloadFeedback) =>
     custom && (
-      <RevisionPhotos
-        artworkId={artwork.id}
+      <FeedbackRefs
+        key={refsKey(feedback)}
+        artwork={artwork}
         feedback={feedback}
-        photos={revisionPhotosOf(artwork, feedback)}
-        stageId={stageId}
         stages={stages}
-        locked={completed}
-        onChanged={reload}
+        onChanged={reloadFeedback}
       />
     )
 
@@ -266,26 +201,16 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         <StageStepper stages={stages} />
 
         {renderTimeline ? (
-          renderTimeline({
-            artworkId: artwork.id,
-            sections,
-            renderRevisions,
-            extraItems: legacyExtras,
-            // 완료한 작품은 사진을 바꿀 수 없음 (서버도 409 ARTWORK_COMPLETED)
-            actions: completed ? null : (
-              <AddPhotoButton
-                key={latestStage}
-                stages={custom ? stages.map((s) => ({ key: s.key, label: s.label })) : STAGES}
-                defaultStage={latestStage}
-                busy={busyStage === 'extra'}
-                onUpload={handleAddPhoto}
-              />
-            ),
-          })
+          renderTimeline({ artworkId: artwork.id, sections, renderFeedbackExtras })
         ) : (
           <div className={styles.stageList}>
             {sections.map((section) => (
-              <div key={section.key}>{section.node}</div>
+              <div key={section.key} className={styles.stageList}>
+                {section.node}
+                {section.items.map((item) => (
+                  <div key={item.key}>{item.node}</div>
+                ))}
+              </div>
             ))}
           </div>
         )}
@@ -297,7 +222,7 @@ export default function ArtworkDetailPage({ renderTimeline }) {
               {statusBusy ? '처리하는 중…' : '작업 재개'}
             </Button>
             <p className={styles.hint}>
-              완료한 작품은 사진을 바꿀 수 없어요. 녹음과 첨삭은 계속 추가할 수 있어요.
+              완료한 작품은 사진을 추가하거나 지울 수 없어요. 녹음과 첨삭은 계속 추가할 수 있어요.
             </p>
           </>
         ) : (

@@ -4,7 +4,10 @@ import { api } from '../../lib/api'
 
 /** source: INSTRUCTOR(강사 첨삭을 받아 적음) | SELF_NOTE(자기 메모) | PEER(다른 학생 의견) */
 /** stageId: 단계 피드백이면 작품 단계 id (v0.9.7). 없으면 작품 전체 피드백 */
-export const createNote = (artworkId, { source, body, feedbackDate, requestSummary, stageId }) =>
+export const createNote = (
+  artworkId,
+  { source, body, feedbackDate, requestSummary, stageId, references = {} },
+) =>
   api(`/artworks/${artworkId}/feedback-notes`, {
     method: 'POST',
     body: {
@@ -12,6 +15,7 @@ export const createNote = (artworkId, { source, body, feedbackDate, requestSumma
       body,
       ...(feedbackDate ? { feedback_date: feedbackDate } : {}),
       ...(stageId ? { stage_id: stageId } : {}),
+      ...references, // v0.9.8 기준 이미지
       request_summary: requestSummary,
     },
   })
@@ -32,6 +36,13 @@ export const updateNote = (noteId, { version, source, body, feedbackDate, stageI
       feedback_date: feedbackDate,
       ...(stageId !== undefined ? { stage_id: stageId } : {}),
     },
+  })
+
+/** 기준 이미지 확인·변경 (v0.9.8). 원문이 아니므로 AI 정리는 그대로 */
+export const setNoteImageRefs = (noteId, photoIds, confirmed) =>
+  api(`/feedback-notes/${noteId}/image-refs`, {
+    method: 'PUT',
+    body: { photo_ids: photoIds, confirmed },
   })
 
 export const deleteNote = (noteId) => api(`/feedback-notes/${noteId}`, { method: 'DELETE' })

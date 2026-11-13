@@ -7,8 +7,10 @@ import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getAiConsent } from '../aiApi'
+import ReferencePicker from '../components/ReferencePicker'
 import StagePicker from '../components/StagePicker'
-import { createNote, getNote, updateNote } from '../notesApi'
+import { referenceBody, refsFromRead } from '../imageRefs'
+import { createNote, getNote, setNoteImageRefs, updateNote } from '../notesApi'
 import styles from './NoteFormPage.module.css'
 
 const DEFAULT_SOURCES = [
@@ -49,6 +51,9 @@ function NoteForm({ artworkId, note }) {
   // v0.9.7 단계 피드백: 작품 화면의 단계에서 들어오면 ?stage=단계 id. '' = 작품 전체
   const [params] = useSearchParams()
   const [stageId, setStageId] = useState(note ? (note.stage_id ?? '') : (params.get('stage') ?? ''))
+  // v0.9.8 이 첨삭을 받을 때 본 작품 사진 (수정 화면은 저장된 연결)
+  const initialRefs = refsFromRead(note?.image_refs)
+  const [refs, setRefs] = useState(initialRefs)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const artworkPath = `/artworks/${artworkId}`
@@ -71,6 +76,10 @@ function NoteForm({ artworkId, note }) {
           // 단계는 바꾼 경우에만 보냄 (원문이 아니라 AI 정리는 그대로)
           ...(stageId !== (note.stage_id ?? '') ? { stageId: stageId || null } : {}),
         })
+        // 기준 이미지는 바꾼 경우에만 (명시적 저장 → 이후 사진이 추가돼도 그대로)
+        if (refs.touched && JSON.stringify(refs) !== JSON.stringify(initialRefs)) {
+          await setNoteImageRefs(note.id, refs.photoIds, refs.confirmed)
+        }
         navigate(artworkPath, { replace: true })
         return
       }
@@ -81,6 +90,7 @@ function NoteForm({ artworkId, note }) {
         body: body.trim(),
         feedbackDate,
         stageId: stageId || undefined,
+        references: referenceBody(refs),
         requestSummary: withAi && consent.is_valid,
       })
       if (withAi && !consent.is_valid) {
@@ -121,6 +131,12 @@ function NoteForm({ artworkId, note }) {
         </div>
 
         <StagePicker artworkId={artworkId} value={stageId} onChange={setStageId} />
+        <ReferencePicker
+          artworkId={artworkId}
+          stageId={stageId}
+          value={refs}
+          onChange={setRefs}
+        />
 
         <Textarea
           label="첨삭 내용"
