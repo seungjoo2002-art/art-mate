@@ -7,6 +7,7 @@ import { useAsync } from '../../../hooks/useAsync'
 import { formatMonthDay } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { createPost, getSharing, grantCommunitySharing } from '../api'
+import { AuthorDisplay, PhotoPicker } from '../components/PostFields'
 import { CATEGORIES } from '../labels'
 import styles from './PostWritePage.module.css'
 
@@ -17,7 +18,6 @@ const CONSENT_ITEMS = [
   ['공개 범위', 'ART MATE를 쓰는 모든 사용자'],
   ['철회', '게시물을 삭제하면 공유도 함께 철회되고, 공개용 이미지도 바로 내려가요.'],
 ]
-const STAGE_LABELS = { SKETCH: '스케치', PROGRESS: '중간 작업', FINAL: '완성' }
 
 // features끼리 import하지 않도록 작품 API를 직접 호출
 // VER.2 P0: 커뮤니티 공유는 사진 1장 이상이면 가능 (완성 사진 필수 아님)
@@ -229,21 +229,7 @@ function ArtworkPostForm({ artwork, category }) {
   return (
     <form className={styles.section} onSubmit={handleSubmit} noValidate>
       <h2 className={styles.heading}>공유할 사진</h2>
-      <div className={styles.photos} role="radiogroup" aria-label="공유할 사진">
-        {photos.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            role="radio"
-            aria-checked={photoId === p.id}
-            className={`${styles.photo} ${photoId === p.id ? styles.photoSelected : ''}`}
-            onClick={() => setPhotoId(p.id)}
-          >
-            {p.url ? <img src={p.url} alt="" /> : <span aria-hidden />}
-            <span className={styles.photoLabel}>{STAGE_LABELS[p.stage] ?? p.stage}</span>
-          </button>
-        ))}
-      </div>
+      <PhotoPicker photos={photos} value={photoId} onChange={setPhotoId} />
       <p className={styles.hint}>원본 사진은 공개되지 않고, 공유용 이미지가 따로 만들어져요.</p>
 
       {needsConsent && (
@@ -301,31 +287,5 @@ function ArtworkPostForm({ artwork, category }) {
         {submitting ? '올리는 중…' : '올리기'}
       </Button>
     </form>
-  )
-}
-
-function AuthorDisplay({ value, onChange }) {
-  return (
-    <div className={styles.authorDisplay}>
-      <span className={styles.label}>작성자 표시</span>
-      <div className={styles.chips} role="radiogroup" aria-label="작성자 표시">
-        <Chip
-          role="radio"
-          aria-checked={value === 'NAME'}
-          selected={value === 'NAME'}
-          onClick={() => onChange('NAME')}
-        >
-          내 닉네임으로
-        </Chip>
-        <Chip
-          role="radio"
-          aria-checked={value === 'ANONYMOUS'}
-          selected={value === 'ANONYMOUS'}
-          onClick={() => onChange('ANONYMOUS')}
-        >
-          익명으로
-        </Chip>
-      </div>
-    </div>
   )
 }

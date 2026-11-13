@@ -82,6 +82,7 @@
 .postActions {
   display: flex;
   justify-content: flex-end;
+  gap: var(--space-3);
   margin-top: calc(var(--space-3) * -1);
 }
 
@@ -232,4 +233,17 @@
   font-size: var(--text-sm);
   color: var(--color-text-sub);
   text-align: center;
+}
+
+.imageGoneLink {
+  display: block;
+  margin-top: var(--space-2);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }

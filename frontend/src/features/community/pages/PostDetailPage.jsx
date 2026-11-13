@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react'
-import { Flag, Heart, Trash2 } from 'lucide-react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Flag, Heart, PenLine, Trash2 } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
-import { Button, Card, Chip, Select, Textarea } from '../../../components/ui'
+import { Button, Card, Checkbox, Chip, Select, Textarea } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { labelOf } from '../../../lib/options'
@@ -15,6 +15,7 @@ import {
   deleteComment,
   deletePost,
   revokeCommunitySharing,
+  updateComment,
   getPost,
   listComments,
   reportComment,
@@ -58,12 +59,10 @@ export default function PostDetailPage() {
   }
 
   async function handleDelete() {
-    if (
-      !window.confirm(
-        '게시물을 삭제할까요? 이 작품의 커뮤니티 공유도 함께 중단돼요. 다시 올리려면 공유 동의를 새로 해야 해요.',
-      )
-    )
-      return
+    const message = post.artwork_id
+      ? '게시물을 삭제할까요? 이 작품의 커뮤니티 공유도 함께 중단돼요. 다시 올리려면 공유 동의를 새로 해야 해요.'
+      : '게시물을 삭제할까요? 삭제하면 되돌릴 수 없어요.'
+    if (!window.confirm(message)) return
     try {
       // 내 게시물엔 artwork_id가 있음 → 공유 철회(게시물도 삭제됨). 없으면 게시물만 삭제
       if (post.artwork_id) await revokeCommunitySharing(post.artwork_id)
@@ -95,6 +94,11 @@ export default function PostDetailPage() {
           post.has_artwork && (
             <p className={styles.imageGone}>
               공유한 사진이 내려갔어요. 원본 사진을 지우면 공개용 이미지도 함께 내려가요.
+              {mine && (
+                <Link to={`/community/posts/${post.id}/edit`} className={styles.imageGoneLink}>
+                  다른 사진 고르기
+                </Link>
+              )}
             </p>
           )
         )}
@@ -123,9 +127,14 @@ export default function PostDetailPage() {
         </div>
         <div className={styles.postActions}>
           {mine ? (
-            <button type="button" className={styles.textButton} onClick={handleDelete}>
-              <Trash2 size={14} aria-hidden /> 게시물 삭제
-            </button>
+            <>
+              <Link to={`/community/posts/${post.id}/edit`} className={styles.textButton}>
+                <PenLine size={14} aria-hidden /> 수정
+              </Link>
+              <button type="button" className={styles.textButton} onClick={handleDelete}>
+                <Trash2 size={14} aria-hidden /> 게시물 삭제
+              </button>
+            </>
           ) : (
             <ReportButton onReport={(reason) => reportPost(post.id, reason)} label="게시물 신고" />
           )}
@@ -145,6 +154,8 @@ function Comments({ post, onChanged }) {
   const [body, setBody] = useState('')
   const [type, setType] = useState('GENERAL')
   const [categories, setCategories] = useState([])
+  const [anonymous, setAnonymous] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -171,7 +182,12 @@ function Comments({ post, onChanged }) {
     e.preventDefault()
     if (!body.trim()) return
     run(async () => {
-      await addComment(post.id, { body: body.trim(), commentType: type, categories })
+      await addComment(post.id, {
+        body: body.trim(),
+        commentType: type,
+        categories,
+        isAnonymous: anonymous,
+      })
       setBody('')
       setCategories([])
     })
@@ -193,13 +209,35 @@ function Comments({ post, onChanged }) {
             <li key={c.id} className={styles.comment}>
               <div className={styles.commentHead}>
                 <strong>{c.author.display_name}</strong>
+                {c.author.is_me && c.author.is_anonymous && (
+                  <span className={styles.caption}>(나 · 익명)</span>
+                )}
                 {c.comment_type === 'FEEDBACK' && (
                   <span className={styles.feedbackTag}>작품 피드백</span>
                 )}
                 {c.adopted && <span className={styles.adoptedTag}>채택됨</span>}
                 <span className={styles.caption}>{formatUploadedAt(c.created_at)}</span>
               </div>
-              <p className={styles.commentBody}>{c.body}</p>
+              {editingId === c.id ? (
+                <CommentEditor
+                  comment={c}
+                  busy={busy}
+                  onCancel={() => setEditingId(null)}
+                  onSave={(patch) =>
+                    run(async () => {
+                      await updateComment(c.id, patch)
+                      setEditingId(null)
+                    })
+                  }
+                />
+              ) : (
+                <p className={styles.commentBody}>
+                  {c.body}
+                  {Date.parse(c.updated_at) - Date.parse(c.created_at) > 1000 && (
+                    <span className={styles.caption}> (수정됨)</span>
+                  )}
+                </p>
+              )}
               {c.categories.length > 0 && (
                 <div className={styles.tags}>
                   {c.categories.map((code) => (
@@ -226,16 +264,28 @@ function Comments({ post, onChanged }) {
                   </button>
                 )}
                 {c.author.is_me ? (
-                  <button
-                    type="button"
-                    className={styles.textButton}
-                    disabled={busy}
-                    onClick={() =>
-                      window.confirm('댓글을 삭제할까요?') && run(() => deleteComment(c.id))
-                    }
-                  >
-                    삭제
-                  </button>
+                  <>
+                    {editingId !== c.id && (
+                      <button
+                        type="button"
+                        className={styles.textButton}
+                        disabled={busy}
+                        onClick={() => setEditingId(c.id)}
+                      >
+                        수정
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={styles.textButton}
+                      disabled={busy}
+                      onClick={() =>
+                        window.confirm('댓글을 삭제할까요?') && run(() => deleteComment(c.id))
+                      }
+                    >
+                      삭제
+                    </button>
+                  </>
                 ) : (
                   <ReportButton onReport={(reason) => reportComment(c.id, reason)} label="신고" />
                 )}
@@ -294,14 +344,50 @@ function Comments({ post, onChanged }) {
             등록
           </Button>
         </div>
+        <Checkbox checked={anonymous} onChange={setAnonymous}>
+          익명으로 남기기
+        </Checkbox>
         {error && <p className={styles.error}>{error}</p>}
         <p className={styles.footnote}>
-          댓글은 내 닉네임으로 보여요.
+          {anonymous ? '댓글은 익명 학생으로 보여요.' : '댓글은 내 닉네임으로 보여요.'}
           {type === 'FEEDBACK' &&
             ' 작성자가 채택하면 그 작품의 첨삭 기록(다른 학생 의견)으로 저장돼요.'}
         </p>
       </form>
     </section>
+  )
+}
+
+/** 내 댓글 수정: 내용, 익명 여부 */
+function CommentEditor({ comment, busy, onSave, onCancel }) {
+  const [body, setBody] = useState(comment.body)
+  const [anonymous, setAnonymous] = useState(comment.author.is_anonymous)
+  return (
+    <div className={styles.editor}>
+      <Textarea
+        aria-label="댓글 수정"
+        rows={2}
+        maxLength={1000}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+      />
+      <Checkbox checked={anonymous} onChange={setAnonymous}>
+        익명으로 보이기
+      </Checkbox>
+      <div className={styles.reportActions}>
+        <Button
+          size="md"
+          fullWidth={false}
+          disabled={busy || !body.trim()}
+          onClick={() => onSave({ body: body.trim(), isAnonymous: anonymous })}
+        >
+          저장
+        </Button>
+        <Button size="md" fullWidth={false} variant="soft" onClick={onCancel}>
+          취소
+        </Button>
+      </div>
+    </div>
   )
 }
 

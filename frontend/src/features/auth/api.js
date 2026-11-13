@@ -26,5 +26,13 @@ export const addTargetUniversity = (universityName) =>
   })
 
 /** 멱등: 이미 있으면 200 + 기존 프로필. 학생 전용 서비스라 항상 STUDENT로 만듦 */
-export const createMe = ({ displayName }) =>
-  api('/users/me', { method: 'POST', body: { display_name: displayName, user_type: 'STUDENT' } })
+/** realName: 실명 (선택, VER.2 P1). 본인 프로필 응답에만 있고 다른 사람에게는 닉네임만 보임 */
+export const createMe = ({ displayName, realName }) =>
+  api('/users/me', {
+    method: 'POST',
+    body: {
+      display_name: displayName,
+      user_type: 'STUDENT',
+      ...(realName ? { real_name: realName } : {}),
+    },
+  })

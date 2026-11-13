@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Heart, LayoutGrid, List, Plus } from 'lucide-react'
+import { Heart, LayoutGrid, List, Plus, Search, X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button, Card, Chip, PageIntro, SegmentedTabs } from '../../components/ui'
 import { listFeed } from '../../features/community/api'
@@ -28,18 +28,18 @@ const VIEWS = [
   },
 ]
 
-// 게시글 검색(q)은 VER.2 P1(백엔드 머지 전)이라 아직 제외
 export default function CommunityPage() {
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'gallery' ? 'gallery' : 'board'
   const category = CATEGORY_FILTERS.some((c) => c.code === params.get('category'))
     ? params.get('category')
     : 'all'
+  const q = (params.get('q') ?? '').trim()
   const [limit, setLimit] = useState(PAGE)
-  // 분류는 서버에서 거름 (VER.2 P0)
+  // 분류·검색은 서버에서 거름 (VER.2 P0 category, P1 q)
   const load = useCallback(
-    () => listFeed({ limit, category: category === 'all' ? undefined : category }),
-    [limit, category],
+    () => listFeed({ limit, category: category === 'all' ? undefined : category, q }),
+    [limit, category, q],
   )
   const { data, error, reload } = useAsync(load)
 
@@ -63,6 +63,8 @@ export default function CommunityPage() {
         value={view}
         onChange={(key) => setParam('view', key, 'board')}
       />
+
+      <SearchBox key={q} initial={q} onSearch={(text) => setParam('q', text, '')} />
 
       <div className={styles.toolbar}>
         <div className={styles.chips}>
@@ -90,11 +92,15 @@ export default function CommunityPage() {
         </Card>
       ) : !data ? null : visible.length === 0 ? (
         <div className={styles.empty}>
-          <p className={styles.emptyTitle}>아직 게시물이 없습니다.</p>
+          <p className={styles.emptyTitle}>
+            {q ? `'${q}' 검색 결과가 없어요.` : '아직 게시물이 없습니다.'}
+          </p>
           <p className={styles.emptySub}>
-            {view === 'gallery'
-              ? '사진이 있는 게시물이 여기에 모여요.'
-              : '질문을 남기거나 작품을 공유해 보세요.'}
+            {q
+              ? '다른 단어로 찾아보세요.'
+              : view === 'gallery'
+                ? '사진이 있는 게시물이 여기에 모여요.'
+                : '질문을 남기거나 작품을 공유해 보세요.'}
           </p>
         </div>
       ) : view === 'board' ? (
@@ -160,5 +166,49 @@ export default function CommunityPage() {
         않습니다.
       </p>
     </>
+  )
+}
+
+/** 제목·내용 검색. 입력 후 엔터(검색)로 적용, 2자 이상일 때만 */
+function SearchBox({ initial, onSearch }) {
+  const [text, setText] = useState(initial)
+  const [hint, setHint] = useState('')
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const value = text.trim()
+    if (value && value.length < 2) {
+      setHint('두 글자 이상 입력해 주세요.')
+      return
+    }
+    setHint('')
+    onSearch(value)
+  }
+
+  return (
+    <form className={styles.search} role="search" onSubmit={handleSubmit}>
+      <Search size={18} aria-hidden className={styles.searchIcon} />
+      <input
+        type="search"
+        enterKeyHint="search"
+        className={styles.searchInput}
+        placeholder="제목, 내용으로 검색"
+        aria-label="게시물 검색"
+        maxLength={50}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      {initial && (
+        <button
+          type="button"
+          className={styles.searchClear}
+          aria-label="검색 지우기"
+          onClick={() => onSearch('')}
+        >
+          <X size={16} />
+        </button>
+      )}
+      {hint && <p className={styles.searchHint}>{hint}</p>}
+    </form>
   )
 }
