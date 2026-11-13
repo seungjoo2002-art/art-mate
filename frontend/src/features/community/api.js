@@ -4,9 +4,11 @@ import { api } from '../../lib/api'
 // 게시물은 항상 내 작품 1개와 연결 (완성 사진 + 커뮤니티 공유 동의 필요, 작품당 1개)
 
 /** category: PRACTICE_QUESTION | FEEDBACK_REQUEST | ARTWORK_SHARE | FREE (없으면 전체) */
-export const listFeed = ({ limit = 30, offset = 0, category } = {}) => {
+/** q: 제목·본문·질문 부분 일치 (2~50자, 밖이면 서버 422라 보내지 않음) */
+export const listFeed = ({ limit = 30, offset = 0, category, q } = {}) => {
   const params = new URLSearchParams({ limit, offset })
   if (category) params.set('category', category)
+  if (q && q.length >= 2) params.set('q', q.slice(0, 50))
   return api(`/community/posts?${params}`)
 }
 
@@ -43,6 +45,10 @@ export const createPost = ({
     },
   })
 
+/** 게시물 수정 (VER.2): title·body·question·category, 작품 게시물은 photo_id, 사진 없는 글은 author_display */
+export const updatePost = (postId, patch) =>
+  api(`/community/posts/${postId}`, { method: 'PATCH', body: patch })
+
 export const deletePost = (postId) => api(`/community/posts/${postId}`, { method: 'DELETE' })
 
 /**
@@ -58,14 +64,22 @@ export const setLiked = (postId, liked) =>
 export const listComments = (postId) => api(`/community/posts/${postId}/comments?limit=100`)
 
 /** commentType: GENERAL(일반 의견) | FEEDBACK(작품 피드백, categories 선택 가능) */
-export const addComment = (postId, { body, commentType, categories }) =>
+export const addComment = (postId, { body, commentType, categories, isAnonymous = false }) =>
   api(`/community/posts/${postId}/comments`, {
     method: 'POST',
     body: {
       body,
+      is_anonymous: isAnonymous,
       comment_type: commentType,
       ...(commentType === 'FEEDBACK' ? { categories } : {}),
     },
+  })
+
+/** 댓글 수정 (본인만): 내용, 익명 여부 */
+export const updateComment = (commentId, { body, isAnonymous }) =>
+  api(`/community/comments/${commentId}`, {
+    method: 'PATCH',
+    body: { body, ...(isAnonymous === undefined ? {} : { is_anonymous: isAnonymous }) },
   })
 
 export const deleteComment = (commentId) =>

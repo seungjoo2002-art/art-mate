@@ -24,6 +24,7 @@ export default function ProfileEditPage() {
   const { profile, updateProfile } = useAuth()
   const options = useOptions()
   const [displayName, setDisplayName] = useState(profile.display_name)
+  const [realName, setRealName] = useState(profile.real_name ?? '')
   const [grade, setGrade] = useState(profile.grade ?? '')
   const [practicalType, setPracticalType] = useState(profile.practical_type ?? '')
   const [goal, setGoal] = useState(profile.learning_goal ?? '')
@@ -41,6 +42,7 @@ export default function ProfileEditPage() {
     try {
       await updateProfile({
         display_name: displayName.trim(),
+        real_name: realName.trim() || null, // 비우면 삭제
         grade: grade || null,
         practical_type: practicalType || null,
         learning_goal: goal.trim() || null,
@@ -58,6 +60,15 @@ export default function ProfileEditPage() {
       <main className={styles.body}>
         <form className={styles.form} onSubmit={handleSave} noValidate>
           <h2 className={styles.heading}>프로필</h2>
+          <Input
+            label="이름 (선택)"
+            placeholder="김서연"
+            autoComplete="name"
+            maxLength={50}
+            value={realName}
+            onChange={(e) => setRealName(e.target.value)}
+          />
+          <p className={styles.hint}>나만 볼 수 있어요. 다른 사람에게는 닉네임만 보여요.</p>
           <Input
             label="공개 닉네임"
             maxLength={50}

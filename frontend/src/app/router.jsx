@@ -5,6 +5,7 @@ import ArtworkCreatePage from '../features/artworks/pages/ArtworkCreatePage'
 import ArtworkDetailPage from '../features/artworks/pages/ArtworkDetailPage'
 import ArtworkEditPage from '../features/artworks/pages/ArtworkEditPage'
 import PostDetailPage from '../features/community/pages/PostDetailPage'
+import PostEditPage from '../features/community/pages/PostEditPage'
 import PostWritePage from '../features/community/pages/PostWritePage'
 import FeedbackTimeline from '../features/feedback/components/FeedbackTimeline'
 import AiConsentPage from '../features/feedback/pages/AiConsentPage'
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
           { path: '/notifications', element: <NotificationsPage /> },
           { path: '/community/write', element: <PostWritePage /> },
           { path: '/community/posts/:postId', element: <PostDetailPage /> },
+          { path: '/community/posts/:postId/edit', element: <PostEditPage /> },
           { path: '/artworks/new', element: <ArtworkCreatePage /> },
           { path: '/artworks/:artworkId/edit', element: <ArtworkEditPage /> },
           {
