@@ -15,15 +15,23 @@ import {
   reopenArtwork,
   uploadStagePhoto,
 } from '../api'
+import RevisionPhotos from '../components/RevisionPhotos'
 import StagePhotoCard from '../components/StagePhotoCard'
 import StageStepper from '../components/StageStepper'
-import { hasFinalPhoto, isCompleted, stagesWithPhotos } from '../stages'
+import {
+  hasFinalPhoto,
+  isCompleted,
+  revisionPhotosOf,
+  stagesWithPhotos,
+  unlinkedRevisions,
+} from '../stages'
 import { formatMinutes } from '../exam'
 import styles from './ArtworkPage.module.css'
 
 /**
- * renderTimeline({ artworkId, items }): 단계 사진 카드(items)에 녹음 등을 시간순으로 섞어 그리는 함수.
- * features끼리 직접 import하지 않도록 라우터에서 주입. 없으면 단계 순서대로 그림
+ * renderTimeline({ artworkId, sections, renderRevisions }): 단계마다 [사진 카드 → 단계 피드백 →
+ * 피드백별 수정 사진], 맨 아래 작품 전체 피드백을 그리는 함수 (v0.9.7).
+ * features끼리 직접 import하지 않도록 라우터에서 주입. 없으면 단계 사진만 순서대로 그림
  */
 export default function ArtworkDetailPage({ renderTimeline }) {
   const { artworkId } = useParams()
@@ -63,10 +71,12 @@ export default function ArtworkDetailPage({ renderTimeline }) {
     }
   }
 
-  // 단계당 사진 1장으로 보여 주므로, 이미 있으면 교체
+  // 단계당 대표 사진 1장으로 보여 주므로, 이미 있으면 교체 (단계 id가 없으면 예전 고정 단계 값)
   const handleSelectFile = (stage, file) =>
     runStageAction(stage, () =>
-      uploadStagePhoto(artwork.id, stage.key, file, { replacesPhotoId: stage.photo?.id }),
+      uploadStagePhoto(artwork.id, stage.id ?? stage.legacy, file, {
+        replacesPhotoId: stage.photo?.id,
+      }),
     )
 
   function handleDeletePhoto(stage) {
@@ -101,23 +111,53 @@ export default function ArtworkDetailPage({ renderTimeline }) {
     }
   }
 
-  // 타임라인 항목: 사진이 있는 단계는 업로드 시각, 빈 단계는 시각 없음(맨 뒤)
-  const stageItems = stages.map((stage, index) => ({
-    key: stage.key,
-    time: stage.photo ? stage.uploadedAt : null,
-    node: (
-      <StagePhotoCard
-        key={stage.key}
+  // 단계마다 사진 카드 (+ 피드백이 지워져 연결이 끊긴 수정 사진)
+  const sections = stages.map((stage, index) => {
+    const orphans = stage.id ? unlinkedRevisions(artwork, stage.id) : []
+    return {
+      key: stage.key,
+      stageId: stage.id,
+      title: stage.label,
+      node: (
+        <>
+          <StagePhotoCard
+            artworkId={artwork.id}
+            stage={stage}
+            index={index}
+            busy={busyStage === stage.key}
+            locked={completed}
+            onSelectFile={(file) => handleSelectFile(stage, file)}
+            onDelete={() => handleDeletePhoto(stage)}
+          />
+          {orphans.length > 0 && (
+            <RevisionPhotos
+              artworkId={artwork.id}
+              feedback={{ type: 'NOTE', id: null }}
+              photos={orphans}
+              stageId={stage.id}
+              stages={stages}
+              locked
+              label="연결된 피드백이 삭제된 수정 사진"
+              onChanged={reload}
+            />
+          )}
+        </>
+      ),
+    }
+  })
+
+  const renderRevisions = (feedback, stageId) =>
+    stages.some((s) => s.id) && (
+      <RevisionPhotos
         artworkId={artwork.id}
-        stage={stage}
-        index={index}
-        busy={busyStage === stage.key}
+        feedback={feedback}
+        photos={revisionPhotosOf(artwork, feedback)}
+        stageId={stageId}
+        stages={stages}
         locked={completed}
-        onSelectFile={(file) => handleSelectFile(stage, file)}
-        onDelete={() => handleDeletePhoto(stage)}
+        onChanged={reload}
       />
-    ),
-  }))
+    )
 
   return (
     <>
@@ -153,9 +193,13 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         <StageStepper stages={stages} />
 
         {renderTimeline ? (
-          renderTimeline({ artworkId: artwork.id, items: stageItems })
+          renderTimeline({ artworkId: artwork.id, sections, renderRevisions })
         ) : (
-          <div className={styles.stageList}>{stageItems.map((item) => item.node)}</div>
+          <div className={styles.stageList}>
+            {sections.map((section) => (
+              <div key={section.key}>{section.node}</div>
+            ))}
+          </div>
         )}
         {actionError && <p className={styles.error}>{actionError}</p>}
 
@@ -174,7 +218,9 @@ export default function ArtworkDetailPage({ renderTimeline }) {
               {statusBusy ? '처리하는 중…' : '작품 완료하기'}
             </Button>
             {!finalPhoto && (
-              <p className={styles.hint}>완성 사진을 올리면 작품을 완료할 수 있어요.</p>
+              <p className={styles.hint}>
+                마지막 단계({stages.at(-1)?.label}) 사진을 올리면 작품을 완료할 수 있어요.
+              </p>
             )}
           </>
         )}

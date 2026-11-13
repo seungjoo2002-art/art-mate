@@ -23,6 +23,7 @@ export const createArtwork = ({
   practicalType,
   workCategory,
   timeLimitMinutes,
+  stages,
 }) =>
   api('/artworks', {
     method: 'POST',
@@ -34,8 +35,19 @@ export const createArtwork = ({
       ...(practicalType ? { practical_type: practicalType } : {}),
       ...(workCategory ? { work_category: workCategory } : {}),
       ...(timeLimitMinutes ? { time_limit_minutes: timeLimitMinutes } : {}),
+      ...(stages?.length ? { stages } : {}), // v0.9.7 [{ name, target_minutes? }]
     },
   })
+
+/** 작품 단계 (v0.9.7): 활성 단계 순서대로, 그 뒤에 숨긴 단계(archived=true) */
+export const listStages = (artworkId) => api(`/artworks/${artworkId}/stages`)
+
+/**
+ * 단계 목록 전체를 순서대로 보냄 ([{ id?, name, target_minutes? }]). 기존 단계는 id 포함.
+ * 빠진 단계에 사진·피드백이 있으면 지우지 않고 숨김 (archived_stage_ids), id를 다시 넣으면 복원
+ */
+export const replaceStages = (artworkId, stages) =>
+  api(`/artworks/${artworkId}/stages`, { method: 'PUT', body: { stages } })
 
 export const deleteArtwork = (artworkId) => api(`/artworks/${artworkId}`, { method: 'DELETE' })
 
@@ -69,8 +81,19 @@ export const getPhotoUrl = (artworkId, photoId) =>
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_BYTES = 10 * 1024 * 1024
 
-/** 브라우저 → Storage 직접 업로드 (docs/frontend-integration-v0.4.md §3) */
-export async function uploadStagePhoto(artworkId, stage, file, { replacesPhotoId } = {}) {
+const LEGACY_STAGES = ['SKETCH', 'PROGRESS', 'FINAL']
+
+/**
+ * 브라우저 → Storage 직접 업로드 (docs/frontend-integration-v0.4.md §3)
+ * stage: 작품 단계 id (v0.9.7) 또는 예전 SKETCH | PROGRESS | FINAL
+ * kind REVISION: 피드백을 반영한 수정 사진 → feedbackNoteId 또는 feedbackRecordingId 1개 필수
+ */
+export async function uploadStagePhoto(
+  artworkId,
+  stage,
+  file,
+  { replacesPhotoId, kind = 'STAGE', feedbackNoteId, feedbackRecordingId } = {},
+) {
   if (!ALLOWED_TYPES.includes(file.type)) {
     const isHeic = /heic|heif/i.test(file.type) || /\.hei[cf]$/i.test(file.name)
     throw {
@@ -85,7 +108,10 @@ export async function uploadStagePhoto(artworkId, stage, file, { replacesPhotoId
   const ticket = await api(`/artworks/${artworkId}/photos`, {
     method: 'POST',
     body: {
-      stage,
+      ...(LEGACY_STAGES.includes(stage) ? { stage } : { stage_id: stage }),
+      kind,
+      ...(feedbackNoteId ? { feedback_note_id: feedbackNoteId } : {}),
+      ...(feedbackRecordingId ? { feedback_recording_id: feedbackRecordingId } : {}),
       content_type: file.type,
       file_size: file.size,
       file_name: file.name,

@@ -3,13 +3,15 @@ import { api } from '../../lib/api'
 // v0.9 F-3 텍스트 첨삭 (docs/frontend-integration-v0.9.md §3). 원문은 문장 단위(segments)로 나뉘어 AI 근거 번호가 됨
 
 /** source: INSTRUCTOR(강사 첨삭을 받아 적음) | SELF_NOTE(자기 메모) | PEER(다른 학생 의견) */
-export const createNote = (artworkId, { source, body, feedbackDate, requestSummary }) =>
+/** stageId: 단계 피드백이면 작품 단계 id (v0.9.7). 없으면 작품 전체 피드백 */
+export const createNote = (artworkId, { source, body, feedbackDate, requestSummary, stageId }) =>
   api(`/artworks/${artworkId}/feedback-notes`, {
     method: 'POST',
     body: {
       source,
       body,
       ...(feedbackDate ? { feedback_date: feedbackDate } : {}),
+      ...(stageId ? { stage_id: stageId } : {}),
       request_summary: requestSummary,
     },
   })
@@ -19,10 +21,17 @@ export const listNotes = (artworkId) => api(`/artworks/${artworkId}/feedback-not
 
 export const getNote = (noteId) => api(`/feedback-notes/${noteId}`)
 
-export const updateNote = (noteId, { version, source, body, feedbackDate }) =>
+/** stageId: undefined면 그대로, null이면 작품 전체 피드백으로 (v0.9.7) */
+export const updateNote = (noteId, { version, source, body, feedbackDate, stageId }) =>
   api(`/feedback-notes/${noteId}`, {
     method: 'PATCH',
-    body: { version, source, body, feedback_date: feedbackDate },
+    body: {
+      version,
+      source,
+      body,
+      feedback_date: feedbackDate,
+      ...(stageId !== undefined ? { stage_id: stageId } : {}),
+    },
   })
 
 export const deleteNote = (noteId) => api(`/feedback-notes/${noteId}`, { method: 'DELETE' })

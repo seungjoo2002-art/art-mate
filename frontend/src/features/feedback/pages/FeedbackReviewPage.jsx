@@ -162,6 +162,13 @@ export default function FeedbackReviewPage() {
               </Link>
             )}
 
+            {/* v0.9.7 어느 단계의 피드백인지 */}
+            <div className={styles.chips}>
+              <Badge>
+                {feedback.stage_name ? `${feedback.stage_name} 단계 피드백` : '작품 전체 피드백'}
+              </Badge>
+            </div>
+
             <section className={styles.section}>
               <h2 className={styles.label}>전체 첨삭 요약</h2>
               {feedback.summary ? (

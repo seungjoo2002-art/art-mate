@@ -7,14 +7,9 @@ import { useOptions } from '../../../hooks/useOptions'
 import { labelOf } from '../../../lib/options'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { createArtwork } from '../api'
-import ExamTargetsCard from '../components/ExamTargetsCard'
-import {
-  loadStageTargets,
-  newExamSession,
-  saveExamSession,
-  saveStageTargets,
-  totalMinutes,
-} from '../exam'
+import StageEditor from '../components/StageEditor'
+import { loadStageTargets, newExamSession, saveExamSession, saveStageTargets } from '../exam'
+import { DEFAULT_STAGE_NAMES, newStageRow, stageListError, toStageSpecs } from '../stages'
 import styles from './ArtworkPage.module.css'
 
 /** 작품명을 비우면 쓰는 임시 제목. 예: "기초디자인 · 11월 11일" */
@@ -26,7 +21,7 @@ function fallbackTitle(typeLabel, exam) {
 
 /**
  * /artworks/new (새 작품 기록) · /artworks/new?mode=exam (실기시험: 모의시험 + 제한 시간)
- * 디자인의 실기 유형 "관리"와 "기록 중 단계 추가"는 백엔드가 없어 제외 (단계는 스케치·중간·완성 고정)
+ * v0.9.7: 제작 단계를 학생이 정함 (기본 스케치 · 채색 · 완성, 1~10개). 시험 모드는 단계별 목표 시간도
  */
 export default function ArtworkCreatePage() {
   const navigate = useNavigate()
@@ -35,7 +30,11 @@ export default function ArtworkCreatePage() {
   const [params] = useSearchParams()
   const recommendationId = params.get('recommendation')
   const exam = params.get('mode') === 'exam'
-  const [stageTargets, setStageTargets] = useState(loadStageTargets)
+  const [stages, setStages] = useState(() =>
+    exam
+      ? loadStageTargets().map((t) => newStageRow(t.label, { minutes: t.minutes }))
+      : DEFAULT_STAGE_NAMES.map((name) => newStageRow(name)),
+  )
   const [title, setTitle] = useState('')
   const [practicalType, setPracticalType] = useState(profile.practical_type ?? '')
   const [topic, setTopic] = useState('')
@@ -44,11 +43,17 @@ export default function ArtworkCreatePage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    const stageError = stageListError(stages, { withMinutes: exam })
+    if (stageError) {
+      setFormError(stageError)
+      return
+    }
     setSubmitting(true)
     setFormError('')
     const typeLabel =
       practicalType && options ? labelOf(options.practical_types, practicalType) : ''
-    if (exam) saveStageTargets(stageTargets) // 다음 시험 기본값
+    const targets = stages.map((s) => ({ key: s.key, label: s.name.trim(), minutes: s.minutes }))
+    if (exam) saveStageTargets(targets) // 다음 시험 기본값
     try {
       const artwork = await createArtwork({
         title: title.trim() || fallbackTitle(typeLabel, exam),
@@ -56,10 +61,17 @@ export default function ArtworkCreatePage() {
         recommendationId,
         practicalType: practicalType || undefined,
         workCategory: exam ? 'MOCK_EXAM' : undefined,
-        timeLimitMinutes: exam ? totalMinutes(stageTargets) : undefined,
+        // 시험 모드: 제한 시간 = 단계 목표 시간의 합 (서버가 계산)
+        stages: toStageSpecs(stages, { withMinutes: exam }),
       })
       if (exam) {
-        saveExamSession(artwork.id, newExamSession(stageTargets))
+        const plan = artwork.stage_plan ?? []
+        saveExamSession(
+          artwork.id,
+          newExamSession(
+            targets.map((t, i) => ({ ...t, key: plan[i]?.id ?? t.key, stageId: plan[i]?.id })),
+          ),
+        )
         navigate(`/artworks/${artwork.id}/exam`, { replace: true })
       } else {
         navigate(`/artworks/${artwork.id}`, { replace: true })
@@ -103,12 +115,12 @@ export default function ArtworkCreatePage() {
           onChange={(e) => setTopic(e.target.value)}
         />
 
-        {exam && <ExamTargetsCard targets={stageTargets} onChange={setStageTargets} />}
-        {!exam && (
-          <p className={styles.caption}>
-            스케치 · 중간 작업 · 완성 단계별로 사진과 피드백을 기록할 수 있어요.
-          </p>
-        )}
+        <StageEditor
+          stages={stages}
+          onChange={setStages}
+          withMinutes={exam}
+          note="단계마다 사진과 피드백, 피드백을 반영한 수정 사진을 따로 기록할 수 있어요. 단계는 나중에 작품 정보 수정에서 바꿀 수 있어요."
+        />
 
         {formError && <p className={styles.error}>{formError}</p>}
         <div className={styles.submit}>

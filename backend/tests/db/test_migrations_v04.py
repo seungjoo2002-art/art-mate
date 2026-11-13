@@ -177,15 +177,25 @@ async def test_storage_access_function(conn: asyncpg.Connection) -> None:
     paths = {}
     for photo, artwork in (("photo", "artwork"), ("personal_photo", "personal")):
         paths[photo] = f"{ids['owner']}/{ids[artwork]}/{ids[photo]}.png"
+        stage_id = uuid.uuid4()  # v0.9.7: 사진은 작품 단계에 연결된다
         await conn.execute(
-            "INSERT INTO artwork_photos (id, artwork_id, owner_id, stage, status, storage_path,"
-            " content_type, size_bytes, width, height, sha256, upload_expires_at, uploaded_at)"
-            " VALUES ($1, $2, $3, 'SKETCH', 'ACTIVE', $4, 'image/png', 1, 1, 1, $5, now(), now())",
+            "INSERT INTO artwork_stages (id, artwork_id, owner_id, position, name, legacy_stage)"
+            " VALUES ($1, $2, $3, 0, '스케치', 'SKETCH')",
+            stage_id,
+            ids[artwork],
+            ids["owner"],
+        )
+        await conn.execute(
+            "INSERT INTO artwork_photos (id, artwork_id, owner_id, stage, stage_id, status,"
+            " storage_path, content_type, size_bytes, width, height, sha256, upload_expires_at,"
+            " uploaded_at) VALUES ($1, $2, $3, 'SKETCH', $6, 'ACTIVE', $4, 'image/png', 1, 1, 1,"
+            " $5, now(), now())",
             ids[photo],
             ids[artwork],
             ids["owner"],
             paths[photo],
             ids[photo].hex * 2,
+            stage_id,
         )
 
     async def can(user: str, photo: str, mode: str) -> bool:

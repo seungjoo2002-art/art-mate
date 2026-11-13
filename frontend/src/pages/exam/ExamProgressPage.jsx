@@ -15,6 +15,7 @@ import {
   newExamSession,
   saveExamSession,
   stageSeconds,
+  targetsFromPlan,
 } from '../../features/artworks/exam'
 import { createNote } from '../../features/feedback/notesApi'
 import { useAsync } from '../../hooks/useAsync'
@@ -52,11 +53,11 @@ export default function ExamProgressPage() {
 function ExamProgress({ artwork, timer, onPhotoChanged }) {
   const navigate = useNavigate()
   const options = useOptions()
-  // 다른 기기에서 열었으면 기록이 없으니 기본 목표로 새로 시작 (단계 시작은 지금 경과 시간부터)
+  // 다른 기기에서 열었으면 기록이 없으니 작품의 단계(v0.9.7)로 새로 시작 (단계 시작은 지금 경과 시간부터)
   const [session, setSession] = useState(
     () =>
       loadExamSession(artwork.id) ?? {
-        ...newExamSession(DEFAULT_STAGE_TARGETS),
+        ...newExamSession(targetsFromPlan(artwork) ?? DEFAULT_STAGE_TARGETS),
         stageStarts: [timer.elapsed],
       },
   )
@@ -76,9 +77,18 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
     artwork.practical_type && options
       ? labelOf(options.practical_types, artwork.practical_type)
       : null
-  const photoStage = EXAM_PHOTO_STAGES[index]
-  const summary = artwork.stages.find((s) => s.stage === photoStage)
-  const photo = artwork.photos.find((p) => p.id === summary?.representative_photo_id)
+  // 작품 단계 id (v0.9.7). 예전 기록이면 같은 순서의 작품 단계, 그것도 없으면 예전 고정 단계
+  const plan = artwork.stage_plan ?? []
+  const stageId =
+    stage.stageId ?? (plan.length === session.targets.length ? plan[index]?.id : undefined)
+  const photoStage = stageId ?? EXAM_PHOTO_STAGES[Math.min(index, EXAM_PHOTO_STAGES.length - 1)]
+  const photo = stageId
+    ? artwork.photos.find(
+        (p) => p.stage_id === stageId && (p.kind ?? 'STAGE') === 'STAGE' && p.is_representative,
+      )
+    : artwork.photos.find(
+        (p) => p.id === artwork.stages.find((s) => s.stage === photoStage)?.representative_photo_id,
+      )
 
   const update = (next) => {
     setSession(next)
@@ -92,6 +102,7 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
       source: memoSource,
       body: memo.trim(),
       requestSummary: false,
+      stageId, // 이 단계의 피드백으로 (v0.9.7)
     })
     setMemo('')
     const next = {
@@ -235,7 +246,13 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
 
         <section className={styles.section}>
           <h2 className={styles.label}>음성 첨삭 녹음</h2>
-          <Button onClick={() => navigate(`/artworks/${artwork.id}/recordings/new`)}>
+          <Button
+            onClick={() =>
+              navigate(
+                `/artworks/${artwork.id}/recordings/new${stageId ? `?stage=${stageId}` : ''}`,
+              )
+            }
+          >
             <Mic size={22} aria-hidden /> 음성 피드백 녹음하기
           </Button>
           <p className={styles.small}>
