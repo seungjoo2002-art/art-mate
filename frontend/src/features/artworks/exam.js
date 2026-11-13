@@ -1,51 +1,88 @@
-// 실기시험 모드 (모의시험 작품 + 제한 시간)
+import { getExamDefaults, putExamDefaults } from './api'
 
-// 시험 단계별 목표 시간 기본값. v0.9.7부터 단계 이름·개수를 학생이 정하고 작품의 단계(stage_plan)에
-// 목표 시간과 함께 저장된다. 이 기기에는 다음 시험의 기본값으로 마지막 설정을 기억한다
+// 실기시험 모드 (모의시험 작품 + 서버에 저장되는 단계별 목표·진행)
+
+// 시험 단계 코드 → 이름 (서버 EXAM_STAGE_LABELS와 같음)
+export const STAGE_LABELS = { IDEA: '아이디어', SKETCH: '스케치', COLOR: '채색', FINISH: '마무리' }
+
+// 화면용 단계 목표: { key: 단계 코드, label, minutes }
 export const DEFAULT_STAGE_TARGETS = [
   { key: 'IDEA', label: '아이디어', minutes: 40 },
   { key: 'SKETCH', label: '스케치', minutes: 80 },
   { key: 'COLOR', label: '채색', minutes: 180 },
 ]
-export const MAX_EXAM_MINUTES = 1440 // 서버 제한 (1~1440분)
+export const MAX_EXAM_MINUTES = 1440 // 서버 제한 (합계 1~1440분)
 
-const KEY = 'artmate.examStageTargets'
+// v0.9.7: 시험 단계 이름은 학생이 정하고 작품 단계(stage_plan)로 저장한다. 서버 시험 진행은 단계 코드
+// 최대 4개를 쓰므로, 시험 단계 i ↔ 작품 단계 i (같은 순서)로 대응하고 코드는 순서대로 붙인다
+export const EXAM_CODES = ['IDEA', 'SKETCH', 'COLOR', 'FINISH']
+export const MAX_EXAM_STAGES = EXAM_CODES.length
 
-export function loadStageTargets() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY))
-    // v0.9.7: 이름까지 저장 (개수 자유)
-    if (Array.isArray(saved) && saved.length && saved.every((t) => t?.label)) {
-      return saved
-        .slice(0, 10)
-        .map((t, i) => ({
-          key: t.key ?? `S${i}`,
-          label: String(t.label).slice(0, 30),
-          minutes: Number(t.minutes) || 30,
-        }))
-    }
-    if (Array.isArray(saved) && saved.length === DEFAULT_STAGE_TARGETS.length) {
-      return DEFAULT_STAGE_TARGETS.map((stage, i) => ({
-        ...stage,
-        minutes: Number(saved[i]?.minutes) || stage.minutes,
-      }))
-    }
-  } catch {
-    // 저장소를 못 쓰면 기본값
-  }
-  return DEFAULT_STAGE_TARGETS
+/** 편집 목록 [{ name, minutes }] → 서버 시험 계획 [{ stage: 코드, target_minutes }] (순서대로) */
+export const rowsToPlan = (rows) =>
+  rows.map((row, i) => ({ stage: EXAM_CODES[i], target_minutes: row.minutes }))
+
+/**
+ * 시험 단계(서버)에 대응하는 작품 단계. 단계 수가 같을 때만 순서로 맞춤
+ * (예전 시험·단계를 나중에 바꾼 작품은 대응하지 않음 → 예전 고정 사진 단계로)
+ */
+export function artworkStageFor(artwork, examStages, index) {
+  const plan = artwork.stage_plan ?? []
+  return plan.length === examStages.length ? (plan[index] ?? null) : null
 }
 
-export function saveStageTargets(targets) {
+/** 화면에 보여 줄 시험 단계 이름: 대응하는 작품 단계 이름, 없으면 서버 이름 */
+export const examStageName = (artwork, examStages, index) =>
+  artworkStageFor(artwork, examStages, index)?.name ?? examStages[index]?.label ?? '시험'
+
+/** 서버 { stage, target_minutes }[] ↔ 화면 { key, label, minutes }[] */
+export const toTargets = (stages) =>
+  stages.map((s) => ({
+    key: s.stage,
+    label: STAGE_LABELS[s.stage] ?? s.stage,
+    minutes: s.target_minutes,
+  }))
+export const toPlan = (targets) => targets.map((t) => ({ stage: t.key, target_minutes: t.minutes }))
+
+// 예전 버전이 이 기기에만 저장하던 기본 목표 → 처음 한 번 계정으로 옮기고 지움
+const LEGACY_KEY = 'artmate.examStageTargets'
+
+function takeLegacyTargets() {
   try {
-    localStorage.setItem(
-      KEY,
-      JSON.stringify(targets.map(({ key, label, minutes }) => ({ key, label, minutes }))),
-    )
+    const saved = JSON.parse(localStorage.getItem(LEGACY_KEY))
+    if (!Array.isArray(saved) || saved.length !== DEFAULT_STAGE_TARGETS.length) return null
+    return DEFAULT_STAGE_TARGETS.map((stage, i) => ({
+      ...stage,
+      minutes: Number(saved[i]?.minutes) || stage.minutes,
+    }))
   } catch {
-    // 무시 (다음에 기본값으로 시작)
+    return null
   }
 }
+
+function clearLegacyTargets() {
+  try {
+    localStorage.removeItem(LEGACY_KEY)
+  } catch {
+    // 무시
+  }
+}
+
+/** 내 기본 단계 목표 (계정에 저장, 모든 기기 공통) */
+export async function loadExamDefaults() {
+  const res = await getExamDefaults()
+  if (res.source === 'DEFAULT') {
+    const legacy = takeLegacyTargets()
+    if (legacy) {
+      const saved = await putExamDefaults(toPlan(legacy))
+      clearLegacyTargets()
+      return toTargets(saved.stages)
+    }
+  }
+  return toTargets(res.stages)
+}
+
+export const saveExamDefaults = (targets) => putExamDefaults(toPlan(targets))
 
 export const totalMinutes = (targets) => targets.reduce((sum, t) => sum + t.minutes, 0)
 
@@ -57,69 +94,36 @@ export function formatMinutes(minutes) {
   return m ? `${h}시간 ${m}분` : `${h}시간`
 }
 
-// 시험 진행 기록 (이 기기에만): 단계별 목표, 단계 시작 시점(경과 초), 단계별 메모 id
-// 타이머 API에는 단계 구분이 없어서 "다음 단계"를 누른 시점으로 단계별 실제 시간을 계산함
-// 예전(v0.9.6) 작품: 단계 id가 없으면 아이디어·스케치·채색 → 사진 단계로 대응
-export const EXAM_PHOTO_STAGES = ['SKETCH', 'PROGRESS', 'FINAL']
-
-/** 작품의 단계(stage_plan)로 시험 목표를 만듦. 목표 시간이 없는 단계는 남은 시간을 나눠 씀 */
-export function targetsFromPlan(artwork) {
-  const plan = artwork.stage_plan ?? []
-  if (!plan.length) return null
-  const fixed = plan.reduce((sum, s) => sum + (s.target_minutes ?? 0), 0)
-  const missing = plan.filter((s) => !s.target_minutes).length
-  const share = missing
-    ? Math.max(10, Math.floor(((artwork.time_limit_minutes ?? fixed) - fixed) / missing))
-    : 0
-  return plan.map((s) => ({
-    key: s.id,
-    stageId: s.id,
-    label: s.name,
-    minutes: s.target_minutes ?? share,
-  }))
+// 시험 단계 → 그 단계에서 올리는 작품 사진 단계 (작품 사진은 스케치·중간·완성 3단계)
+export const EXAM_PHOTO_STAGE = {
+  IDEA: 'SKETCH',
+  SKETCH: 'PROGRESS',
+  COLOR: 'FINAL',
+  FINISH: 'FINAL',
 }
 
-const sessionKey = (artworkId) => `artmate.exam.${artworkId}`
-
-export function loadExamSession(artworkId) {
-  try {
-    const saved = JSON.parse(localStorage.getItem(sessionKey(artworkId)))
-    if (saved && Array.isArray(saved.stageStarts)) return saved
-  } catch {
-    // 무시
-  }
-  return null
+/**
+ * 서버 단계별 작업 시간(초). ACTIVE 단계는 응답 시점 이후 흐른 시간(liveElapsed − 응답 당시 경과)을 더함
+ * liveElapsed: useExamTimer가 1초마다 계산한 전체 경과 초
+ */
+export function liveStageSeconds(exam, liveElapsed) {
+  const base = exam.timer?.elapsed_seconds ?? 0
+  return exam.stages.map((s) =>
+    s.status === 'ACTIVE' ? s.elapsed_seconds + Math.max(0, liveElapsed - base) : s.elapsed_seconds,
+  )
 }
 
-export function saveExamSession(artworkId, session) {
-  try {
-    localStorage.setItem(sessionKey(artworkId), JSON.stringify(session))
-  } catch {
-    // 무시 (단계별 시간만 못 보여 줌)
-  }
-}
-
-export function newExamSession(targets) {
-  return {
-    targets: targets.map(({ key, label, minutes, stageId }) => ({
-      key,
-      label,
-      minutes,
-      ...(stageId ? { stageId } : {}),
-    })),
-    stageStarts: [0], // 단계마다 시작한 시점의 경과 초
-    notes: {}, // { 단계 index: [note id] }
-  }
-}
-
-/** 단계별 실제 시간(초). 끝난 단계는 다음 단계 시작까지, 현재 단계는 지금(elapsed)까지 */
-export function stageSeconds(session, elapsed) {
-  return session.targets.map((_, i) => {
-    const start = session.stageStarts[i]
-    if (start === undefined) return 0
-    const end = session.stageStarts[i + 1] ?? elapsed
-    return Math.max(0, end - start)
-  })
+/** 메모 작성 시각으로 어느 단계에서 쓴 메모인지 (단계 시작~끝 사이) */
+export function stageOfNote(stages, note) {
+  const at = Date.parse(note.created_at)
+  return (
+    stages.find(
+      (s) =>
+        s.started_at &&
+        Date.parse(s.started_at) <= at &&
+        (!s.ended_at || at < Date.parse(s.ended_at)),
+    )?.stage ?? null
+  )
 }
 
 const pad = (n) => String(n).padStart(2, '0')

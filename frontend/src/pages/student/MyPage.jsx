@@ -37,7 +37,9 @@ export default function MyPage() {
             {profile.display_name}
             <span className={styles.role}>학생</span>
           </p>
-          <p className={styles.sub}>{[profile.email, grade].filter(Boolean).join(' · ')}</p>
+          <p className={styles.sub}>
+            {[profile.real_name, profile.email, grade].filter(Boolean).join(' · ')}
+          </p>
         </div>
         <Link to="/my/edit" className={styles.edit}>
           편집 <PencilLine size={16} aria-hidden />

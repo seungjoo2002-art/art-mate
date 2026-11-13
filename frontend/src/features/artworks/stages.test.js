@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { targetsFromPlan } from './exam'
+import { artworkStageFor, examStageName, rowsToPlan } from './exam'
 import {
+  extraStagePhotos,
   newStageRow,
   revisionPhotosOf,
   stageListError,
@@ -114,18 +115,53 @@ describe('stage editing', () => {
   })
 })
 
-describe('targetsFromPlan', () => {
-  it('splits the remaining limit over stages without a target', () => {
-    const targets = targetsFromPlan({ stage_plan: plan, time_limit_minutes: 200 })
-    expect(targets.map((t) => [t.label, t.minutes, t.stageId])).toEqual([
-      ['아이디어', 20, 's1'],
-      ['밑색', 70, 's2'],
-      ['묘사', 70, 's3'],
-      ['마무리', 40, 's4'],
+describe('exam stages ↔ artwork stages', () => {
+  const exam = [
+    { stage: 'IDEA', label: '아이디어' },
+    { stage: 'SKETCH', label: '스케치' },
+    { stage: 'COLOR', label: '채색' },
+    { stage: 'FINISH', label: '마무리' },
+  ]
+
+  it('assigns exam codes by position', () => {
+    expect(
+      rowsToPlan([
+        { name: '구상', minutes: 30 },
+        { name: '묘사', minutes: 90 },
+      ]),
+    ).toEqual([
+      { stage: 'IDEA', target_minutes: 30 },
+      { stage: 'SKETCH', target_minutes: 90 },
     ])
   })
 
-  it('returns null for old responses', () => {
-    expect(targetsFromPlan({})).toBeNull()
+  it('maps exam stage i to artwork stage i with the custom name', () => {
+    const artwork = { stage_plan: plan }
+    expect(artworkStageFor(artwork, exam, 1).id).toBe('s2')
+    expect(examStageName(artwork, exam, 3)).toBe('마무리')
+    expect(examStageName(artwork, exam, 1)).toBe('밑색')
+  })
+
+  it('falls back to server labels when counts differ (old exams)', () => {
+    const artwork = { stage_plan: plan.slice(0, 3) }
+    expect(artworkStageFor(artwork, exam, 0)).toBeNull()
+    expect(examStageName(artwork, exam, 0)).toBe('아이디어')
+    expect(examStageName({}, exam, 2)).toBe('채색')
+  })
+})
+
+describe('extraStagePhotos', () => {
+  it('lists non-representative stage photos but not revisions', () => {
+    const artwork = {
+      photos: [
+        photo('p1', { stage_id: 's1', is_representative: true, status: 'ACTIVE' }),
+        photo('p2', { stage_id: 's1', status: 'ACTIVE' }),
+        photo('p3', { stage_id: 's2', status: 'ACTIVE' }),
+        photo('r1', { stage_id: 's1', kind: 'REVISION', status: 'ACTIVE', feedback_note_id: 'n' }),
+        photo('d1', { stage_id: 's1', status: 'DELETED' }),
+      ],
+    }
+    expect(extraStagePhotos(artwork, 's1').map((p) => p.id)).toEqual(['p2'])
+    expect(extraStagePhotos(artwork, null).map((p) => p.id)).toEqual(['p2', 'p3'])
   })
 })

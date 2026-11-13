@@ -29,7 +29,8 @@ export function stagesWithPhotos(artwork) {
         id: null,
         legacy: stage.key,
         photo,
-        uploadedAt: summary?.last_uploaded_at ?? null,
+        // 타임라인 시각은 이 사진을 올린 시각 (단계의 last_uploaded_at은 추가 사진 시각일 수 있음)
+        uploadedAt: photo ? (photo.uploaded_at ?? photo.created_at) : null,
         targetMinutes: null,
       }
     })
@@ -44,7 +45,7 @@ export function stagesWithPhotos(artwork) {
       label: stage.name,
       photoLabel: `${stage.name} 사진`,
       photo,
-      uploadedAt: photo?.uploaded_at ?? null,
+      uploadedAt: photo ? (photo.uploaded_at ?? photo.created_at) : null,
       targetMinutes: stage.target_minutes ?? null,
     }
   })
@@ -60,6 +61,19 @@ export function revisionPhotosOf(artwork, { type, id }) {
         Date.parse(a.uploaded_at ?? a.created_at) - Date.parse(b.uploaded_at ?? b.created_at),
     )
 }
+
+/**
+ * 대표가 아닌 단계 사진 (VER.2 추가 사진: 피드백 전·작업 중 여러 장). 수정 사진(REVISION)은 제외.
+ * stageId가 없으면(예전 응답) 모든 추가 사진
+ */
+export const extraStagePhotos = (artwork, stageId) =>
+  artwork.photos.filter(
+    (p) =>
+      isStagePhoto(p) &&
+      !p.is_representative &&
+      p.status === 'ACTIVE' &&
+      (stageId == null || p.stage_id === stageId),
+  )
 
 /** 연결된 피드백이 지워진 수정 사진 (사진은 남아 있음) */
 export const unlinkedRevisions = (artwork, stageId) =>
@@ -98,5 +112,5 @@ export const toStageSpecs = (stages, { withMinutes = false } = {}) =>
 /** 학생이 직접 "작품 완료하기"를 누른 작품 (v0.5.1 work_status). 완성 사진이 있다고 완료는 아님 */
 export const isCompleted = (artwork) => artwork.work_status === 'COMPLETED'
 
-/** 마지막 단계 사진이 있음 → 작품 완료·커뮤니티 공유 가능 */
+/** 마지막 단계 사진이 있음 → 작품 완료 가능 (커뮤니티 공유는 VER.2부터 사진 1장이면 가능) */
 export const hasFinalPhoto = (artwork) => artwork.progress === 'FINAL'

@@ -19,10 +19,19 @@ const byTime = (a, b) => Date.parse(a.time) - Date.parse(b.time)
  * 작품 상세의 단계별 기록 (v0.9.7)
  * 단계마다 [단계 사진(section.node) → 그 단계의 피드백(녹음·글 첨삭) → 피드백별 수정 사진],
  * 맨 아래에 단계를 정하지 않은 '작품 전체 피드백'.
- * sections: [{ key, stageId, title, node }] — stageId가 없으면(예전 응답) 모든 피드백이 전체 피드백으로
+ * sections: [{ key, stageId, title, node, items? }] — stageId가 없으면(예전 응답) 모든 피드백이 전체 피드백으로
+ *   items: 그 단계의 추가 사진 등 [{ key, time, node }] → 그 단계 피드백과 함께 올린 시각 순으로 섞음
  * renderRevisions({ type, id }, stageId): 피드백 아래 수정 사진 영역 (작품 기능에서 주입)
+ * extraItems: 단계를 알 수 없는 항목 (예전 응답의 추가 사진) → 전체 피드백과 함께 시간순
+ * actions: 맨 아래 (작품 쪽에서 넘긴 사진 추가 등, VER.2)
  */
-export default function FeedbackTimeline({ artworkId, sections, renderRevisions }) {
+export default function FeedbackTimeline({
+  artworkId,
+  sections,
+  renderRevisions,
+  extraItems = [],
+  actions = null,
+}) {
   const options = useOptions()
   const load = useCallback(() => listRecordings(artworkId), [artworkId])
   const { data, reload } = useAsync(load)
@@ -115,20 +124,22 @@ export default function FeedbackTimeline({ artworkId, sections, renderRevisions 
   const all = [...recordingItems, ...noteItems]
   const feedbackOf = (stageId) => all.filter((item) => item.stageId === stageId).sort(byTime)
 
+  // 피드백과 (작품 쪽에서 넘긴) 추가 사진을 올린 시각 순으로. 피드백 아래에는 그 피드백의 수정 사진
   const feedbackList = (items, stageId) =>
     items.length > 0 && (
       <ol className={styles.timeline}>
         {items.map((item) => (
           <li key={item.key} className={styles.entry}>
-            <span className={styles.time}>{formatUploadedAt(item.time)}</span>
+            {item.time && <span className={styles.time}>{formatUploadedAt(item.time)}</span>}
             <div className={styles.feedback}>
               {item.node}
-              {renderRevisions?.(item.feedback, stageId)}
+              {item.feedback && renderRevisions?.(item.feedback, stageId)}
             </div>
           </li>
         ))}
       </ol>
     )
+  const withExtras = (feedback, extras = []) => [...feedback, ...extras].sort(byTime)
 
   const addButtons = (stageId, compact) => {
     const query = stageId ? `?stage=${stageId}` : ''
@@ -152,15 +163,17 @@ export default function FeedbackTimeline({ artworkId, sections, renderRevisions 
   return (
     <section className={styles.section}>
       {sections.map((section) => {
-        const items = section.stageId ? feedbackOf(section.stageId) : []
+        const feedback = section.stageId ? feedbackOf(section.stageId) : []
+        const items = withExtras(feedback, section.items)
         return (
           <section key={section.key} className={styles.stage} aria-label={section.title}>
             {section.node}
+            {!section.stageId && feedbackList(withExtras([], section.items), null)}
             {section.stageId && (
               <>
-                {items.length > 0 && (
+                {feedback.length > 0 && (
                   <span className={styles.subhead}>
-                    {section.title} 피드백 {items.length}개
+                    {section.title} 피드백 {feedback.length}개
                   </span>
                 )}
                 {feedbackList(items, section.stageId)}
@@ -176,9 +189,10 @@ export default function FeedbackTimeline({ artworkId, sections, renderRevisions 
         {staged && (
           <p className={styles.caption}>특정 단계가 아닌 작품 전체에 대한 피드백이에요.</p>
         )}
-        {feedbackList(overall, null)}
+        {feedbackList(withExtras(overall, extraItems), null)}
         {actionError && <p className={styles.error}>{actionError}</p>}
         {addButtons(null, false)}
+        {actions}
       </section>
     </section>
   )

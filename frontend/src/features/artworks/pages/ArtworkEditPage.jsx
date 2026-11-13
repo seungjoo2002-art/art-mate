@@ -33,8 +33,8 @@ export default function ArtworkEditPage() {
 
 const toRow = (s) => ({ key: s.id, id: s.id, name: s.name, minutes: s.target_minutes ?? 30 })
 const sameStages = (a, b) =>
-  JSON.stringify(a.map((s) => [s.id, s.name.trim(), s.minutes])) ===
-  JSON.stringify(b.map((s) => [s.id, s.name.trim(), s.minutes]))
+  JSON.stringify(a.map((s) => [s.id, s.name.trim()])) ===
+  JSON.stringify(b.map((s) => [s.id, s.name.trim()]))
 
 const toNumber = (v) => (v === '' ? null : Number(v))
 
@@ -68,8 +68,8 @@ function ArtworkEditForm({ artwork, stagePlan }) {
       setFormError('시간은 1분에서 1440분(24시간) 사이로 입력해 주세요.')
       return
     }
-    const exam = form.work_category === 'MOCK_EXAM'
-    const stageError = stageListError(stages, { withMinutes: exam })
+    // 시험 단계별 목표 시간은 서버 시험 계획(/exam)이 관리하므로 여기서는 이름·순서·개수만
+    const stageError = stageListError(stages)
     if (stageError) {
       setFormError(stageError)
       return
@@ -97,7 +97,7 @@ function ArtworkEditForm({ artwork, stagePlan }) {
       })
       // 단계는 바뀐 경우에만 (시험 작품은 단계 목표 시간의 합이 제한 시간이 됨)
       if (!sameStages(stages, initialStages)) {
-        await replaceStages(artwork.id, toStageSpecs(stages, { withMinutes: exam }))
+        await replaceStages(artwork.id, toStageSpecs(stages))
       }
       navigate(`/artworks/${artwork.id}`, { replace: true })
     } catch (err) {
@@ -165,7 +165,6 @@ function ArtworkEditForm({ artwork, stagePlan }) {
         <StageEditor
           stages={stages}
           onChange={setStages}
-          withMinutes={form.work_category === 'MOCK_EXAM'}
           note="이름·순서를 바꿔도 사진과 피드백은 그대로 그 단계에 남아요. 사진이나 피드백이 있는 단계를 빼면 지우지 않고 숨겨요."
         />
         {archived.length > 0 && (

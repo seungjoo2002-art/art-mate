@@ -21,7 +21,13 @@ function validate({ displayName, email, password, agreed }) {
 
 export default function SignupPage() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ displayName: '', email: '', password: '', agreed: false })
+  const [form, setForm] = useState({
+    realName: '',
+    displayName: '',
+    email: '',
+    password: '',
+    agreed: false,
+  })
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -39,7 +45,11 @@ export default function SignupPage() {
     setSubmitting(true)
     const email = form.email.trim()
     // 프로필은 로그인 상태가 된 뒤 AuthProvider가 이 값으로 생성
-    savePendingProfile({ email, displayName: form.displayName.trim() })
+    savePendingProfile({
+      email,
+      displayName: form.displayName.trim(),
+      realName: form.realName.trim() || undefined,
+    })
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -72,6 +82,15 @@ export default function SignupPage() {
         />
 
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
+          <Input
+            label="이름 (선택)"
+            placeholder="김서연"
+            autoComplete="name"
+            maxLength={50}
+            value={form.realName}
+            onChange={onInput('realName')}
+          />
+          <p className={styles.hint}>나만 볼 수 있어요. 다른 사람에게는 닉네임만 보여요.</p>
           <Input
             label="공개 닉네임"
             placeholder="서연의작업실"

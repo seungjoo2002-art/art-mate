@@ -80,3 +80,47 @@
   color: var(--color-danger);
   font-size: var(--text-sm);
 }
+
+.photos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.photo {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.photo img,
+.photo > span[aria-hidden] {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photoSelected {
+  border-color: var(--color-primary);
+}
+
+.photoLabel {
+  position: absolute;
+  bottom: var(--space-1);
+  left: var(--space-1);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: rgba(31, 31, 31, 0.72);
+  font-size: var(--text-xs);
+  color: var(--color-text-on-dark);
+}
+
+.authorDisplay {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

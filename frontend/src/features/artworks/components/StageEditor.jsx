@@ -11,7 +11,14 @@ const STEP = 10 // 분
  * withMinutes: 실기시험 모드 → 단계별 목표 시간(10분 단위)과 합계
  * stages: [{ key, id?, name, minutes? }]
  */
-export default function StageEditor({ stages, onChange, withMinutes = false, title, note }) {
+export default function StageEditor({
+  stages,
+  onChange,
+  withMinutes = false,
+  maxStages = MAX_STAGES,
+  title,
+  note,
+}) {
   const total = stages.reduce((sum, s) => sum + (s.minutes || 0), 0)
 
   const patch = (key, values) =>
@@ -32,7 +39,7 @@ export default function StageEditor({ stages, onChange, withMinutes = false, tit
           {title ?? (withMinutes ? '시험 단계와 목표 시간' : '제작 단계')}
         </h2>
         <span className={styles.count}>
-          {stages.length}/{MAX_STAGES}
+          {stages.length}/{maxStages}
         </span>
       </div>
 
@@ -107,7 +114,7 @@ export default function StageEditor({ stages, onChange, withMinutes = false, tit
         type="button"
         className={styles.add}
         onClick={add}
-        disabled={stages.length >= MAX_STAGES}
+        disabled={stages.length >= maxStages}
       >
         <Plus size={18} aria-hidden /> 단계 추가
       </button>

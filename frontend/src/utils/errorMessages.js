@@ -44,23 +44,32 @@ const API_MESSAGES = {
   FEEDBACK_INVALID_STATE: '지금 상태에서는 할 수 없는 작업이에요. 새로고침해 주세요.',
   FEEDBACK_VERSION_CONFLICT: '다른 곳에서 먼저 수정됐어요. 최신 내용을 다시 불러왔어요.',
   FEEDBACK_NOT_APPROVED: '선생님이 확인 중인 정리예요.',
-  FEEDBACK_NOTE_LOCKED: '확정된 AI 정리가 있어서 수정할 수 없어요. 정리 결과에서 확정을 취소한 뒤 수정해 주세요.',
+  FEEDBACK_NOTE_LOCKED:
+    '확정된 AI 정리가 있어서 수정할 수 없어요. 정리 결과에서 확정을 취소한 뒤 수정해 주세요.',
   FEEDBACK_NOTE_LIMIT: '작품 하나에 글 첨삭은 50개까지 남길 수 있어요.',
-  TRANSCRIPT_LOCKED: '확정된 AI 정리가 있어서 원문을 고칠 수 없어요. 정리 결과에서 확정을 취소한 뒤 수정해 주세요.',
+  TRANSCRIPT_LOCKED:
+    '확정된 AI 정리가 있어서 원문을 고칠 수 없어요. 정리 결과에서 확정을 취소한 뒤 수정해 주세요.',
   RECORDING_TOO_LONG: '녹음이 너무 길어서 AI로 정리할 수 없어요.',
   RECORDING_AUDIO_EXPIRED: '보관 기간이 지나 음성 파일이 삭제된 녹음이에요.',
   // 서버 설정이 꺼진 경우: 녹음·대본은 그대로 남아 있고, 설정 후 다시 요청할 수 있음
-  STT_NOT_CONFIGURED: '서버 음성 변환을 지금은 쓸 수 없어요. 이 기기에서 글로 바꾸거나 글 첨삭으로 남겨 주세요.',
+  STT_NOT_CONFIGURED:
+    '서버 음성 변환을 지금은 쓸 수 없어요. 이 기기에서 글로 바꾸거나 글 첨삭으로 남겨 주세요.',
   AI_NOT_CONFIGURED: 'AI 서비스 설정이 필요해요. 녹음 대본은 지금도 볼 수 있어요.',
   RATE_LIMITED: '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.',
   // 커뮤니티 (docs/frontend-integration-v0.8.md, v0.9.md §8)
   SHARING_CONSENT_REQUIRED: '커뮤니티 공유 동의가 필요해요.',
+  PHOTO_SELECTION_REQUIRED: '공유할 사진을 골라 주세요.',
   FINAL_PHOTO_REQUIRED: '완성 사진을 먼저 올려 주세요.',
   POST_ALREADY_EXISTS: '이미 커뮤니티에 올린 작품이에요.',
   SHARING_SCOPE_INVALID: '이 작품은 선택한 범위로 공유할 수 없어요.',
   COMMENT_NOT_FEEDBACK: '작품 피드백 댓글만 채택할 수 있어요.',
   COMMENT_ALREADY_ADOPTED: '이미 채택한 피드백이에요.',
   // 작품 타이머 (docs/frontend-integration-v0.9.md §2.1)
+  EXAM_PLAN_REQUIRED: '시험 단계 목표가 없어요. 시험을 다시 준비해 주세요.',
+  EXAM_NOT_RUNNING: '시험이 진행 중일 때만 다음 단계로 넘어갈 수 있어요.',
+  EXAM_STAGE_CONFLICT: '다른 화면에서 이미 다음 단계로 넘어갔어요. 최신 단계로 맞췄어요.',
+  EXAM_LAST_STAGE: '마지막 단계예요. 시험 완료하기를 눌러 주세요.',
+  EXAM_ALREADY_STARTED: '시작한 시험은 단계 구성을 바꿀 수 없어요. 목표 시간만 바꿀 수 있어요.',
   TIMER_INVALID_TRANSITION: '타이머 상태가 바뀌었어요. 화면을 새로고침해 주세요.',
   TIMER_INVALID_TIME: '기기 시간이 맞지 않아요. 시간 설정을 확인해 주세요.',
   TIMER_TOO_LONG: '24시간을 넘긴 시험은 이어서 기록할 수 없어요.',

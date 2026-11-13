@@ -11,6 +11,7 @@ import styles from './AuthForm.module.css'
 export default function OnboardingPage() {
   const { status, createProfile } = useAuth()
   const [displayName, setDisplayName] = useState('')
+  const [realName, setRealName] = useState('')
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -26,7 +27,7 @@ export default function OnboardingPage() {
     setSubmitting(true)
     setFormError('')
     try {
-      await createProfile({ displayName: name })
+      await createProfile({ displayName: name, realName: realName.trim() || undefined })
     } catch (error) {
       setFormError(toErrorMessage(error))
       setSubmitting(false)
@@ -48,6 +49,15 @@ export default function OnboardingPage() {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
           />
+          <Input
+            label="이름 (선택)"
+            placeholder="김서연"
+            autoComplete="name"
+            maxLength={50}
+            value={realName}
+            onChange={(e) => setRealName(e.target.value)}
+          />
+          <p className={styles.hint}>이름은 나만 볼 수 있어요.</p>
           {formError && <p className={styles.formError}>{formError}</p>}
           <Button type="submit" disabled={!name || submitting}>
             {submitting ? '저장하는 중…' : '다음'}
