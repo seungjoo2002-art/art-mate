@@ -584,7 +584,7 @@ async def test_0015_backfills_suggestions_only_and_keeps_data(migrated_database:
                 other_artwork,
                 user,
                 note_after,
-                late,
+                early,  # 아직 연결되지 않은 사진 (유니크가 아니라 복합 FK로 거부되는지)
             )
 
         _alembic("downgrade", "0014")
