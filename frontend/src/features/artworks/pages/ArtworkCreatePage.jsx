@@ -6,6 +6,7 @@ import { Button, Card, Input, Select } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { labelOf } from '../../../lib/options'
+import AcademyClassPicker from '../../academy/AcademyClassPicker'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { createArtwork, deleteArtwork, putExamPlan } from '../api'
 import StageEditor from '../components/StageEditor'
@@ -62,6 +63,7 @@ export default function ArtworkCreatePage() {
   const [practicalType, setPracticalType] = useState(profile.practical_type ?? '')
   const [topic, setTopic] = useState('')
   const [examMaterials, setExamMaterials] = useState('')
+  const [link, setLink] = useState({ academyId: null, classId: null }) // v1.0 학원 작품
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -96,6 +98,8 @@ export default function ArtworkCreatePage() {
         workCategory: exam ? 'MOCK_EXAM' : undefined,
         timeLimitMinutes: exam ? totalMinutes(stages) : undefined,
         stages: toStageSpecs(stages, { withMinutes: exam }),
+        academyId: link.academyId,
+        classId: link.classId,
       })
       if (exam) {
         // 단계 계획은 타이머 START 전에 저장해야 첫 단계가 함께 시작됨 (실패하면 작품을 지우고 다시)
@@ -154,6 +158,8 @@ export default function ArtworkCreatePage() {
           value={examMaterials}
           onChange={(e) => setExamMaterials(e.target.value)}
         />
+
+        <AcademyClassPicker value={link} onChange={setLink} />
 
         <StageEditor
           stages={stages}

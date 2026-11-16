@@ -68,6 +68,11 @@ export default function MyPage() {
       <section className={styles.section}>
         <h2 className={styles.heading}>기록 설정</h2>
         <SettingLink
+          to="/my/academies"
+          title="내 학원"
+          description="학원 소속 신청 · 학원 작품은 선생님이 첨삭을 확인해요"
+        />
+        <SettingLink
           to="/archive?tab=feed"
           title="내 공개 작품 피드"
           description="커뮤니티에 공유한 작품 확인"

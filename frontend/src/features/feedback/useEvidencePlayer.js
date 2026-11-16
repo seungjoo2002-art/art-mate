@@ -4,8 +4,9 @@ import { getRecordingUrl } from './api'
 /**
  * "근거 듣기": 녹음의 start_ms~end_ms 구간만 재생
  * 재생 URL은 처음 누를 때 받음 (Signed URL은 몇 분 뒤 만료되므로 매번 새로 받음)
+ * fetchUrl: (artworkId, recordingId) => { url } — v1.0 강사 화면은 학원 경로의 재생 URL을 넘긴다
  */
-export function useEvidencePlayer(artworkId, recordingId) {
+export function useEvidencePlayer(artworkId, recordingId, fetchUrl = getRecordingUrl) {
   const audioRef = useRef(null)
   const stopAtRef = useRef(null)
   const [playingKey, setPlayingKey] = useState(null)
@@ -42,7 +43,7 @@ export function useEvidencePlayer(artworkId, recordingId) {
       }
       setError('')
       try {
-        const { url } = await getRecordingUrl(artworkId, recordingId)
+        const { url } = await fetchUrl(artworkId, recordingId)
         if (audio.src !== url) audio.src = url
         stopAtRef.current = endMs ?? null
         audio.currentTime = (startMs ?? 0) / 1000
@@ -52,7 +53,7 @@ export function useEvidencePlayer(artworkId, recordingId) {
         setError('녹음을 재생할 수 없어요.')
       }
     },
-    [artworkId, recordingId, playingKey],
+    [artworkId, recordingId, playingKey, fetchUrl],
   )
 
   return { play, playingKey, error }

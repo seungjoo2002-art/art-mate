@@ -27,6 +27,11 @@ body {
   background: var(--color-bg);
 }
 
+/* v1.0 강사·관리자 웹: 데스크톱에서 여러 학생을 관리하도록 전체 너비 (InstructorLayout이 지정) */
+html[data-layout='wide'] #root {
+  max-width: none;
+}
+
 h1,
 h2,
 h3,

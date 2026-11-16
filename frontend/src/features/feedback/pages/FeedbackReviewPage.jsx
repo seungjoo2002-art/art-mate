@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pause, Play } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
@@ -9,10 +8,10 @@ import { useOptions } from '../../../hooks/useOptions'
 import { labelOf } from '../../../lib/options'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { approveFeedback, getFeedback, reopenFeedback, updateFeedback } from '../aiApi'
+import FeedbackContent from '../components/FeedbackContent'
 import FeedbackEditor from '../components/FeedbackEditor'
 import { getGrowthSummary } from '../../growth/api'
-import { ORIGIN_LABELS } from '../feedbackKinds'
-import { displayTags, repeatedWeaknesses } from '../reviewSections'
+import { repeatedWeaknesses } from '../reviewSections'
 import { useEvidencePlayer } from '../useEvidencePlayer'
 import styles from './FeedbackReviewPage.module.css'
 
@@ -56,52 +55,8 @@ export default function FeedbackReviewPage() {
 
   const canReview = feedback.review_mode === 'SELF'
   const approved = feedback.status === 'APPROVED'
-  const kindLabel = (kind, fallback) =>
-    options ? labelOf(options.feedback_item_kinds, kind) : fallback
   const categoryLabel = (code) => (options ? labelOf(options.weakness_categories, code) : code)
   const repeated = repeatedWeaknesses(feedback, growth)
-  const tags = displayTags(feedback, categoryLabel)
-
-  const renderItems = (items) =>
-    items.length === 0 ? (
-      <p className={styles.empty}>언급되지 않음</p>
-    ) : (
-      <ul className={styles.items}>
-        {items.map((item) => (
-          <li key={item.id} className={styles.item}>
-            <p>{item.content}</p>
-            <div className={styles.meta}>
-              {item.category && <span className={styles.tag}>{categoryLabel(item.category)}</span>}
-              {ORIGIN_LABELS[item.origin] && (
-                <span className={styles.origin}>{ORIGIN_LABELS[item.origin]}</span>
-              )}
-              {item.evidence[0]?.start_ms != null && (
-                <button
-                  type="button"
-                  className={styles.listen}
-                  onClick={() =>
-                    player.play(item.id, item.evidence[0].start_ms, item.evidence.at(-1).end_ms)
-                  }
-                >
-                  {player.playingKey === item.id ? <Pause size={14} /> : <Play size={14} />}
-                  근거 듣기
-                </button>
-              )}
-            </div>
-            {item.evidence.some((e) => e.text) && (
-              <p className={styles.evidence}>
-                “
-                {item.evidence
-                  .map((e) => e.text)
-                  .filter(Boolean)
-                  .join(' ')}
-                ”
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
-    )
 
   async function run(action, { after } = {}) {
     setBusy(true)
@@ -172,93 +127,38 @@ export default function FeedbackReviewPage() {
               <Badge>{refsLabel(feedback.image_refs)}</Badge>
             </div>
 
-            <section className={styles.section}>
-              <h2 className={styles.label}>전체 첨삭 요약</h2>
-              {feedback.summary ? (
-                <p className={styles.summary}>{feedback.summary}</p>
-              ) : (
-                <p className={styles.empty}>언급되지 않음</p>
-              )}
-              {tags.length > 0 && (
-                <>
-                  <ul className={styles.chips} aria-label="첨삭 분류">
-                    {tags.map((tag) => (
-                      <li key={tag.key}>
-                        <Badge className={tag.needsWork ? undefined : styles.tagPraise}>
-                          {tag.label}
-                          <span className={styles.srOnly}>
-                            {tag.needsWork ? ' (개선할 점 있음)' : ' (잘한 점)'}
-                          </span>
-                        </Badge>
-                      </li>
-                    ))}
-                  </ul>
-                  {tags.some((t) => !t.needsWork) && tags.some((t) => t.needsWork) && (
-                    <p className={styles.tagLegend} aria-hidden>
-                      주황색은 개선할 점이 나온 주제예요.
+            <FeedbackContent
+              feedback={feedback}
+              options={options}
+              player={player}
+              middle={
+                <section className={styles.section}>
+                  <h2 className={styles.label}>반복 약점</h2>
+                  {repeated.status === 'found' ? (
+                    <>
+                      <div className={styles.chips}>
+                        {repeated.items.map((item) => (
+                          <Badge key={item.category}>{categoryLabel(item.category)}</Badge>
+                        ))}
+                      </div>
+                      <p className={styles.hint}>
+                        이전에 확정한 첨삭에서도 지적된 약점이에요 (
+                        {repeated.items.map((item) => `${categoryLabel(item.category)} ${item.artworkCount}작품`).join(', ')}
+                        ).
+                      </p>
+                    </>
+                  ) : (
+                    <p className={styles.empty}>
+                      {repeated.status === 'insufficient'
+                        ? '아직 확정한 첨삭이 적어서 반복 약점을 판단하기 어려워요.'
+                        : repeated.status === 'none'
+                          ? '이번 첨삭에서 이전과 반복된 약점은 없어요.'
+                          : '반복 약점 정보를 불러오지 못했어요.'}
                     </p>
                   )}
-                </>
-              )}
-            </section>
-
-            <section className={styles.section}>
-              <h2 className={styles.label}>잘한 점</h2>
-              {renderItems(feedback.strengths)}
-            </section>
-
-            <section className={styles.section}>
-              <h2 className={styles.label}>개선할 점</h2>
-              {feedback.weaknesses.length === 0 && feedback.fixes.length === 0 ? (
-                <p className={styles.empty}>언급되지 않음</p>
-              ) : (
-                <>
-                  {feedback.weaknesses.length > 0 && (
-                    <>
-                      <h3 className={styles.subLabel}>{kindLabel('WEAKNESS', '부족한 점')}</h3>
-                      {renderItems(feedback.weaknesses)}
-                    </>
-                  )}
-                  {feedback.fixes.length > 0 && (
-                    <>
-                      <h3 className={styles.subLabel}>{kindLabel('FIX', '수정 방법')}</h3>
-                      {renderItems(feedback.fixes)}
-                    </>
-                  )}
-                </>
-              )}
-            </section>
-
-            <section className={styles.section}>
-              <h2 className={styles.label}>반복 약점</h2>
-              {repeated.status === 'found' ? (
-                <>
-                  <div className={styles.chips}>
-                    {repeated.items.map((item) => (
-                      <Badge key={item.category}>{categoryLabel(item.category)}</Badge>
-                    ))}
-                  </div>
-                  <p className={styles.hint}>
-                    이전에 확정한 첨삭에서도 지적된 약점이에요 (
-                    {repeated.items.map((item) => `${categoryLabel(item.category)} ${item.artworkCount}작품`).join(', ')}
-                    ).
-                  </p>
-                </>
-              ) : (
-                <p className={styles.empty}>
-                  {repeated.status === 'insufficient'
-                    ? '아직 확정한 첨삭이 적어서 반복 약점을 판단하기 어려워요.'
-                    : repeated.status === 'none'
-                      ? '이번 첨삭에서 이전과 반복된 약점은 없어요.'
-                      : '반복 약점 정보를 불러오지 못했어요.'}
-                </p>
-              )}
-            </section>
-
-            <section className={styles.section}>
-              <h2 className={styles.label}>다음 작품 연습 과제</h2>
-              {renderItems(feedback.next_tips)}
-            </section>
+                </section>
+              }
+            />
             {player.error && <p className={styles.error}>{player.error}</p>}
             {actionError && <p className={styles.error}>{actionError}</p>}
 

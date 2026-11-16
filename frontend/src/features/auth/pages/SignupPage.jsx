@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Button, Checkbox, Input } from '../../../components/ui'
+import { SIGNUP_TYPES } from '../../../app/roles'
+import { Button, Checkbox, Input, SegmentedTabs } from '../../../components/ui'
 import { supabase } from '../../../lib/supabase'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import AuthHero from '../components/AuthHero'
@@ -22,6 +23,7 @@ function validate({ displayName, email, password, agreed }) {
 export default function SignupPage() {
   const navigate = useNavigate()
   const [form, setForm] = useState({
+    userType: 'STUDENT',
     realName: '',
     displayName: '',
     email: '',
@@ -49,6 +51,7 @@ export default function SignupPage() {
       email,
       displayName: form.displayName.trim(),
       realName: form.realName.trim() || undefined,
+      userType: form.userType,
     })
 
     const { data, error } = await supabase.auth.signUp({
@@ -82,6 +85,17 @@ export default function SignupPage() {
         />
 
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
+          <SegmentedTabs
+            label="가입 유형"
+            tabs={SIGNUP_TYPES}
+            value={form.userType}
+            onChange={update('userType')}
+          />
+          <p className={styles.hint}>
+            {form.userType === 'INSTRUCTOR'
+              ? '학원을 등록하거나 기존 학원에 강사로 소속을 신청할 수 있어요. 가입 후에는 바꿀 수 없어요.'
+              : '작품 기록·첨삭 정리·성장 분석을 이용해요. 가입 후에는 바꿀 수 없어요.'}
+          </p>
           <Input
             label="이름 (선택)"
             placeholder="김서연"

@@ -25,6 +25,8 @@ export const createArtwork = ({
   timeLimitMinutes,
   stages,
   examMaterials,
+  academyId,
+  classId,
 }) =>
   api('/artworks', {
     method: 'POST',
@@ -38,6 +40,9 @@ export const createArtwork = ({
       ...(workCategory ? { work_category: workCategory } : {}),
       ...(timeLimitMinutes ? { time_limit_minutes: timeLimitMinutes } : {}),
       ...(stages?.length ? { stages } : {}), // v0.9.7 [{ name, target_minutes? }]
+      // v1.0 학원 작품: 담당 강사가 보고 첨삭을 검토한다 (없으면 개인 작품)
+      ...(academyId ? { academy_id: academyId } : {}),
+      ...(academyId && classId ? { class_id: classId } : {}),
     },
   })
 

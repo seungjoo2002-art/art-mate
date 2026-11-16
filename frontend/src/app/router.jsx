@@ -37,6 +37,18 @@ import CommunityPage from '../pages/student/CommunityPage'
 import HomePage from '../pages/student/HomePage'
 import MyPage from '../pages/student/MyPage'
 import PracticePage from '../pages/student/PracticePage'
+import AdminAcademiesPage from '../features/admin/AdminAcademiesPage'
+import StudentAcademiesPage from '../features/academy/StudentAcademiesPage'
+import AcademyScope from '../features/instructor/AcademyScope'
+import InstructorLayout from '../features/instructor/InstructorLayout'
+import AcademyDashboardPage from '../features/instructor/pages/AcademyDashboardPage'
+import AcademyManagePage from '../features/instructor/pages/AcademyManagePage'
+import ClassPage from '../features/instructor/pages/ClassPage'
+import InstructorHomePage from '../features/instructor/pages/InstructorHomePage'
+import ReviewQueuePage from '../features/instructor/pages/ReviewQueuePage'
+import StaffArtworkPage from '../features/instructor/pages/StaffArtworkPage'
+import StaffArtworksPage from '../features/instructor/pages/StaffArtworksPage'
+import StaffFeedbackPage from '../features/instructor/pages/StaffFeedbackPage'
 import ProtectedRoute from './ProtectedRoute'
 import PublicOnlyRoute from './PublicOnlyRoute'
 
@@ -79,6 +91,7 @@ export const router = createBrowserRouter([
         element: <SubLayout />,
         children: [
           { path: '/my/edit', element: <ProfileEditPage /> },
+          { path: '/my/academies', element: <StudentAcademiesPage /> },
           { path: '/notifications', element: <NotificationsPage /> },
           { path: '/community/write', element: <PostWritePage /> },
           { path: '/community/posts/:postId', element: <PostDetailPage /> },
@@ -107,6 +120,39 @@ export const router = createBrowserRouter([
         ],
       },
     ],
+  },
+
+  // v1.0 강사·원장 웹 (데스크톱 우선). 학원 데이터 권한은 서버가 소속·역할로 다시 검사
+  {
+    element: <ProtectedRoute area="INSTRUCTOR" />,
+    children: [
+      {
+        path: '/instructor',
+        element: <InstructorLayout />,
+        children: [
+          { index: true, element: <InstructorHomePage /> },
+          { path: 'start', element: <InstructorHomePage /> },
+          {
+            path: 'academies/:academyId',
+            element: <AcademyScope />,
+            children: [
+              { index: true, element: <AcademyDashboardPage /> },
+              { path: 'feedbacks', element: <ReviewQueuePage /> },
+              { path: 'feedbacks/:feedbackId', element: <StaffFeedbackPage /> },
+              { path: 'artworks', element: <StaffArtworksPage /> },
+              { path: 'artworks/:artworkId', element: <StaffArtworkPage /> },
+              { path: 'manage', element: <AcademyManagePage /> },
+              { path: 'classes/:classId', element: <ClassPage /> },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  // v1.0 시스템 관리자: 학원 등록 심사
+  {
+    element: <ProtectedRoute area="ADMIN" />,
+    children: [{ path: '/admin/academies', element: <AdminAcademiesPage /> }],
   },
 
   ...(import.meta.env.DEV ? [{ path: '/dev/ui', element: <UiPreviewPage /> }] : []),

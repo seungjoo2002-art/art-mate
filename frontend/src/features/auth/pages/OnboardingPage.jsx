@@ -2,20 +2,22 @@ import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import AuthStatusScreen from '../../../app/AuthStatusScreen'
 import { useAuth } from '../../../app/providers/AuthContext'
-import { Button, Input } from '../../../components/ui'
+import { homePathFor, SIGNUP_TYPES } from '../../../app/roles'
+import { Button, Input, SegmentedTabs } from '../../../components/ui'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import AuthHero from '../components/AuthHero'
 import styles from './AuthForm.module.css'
 
 /** 로그인은 됐지만 프로필이 없는 경우 (가입 도중 이탈, 다른 브라우저에서 메일 인증 등) */
 export default function OnboardingPage() {
-  const { status, createProfile } = useAuth()
+  const { status, profile, createProfile } = useAuth()
   const [displayName, setDisplayName] = useState('')
   const [realName, setRealName] = useState('')
+  const [userType, setUserType] = useState('STUDENT')
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  if (status === 'ready') return <Navigate to="/home" replace />
+  if (status === 'ready') return <Navigate to={homePathFor(profile)} replace />
   if (status === 'signedOut') return <Navigate to="/" replace />
   if (status !== 'needsProfile') return <AuthStatusScreen />
 
@@ -27,7 +29,7 @@ export default function OnboardingPage() {
     setSubmitting(true)
     setFormError('')
     try {
-      await createProfile({ displayName: name, realName: realName.trim() || undefined })
+      await createProfile({ displayName: name, realName: realName.trim() || undefined, userType })
     } catch (error) {
       setFormError(toErrorMessage(error))
       setSubmitting(false)
@@ -42,6 +44,8 @@ export default function OnboardingPage() {
           description="다른 사람에게 보일 닉네임을 알려 주세요."
         />
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
+          <SegmentedTabs label="가입 유형" tabs={SIGNUP_TYPES} value={userType} onChange={setUserType} />
+          <p className={styles.hint}>가입 후에는 유형을 바꿀 수 없어요.</p>
           <Input
             label="공개 닉네임"
             placeholder="서연의작업실"
