@@ -5,7 +5,6 @@ Mock 없음: 성공하면 실제 운영 DB·Storage에 기록된 것이다.
 
 계정은 환경변수로만 받는다 (명령줄·파일에 비밀번호를 남기지 않음):
   ARTMATE_STUDENT_EMAIL / ARTMATE_STUDENT_PASSWORD      (필수)
-  ARTMATE_INSTRUCTOR_EMAIL / ARTMATE_INSTRUCTOR_PASSWORD (선택)
 
 모드
   (기본)   읽기 전용: 로그인 → 역할별 화면 순회(데스크톱·모바일) → 조회 API. 아무것도 만들지 않는다.
@@ -312,7 +311,7 @@ def run_role(pw, browser: Browser, role: str, email: str, password: str, args, o
         if not token:
             page.context.close()
             continue
-        pages = STUDENT_PAGES if role == "학생" else COMMON_PAGES
+        pages = STUDENT_PAGES
         for path in pages:
             visit(page, path, role, vp, out)
         if vp == "desktop":
@@ -360,14 +359,6 @@ def main() -> int:
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         run_role(pw, browser, "학생", s_email, s_pw, args, out)
-        i_email, i_pw = (
-            os.environ.get("ARTMATE_INSTRUCTOR_EMAIL"),
-            os.environ.get("ARTMATE_INSTRUCTOR_PASSWORD"),
-        )
-        if i_email and i_pw:
-            run_role(pw, browser, "강사", i_email, i_pw, args, out)
-        else:
-            record("강사", "전체", None, "강사 계정 환경변수 없음")
         browser.close()
     fails = [r for r in results if r["status"] == "FAIL"]
     print(

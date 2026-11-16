@@ -344,6 +344,26 @@ async def adopt_my_recommendation(
 
 
 @me.post(
+    "/practice-tips/{item_id}/task",
+    summary="첨삭의 다음 연습 과제를 내 연습 과제로 담기 (v1.0)",
+    description=(
+        "본인의 확정 첨삭에 있는 '다음 작품 연습 과제'(NEXT_TIP 항목) 하나를 "
+        "채택된 개인 연습 과제로 만든다. AI 호출 없음. 이미 담았으면 그 과제를 돌려준다. "
+        "완료 기록은 `PUT /growth/me/recommendations/{id}/completion`."
+    ),
+    response_model=ReviewerRecommendationRead | RecommendationRead,
+    responses=WRITE,
+)
+async def create_my_tip_task(
+    item_id: uuid.UUID,
+    owner: Student,
+    session: DbSession,
+    settings: AppSettings,
+) -> ReviewerRecommendationRead | RecommendationRead:
+    return await _svc(session, settings).create_tip_task(owner, item_id)
+
+
+@me.post(
     "/recommendations/{recommendation_id}/reject",
     summary="개인 추천 거절 (본인)",
     response_model=ReviewerRecommendationRead | RecommendationRead,

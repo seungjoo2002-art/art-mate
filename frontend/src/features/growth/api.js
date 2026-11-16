@@ -43,3 +43,7 @@ export const unlinkArtwork = (id, artworkId) =>
 export const getFollowUp = (id) => api(rec(id, 'follow-up'))
 
 export const getGrowthJob = (jobId) => api(`/growth/me/jobs/${jobId}`)
+
+/** v1.0 첨삭의 '다음 작품 연습 과제'(NEXT_TIP)를 내 연습 과제로 담기 (AI 호출 없음, 이미 있으면 그 과제) */
+export const createTipTask = (itemId) =>
+  api(`/growth/me/practice-tips/${itemId}/task`, { method: 'POST' })

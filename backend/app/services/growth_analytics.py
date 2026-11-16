@@ -38,12 +38,15 @@ from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from app.models.enums import (
+    CATEGORY_TAG,
+    FEEDBACK_TAG_LABELS,
     WEAKNESS_CATEGORY_LABELS,
     ArtworkWorkCategory,
     ArtworkWorkStatus,
     Confidence,
     FeedbackItemKind,
     FeedbackSource,
+    FeedbackTag,
     PracticalType,
     ReportStatus,
     TrendDirection,
@@ -54,6 +57,10 @@ ANALYSIS_VERSION = "growth-v2"
 TREND_THRESHOLD = 0.2
 HIGH_CONFIDENCE_ARTWORKS = 8
 MAX_EVIDENCE = 3
+# v1.0 학생 성장 분석
+MAX_PRACTICE_TIPS = 8
+VOLUME_CHANGE = 0.3  # 첨삭 1건당 항목 수가 이만큼(30%) 넘게 달라지면 비교 주의 안내
+MIX_CHANGE = 0.3  # 모의시험 비중이 이만큼 달라지면 비교 주의 안내
 
 NOTES = [
     "이 통계는 강사가 승인한 첨삭 기록을 집계한 것이며, AI가 실기 능력을 채점한 결과가 아닙니다.",
@@ -289,11 +296,19 @@ def analyze(
         for artwork_id in present:
             start = _bucket_start(artworks[artwork_id].work_date, bucket)
             buckets[start]["categories"][category.value].add(artwork_id)
+            # v1.0 9개 태그 기준 (한 작품에 형태·비례가 함께 있어도 1번)
+            tag_sets = buckets[start].setdefault("tags", defaultdict(set))
+            tag_sets[CATEGORY_TAG[category].value].add(artwork_id)
+    for f in feedbacks:
+        start = _bucket_start(artworks[f.artwork_id].work_date, bucket)
+        buckets[start]["feedback_count"] = buckets[start].get("feedback_count", 0) + 1
     timeline = [
         {
             "bucket_start": start.isoformat(),
             "analyzed_artwork_count": len(entry["analyzed"]),
             "categories": {c: len(ids) for c, ids in sorted(entry["categories"].items())},
+            "tags": {t: len(ids) for t, ids in sorted(entry.get("tags", {}).items())},
+            "feedback_count": entry.get("feedback_count", 0),
         }
         for start, entry in sorted(buckets.items())
     ]
@@ -315,6 +330,15 @@ def analyze(
                 "based_on_item_id": str(fix.id) if fix else None,
             }
         )
+
+    # v1.0 9개 태그 기준 (기존 11개 카테고리 통계는 그대로)
+    tags, top_tags = tag_stats(
+        analyzed, artworks, category_artworks, strength_items, recent, previous, comparable
+    )
+    verified_items = [
+        i for i in dataset.items if i.artwork_id in artworks and i.feedback_id in verified_ids
+    ]
+    practice_tips = recent_practice_tips(verified_items, tags)
 
     practical = Counter(
         a.practical_type.value if a.practical_type else None for a in artworks.values()
@@ -348,6 +372,13 @@ def analyze(
         ],
         "weaknesses": weaknesses,
         "top_weaknesses": top,
+        # v1.0 9개 태그 기준 반복 실수·강점, 비교 맥락, 최근 연습 과제
+        "tags": tags,
+        "top_tags": top_tags,
+        "comparison_context": comparison_context(
+            feedbacks, verified_items, recent, previous, artworks, comparable
+        ),
+        "practice_tips": practice_tips,
         "strengths": strengths,
         "timeline_bucket": bucket,
         "timeline": timeline,
@@ -364,6 +395,165 @@ def analyze(
         ),
         "notes": NOTES,
     }
+
+
+# ---------------------------------------------------------------- v1.0 9개 태그·비교 맥락·연습 과제
+
+
+def _trend(recent: dict[str, Any], previous: dict[str, Any], comparable: bool) -> TrendDirection:
+    if not comparable:
+        return TrendDirection.INSUFFICIENT_DATA
+    diff = (recent["ratio"] or 0) - (previous["ratio"] or 0)
+    if abs(diff) < TREND_THRESHOLD:
+        return TrendDirection.SIMILAR
+    return TrendDirection.MORE_FREQUENT if diff > 0 else TrendDirection.LESS_FREQUENT
+
+
+def tag_stats(
+    analyzed: list[uuid.UUID],
+    artworks: dict[uuid.UUID, ArtworkFact],
+    category_artworks: dict[WeaknessCategory, set[uuid.UUID]],
+    strength_items: list[ItemFact],
+    recent: list[uuid.UUID],
+    previous: list[uuid.UUID],
+    comparable: bool,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """9개 태그별 지적(개선할 점)·강점 작품 수와 최근/이전 비교. 작품당 태그마다 1번만 센다."""
+    weak: dict[FeedbackTag, set[uuid.UUID]] = defaultdict(set)
+    strong: dict[FeedbackTag, set[uuid.UUID]] = defaultdict(set)
+    members: dict[FeedbackTag, set[WeaknessCategory]] = defaultdict(set)
+    for category, present in category_artworks.items():
+        tag = CATEGORY_TAG[category]
+        weak[tag] |= present
+        members[tag].add(category)
+    for item in strength_items:
+        category = item.category or WeaknessCategory.OTHER
+        tag = CATEGORY_TAG[category]
+        strong[tag].add(item.artwork_id)
+        members[tag].add(category)
+    order = list(FeedbackTag)
+    out = []
+    for tag in order:
+        present = weak.get(tag, set())
+        if not present and tag not in strong:
+            continue
+        recent_stats = _window(recent, present)
+        previous_stats = _window(previous, present)
+        trend = (
+            _trend(recent_stats, previous_stats, comparable)
+            if present
+            else TrendDirection.INSUFFICIENT_DATA
+        )
+        out.append(
+            {
+                "tag": tag.value,
+                "label": FEEDBACK_TAG_LABELS[tag],
+                "categories": [c.value for c in WeaknessCategory if c in members[tag]],
+                "weakness_artwork_count": len(present),
+                "weakness_ratio": _ratio(len(present), len(analyzed)),
+                "strength_artwork_count": len(strong.get(tag, set())),
+                "recent": recent_stats,
+                "previous": previous_stats if comparable else None,
+                "trend": trend.value,
+                "repeated": len(present) >= 2,
+                "last_seen_work_date": (
+                    max(artworks[a].work_date for a in present).isoformat() if present else None
+                ),
+            }
+        )
+    out.sort(
+        key=lambda t: (
+            -t["weakness_artwork_count"],
+            -t["strength_artwork_count"],
+            order.index(FeedbackTag(t["tag"])),
+        )
+    )
+    return out, [t["tag"] for t in out if t["repeated"]][:3]
+
+
+def comparison_context(
+    feedbacks: list[FeedbackFact],
+    items: list[ItemFact],
+    recent: list[uuid.UUID],
+    previous: list[uuid.UUID],
+    artworks: dict[uuid.UUID, ArtworkFact],
+    comparable: bool,
+) -> dict[str, Any] | None:
+    """최근·이전 비교가 공정한지 보여 주는 맥락 (첨삭 분량·작품 조건). 비교 불가면 None.
+
+    지적 비율이 줄어도 첨삭이 짧아졌거나 작품 조건이 달라졌을 수 있다
+    → 실력 향상으로 단정하지 않는다.
+    """
+    if not comparable:
+        return None
+    per_feedback = Counter(i.feedback_id for i in items)
+
+    def items_per_feedback(ids: list[uuid.UUID]) -> float | None:
+        targets = set(ids)
+        chosen = [f for f in feedbacks if f.artwork_id in targets]
+        if not chosen:
+            return None
+        return round(sum(per_feedback[f.id] for f in chosen) / len(chosen), 2)
+
+    def mock_ratio(ids: list[uuid.UUID]) -> float | None:
+        mock = sum(1 for a in ids if artworks[a].work_category == ArtworkWorkCategory.MOCK_EXAM)
+        return _ratio(mock, len(ids))
+
+    def practical(ids: list[uuid.UUID]) -> set[str]:
+        return {artworks[a].practical_type.value for a in ids if artworks[a].practical_type}
+
+    recent_volume, previous_volume = items_per_feedback(recent), items_per_feedback(previous)
+    recent_mock, previous_mock = mock_ratio(recent), mock_ratio(previous)
+    cautions = []
+    if recent_volume is not None and previous_volume:
+        change = (recent_volume - previous_volume) / previous_volume
+        if abs(change) >= VOLUME_CHANGE:
+            more = "많아" if change > 0 else "적어"
+            cautions.append(
+                f"최근 첨삭은 이전보다 정리된 항목 수가 {more}요 (첨삭 1건당 평균 "
+                f"{previous_volume:g}개 → {recent_volume:g}개). 지적 비율 변화에 첨삭 분량 차이가 "
+                "섞여 있을 수 있어요."
+            )
+    if abs((recent_mock or 0) - (previous_mock or 0)) >= MIX_CHANGE:
+        cautions.append(
+            "최근 작품과 이전 작품의 모의시험 비중이 달라요. 시간 제한·난이도 차이가 지적 빈도에 "
+            "영향을 줄 수 있어요."
+        )
+    if practical(recent) != practical(previous):
+        cautions.append(
+            "최근 작품과 이전 작품의 실기 유형 구성이 달라요. "
+            "유형마다 자주 지적되는 항목이 다를 수 있어요."
+        )
+    return {
+        "recent_items_per_feedback": recent_volume,
+        "previous_items_per_feedback": previous_volume,
+        "recent_mock_exam_ratio": recent_mock,
+        "previous_mock_exam_ratio": previous_mock,
+        "cautions": cautions,
+    }
+
+
+def recent_practice_tips(items: list[ItemFact], tags: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """최근 승인 첨삭의 '다음 작품 연습 과제'(NEXT_TIP). 반복 실수 태그와 관련된 것을 표시."""
+    repeated = {t["tag"] for t in tags if t["repeated"]}
+    tips = sorted(
+        (i for i in items if i.kind == FeedbackItemKind.NEXT_TIP),
+        key=lambda i: (i.work_date, i.approved_at),
+        reverse=True,
+    )[:MAX_PRACTICE_TIPS]
+    out = []
+    for item in tips:
+        tag = CATEGORY_TAG[item.category or WeaknessCategory.OTHER].value
+        out.append(
+            {
+                "item_id": str(item.id),
+                "feedback_id": str(item.feedback_id),
+                "artwork_id": str(item.artwork_id),
+                "tag": tag,
+                "related_repeated": tag in repeated,
+            }
+        )
+    return out
 
 
 # ---------------------------------------------------------------- v0.9 시간·출처·안내

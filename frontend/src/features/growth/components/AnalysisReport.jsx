@@ -6,11 +6,14 @@ import { useAsync } from '../../../hooks/useAsync'
 import { formatMonthDay } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getGrowthTimeline, getWeaknesses, listRecommendations } from '../api'
+import { compareRows, lastActivity, mistakeRows, percent } from '../growthView'
 import { TREND_LABELS } from '../labels'
 import { mockExamCount, pickNextPractice, summaryLine } from '../nextPractice'
 import EvidenceList from './EvidenceList'
+import { PeriodFeedbackBars, TagMentionBars } from './GrowthCharts'
 import MentionTrendChart from './MentionTrendChart'
 import Notes from './Notes'
+import PracticeTips from './PracticeTips'
 import styles from './AnalysisReport.module.css'
 
 async function loadReport() {
@@ -46,8 +49,12 @@ export default function AnalysisReport() {
   const { totals } = analysis
   const ready = analysis.status === 'READY'
   const mockExams = mockExamCount(analysis)
-  const repeated = analysis.weaknesses.filter((w) => w.repeated)
-  const compared = analysis.weaknesses.filter((w) => w.previous && w.trend !== 'INSUFFICIENT_DATA')
+  // v1.0 9개 태그 기준 (이전 응답이면 기존 카테고리)
+  const mistakes = mistakeRows(analysis)
+  const repeated = mistakes.filter((w) => w.repeated)
+  const compared = compareRows(analysis)
+  const cautions = analysis.comparison_context?.cautions ?? []
+  const latest = lastActivity(timeline)
   const recentImprovements = analysis.weaknesses
     .flatMap((w) => w.evidence)
     .sort((a, b) => (b.work_date ?? '').localeCompare(a.work_date ?? ''))
@@ -72,12 +79,20 @@ export default function AnalysisReport() {
       <Section title="학습 기록 요약">
         <div className={styles.stats}>
           <Stat label="기록된 작품" value={`${totals.artwork_count}점`} />
+          <Stat label="누적 첨삭" value={`${totals.approved_feedback_count}건`} />
           <Stat label="첨삭 연결" value={`${totals.analyzed_artwork_count}점`} />
           <Stat label="실기시험" value={`${mockExams}회`} />
         </div>
+        {latest && (
+          <Link to={`/artworks/${latest.artworkId}`} className={styles.link}>
+            최근 활동 · {formatMonthDay(latest.workDate)} {latest.title}
+            {latest.feedbackCount ? ` (첨삭 ${latest.feedbackCount}건)` : ''}
+            <ChevronRight size={16} aria-hidden />
+          </Link>
+        )}
       </Section>
 
-      <Section title="피드백 언급 추이">
+      <Section title="작품별 피드백 변화">
         <Card className={styles.card}>
           {trend.length >= 2 ? (
             <MentionTrendChart points={trend} />
@@ -105,28 +120,45 @@ export default function AnalysisReport() {
         </Card>
       </Section>
 
-      <Section title="반복 지적·집중 항목">
+      <Section title="반복 실수 (9개 항목)">
         <Card className={styles.card}>
           {repeated.length ? (
             repeated.map((w) => (
-              <div key={w.category} className={styles.row}>
+              <div key={w.key} className={styles.row}>
                 <span className={styles.rowTitle}>{w.label}</span>
                 <span className={styles.muted}>
-                  작품 {totals.analyzed_artwork_count}개 중 {w.artwork_count}개에서 지적
+                  작품 {totals.analyzed_artwork_count}개 중 {w.count}개에서 지적 ({percent(w.ratio)})
                 </span>
               </div>
             ))
           ) : (
-            <p className={styles.muted}>분류 가능한 세부 첨삭 항목이 아직 없습니다.</p>
+            <p className={styles.muted}>
+              {mistakes.length
+                ? '아직 2개 이상의 작품에서 반복된 개선할 점은 없어요.'
+                : '분류 가능한 세부 첨삭 항목이 아직 없습니다.'}
+            </p>
+          )}
+          {mistakes.length > repeated.length && (
+            <p className={styles.small}>
+              한 작품에서만 지적:{' '}
+              {mistakes
+                .filter((w) => !w.repeated)
+                .map((w) => w.label)
+                .join(', ')}
+            </p>
           )}
         </Card>
+      </Section>
+
+      <Section title="최근 연습 과제">
+        <PracticeTips tips={analysis.practice_tips ?? []} onChanged={reload} />
       </Section>
 
       <Section title="과거와 최근 피드백 비교">
         <Card className={styles.card}>
           {compared.length ? (
             compared.map((w) => (
-              <div key={w.category} className={styles.row}>
+              <div key={w.key} className={styles.row}>
                 <span className={styles.rowTitle}>{w.label}</span>
                 <span className={styles.muted}>
                   이전 {w.previous.analyzed_artwork_count}개 중 {w.previous.artwork_count}개 → 최근{' '}
@@ -143,8 +175,39 @@ export default function AnalysisReport() {
               </p>
             </>
           )}
+          {cautions.map((text) => (
+            <p key={text} className={styles.small}>
+              ⚠ {text}
+            </p>
+          ))}
+          {compared.length > 0 && (
+            <p className={styles.small}>
+              덜 언급된 항목이 실력이 늘었다는 뜻은 아니에요. 작품 난이도와 첨삭 분량에 따라 달라질 수
+              있어요.
+            </p>
+          )}
         </Card>
       </Section>
+
+      {analysis.tags?.length > 0 && (
+        <Section title="항목별 잘한 점·개선할 점">
+          <Card className={styles.card}>
+            <TagMentionBars analysis={analysis} />
+            <p className={styles.small}>
+              확정한 첨삭에서 각 항목이 언급된 작품 수예요 (작품당 한 번).
+            </p>
+          </Card>
+        </Section>
+      )}
+
+      {analysis.timeline?.length > 0 && (
+        <Section title="기간별 첨삭 횟수">
+          <Card className={styles.card}>
+            <PeriodFeedbackBars analysis={analysis} />
+            <p className={styles.small}>작업한 날짜 기준, 확정한 강사 첨삭 수예요.</p>
+          </Card>
+        </Section>
+      )}
 
       <Section title="긍정적으로 언급된 부분">
         <Card className={styles.card}>
