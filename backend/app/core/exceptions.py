@@ -146,6 +146,8 @@ class ErrorCode(StrEnum):
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     DATABASE_NOT_CONFIGURED = "DATABASE_NOT_CONFIGURED"
     DATABASE_UNAVAILABLE = "DATABASE_UNAVAILABLE"
+    # 실행 코드가 요구하는 Alembic revision이 DB에 없음 (마이그레이션 미적용 상태로 배포됨)
+    DATABASE_SCHEMA_MISMATCH = "DATABASE_SCHEMA_MISMATCH"
     HTTP_ERROR = "HTTP_ERROR"
 
 
@@ -275,6 +277,11 @@ class AiNotConfiguredError(ServiceUnavailableError):
 class DatabaseUnavailableError(ServiceUnavailableError):
     code = ErrorCode.DATABASE_UNAVAILABLE
     message = "Database is unavailable"
+
+
+class DatabaseSchemaMismatchError(ServiceUnavailableError):
+    code = ErrorCode.DATABASE_SCHEMA_MISMATCH
+    message = "Database schema is older than this release requires (apply migrations first)"
 
 
 # --------------------------------------------------------------------------- responses

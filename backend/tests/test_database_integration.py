@@ -28,5 +28,14 @@ async def test_db_health_against_real_database() -> None:
     async with running_client(app) as client:
         response = await client.get("/api/v1/health/db")
 
-    assert response.status_code == 200, response.text
-    assert response.json()["database"] == "ok"
+    # 연결 확인이 목적. v0.9.9부터 스키마 버전도 비교하므로, 이 테스트 시점에 마이그레이션이
+    # 적용돼 있지 않으면(예: CI의 downgrade base 직후) 503 DATABASE_SCHEMA_MISMATCH가 정상이다.
+    # 스키마 판정 자체는 tests/db/test_schema_version_health.py (head로 마이그레이션된 DB)에서 검증
+    if response.status_code == 200:
+        assert response.json()["database"] == "ok"
+        assert response.json()["schema_status"] in ("ok", "ahead")
+    else:
+        assert response.status_code == 503, response.text
+        error = response.json()["error"]
+        assert error["code"] == "DATABASE_SCHEMA_MISMATCH"
+        assert error["details"]["schema_status"] in ("behind", "missing")

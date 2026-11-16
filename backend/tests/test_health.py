@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from fastapi import FastAPI
 
+from app.db.schema_version import code_revisions
 from app.main import create_app
 from app.schemas.common import ErrorResponse
 from tests.conftest import UNREACHABLE_DATABASE_URL, make_settings, running_client
@@ -86,7 +87,15 @@ async def test_db_health_success_with_mocked_database() -> None:
     app = create_app(make_settings(database_url=UNREACHABLE_DATABASE_URL))
 
     async with running_client(app) as client:
-        with patch.object(app.state.database, "ping", AsyncMock(return_value=None)):
+        with (
+            patch.object(app.state.database, "ping", AsyncMock(return_value=None)),
+            # v0.9.9 스키마 버전 점검: 이 코드의 head와 같은 revision
+            patch.object(
+                app.state.database,
+                "schema_revisions",
+                AsyncMock(return_value=list(code_revisions().heads)),  # type: ignore[union-attr]
+            ),
+        ):
             response = await client.get("/api/v1/health/db")
 
     assert response.status_code == 200
