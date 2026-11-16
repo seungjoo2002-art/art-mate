@@ -81,6 +81,17 @@ class Database:
         async with asyncio.timeout(timeout_s), self.engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
 
+    async def schema_revisions(self, timeout_s: float) -> list[str]:
+        """현재 Alembic revision 목록 (테이블이 없으면 빈 목록). 읽기만 한다."""
+        async with asyncio.timeout(timeout_s), self.engine.connect() as conn:
+            exists = (
+                await conn.execute(text("SELECT to_regclass('public.alembic_version') IS NOT NULL"))
+            ).scalar_one()
+            if not exists:
+                return []
+            rows = await conn.execute(text("SELECT version_num FROM alembic_version"))
+            return [row[0] for row in rows]
+
     async def dispose(self) -> None:
         await self.engine.dispose()
 
