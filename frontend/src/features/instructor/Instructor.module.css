@@ -51,7 +51,8 @@
 }
 
 .academySelect {
-  min-width: 0;
+  flex: 0 1 320px;
+  min-width: 120px;
   max-width: 320px;
   height: 40px;
   padding: 0 var(--space-3);
@@ -72,6 +73,21 @@
 .userName {
   font-size: var(--text-sm);
   color: var(--color-text-sub);
+}
+
+@media (max-width: 600px) {
+  .header {
+    gap: var(--space-2);
+  }
+
+  .brandText,
+  .userName {
+    display: none;
+  }
+
+  .academySelect {
+    flex: 1 1 auto;
+  }
 }
 
 .iconButton {

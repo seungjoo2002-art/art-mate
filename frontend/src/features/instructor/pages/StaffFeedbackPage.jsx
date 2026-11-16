@@ -115,7 +115,7 @@ export default function StaffFeedbackPage() {
             <>
               {!approved && (
                 <Card variant="soft">
-                  AI가 정리한 초안이에요. 왼쪽 원문과 비교해 틀린 부분을 고친 뒤 승인하면 학생에게
+                  AI가 정리한 초안이에요. 첨삭 원문과 비교해 틀린 부분을 고친 뒤 승인하면 학생에게
                   확정된 첨삭으로 보여요.
                 </Card>
               )}

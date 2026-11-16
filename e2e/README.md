@@ -25,3 +25,21 @@ python -X utf8 e2e/prod_smoke.py --write --stt --summary --audio sample.wav   # 
 - 테스트 전용 계정만 사용한다. 실제 학생 계정으로 `--write`를 실행하지 않는다.
 - 강사 화면은 그 강사가 속한 학원(academy)과 학생 소속이 있어야 학생 작품이 보인다.
 - 결과: 콘솔 `[PASS]/[FAIL]/[SKIP]`, `--out` 폴더에 스크린샷과 `results.json`.
+
+## 로컬 전체 스택 E2E (v1.0 강사·학원 흐름)
+
+실제 API(로컬) + 로컬 PostgreSQL + 실제 브라우저. 외부 서비스만 대체한다: Supabase 인증(테스트 서명 키), Storage(메모리), AI(원문 문장을 그대로 쓰는 가짜 — 실제 호출 없음). **운영 DB·운영 API에는 접근하지 않는다.**
+
+```bash
+# 1) 빈 로컬 DB를 head로 (DATABASE_URL은 로컬 주소만, Supabase면 Alembic이 거부)
+cd backend && ENV_FILE= APP_ENV=test DATABASE_URL=postgresql://postgres@127.0.0.1:5432/artmate_e2e uv run alembic upgrade head
+# 2) API 서버 (토큰 파일 생성, :8010)
+uv run python ../e2e/local_v10_server.py "$(pwd)" ../e2e-out/tokens.json postgresql://postgres@127.0.0.1:5432/artmate_e2e
+# 3) 프론트 빌드·실행 (:4175)
+cd ../frontend && VITE_SUPABASE_URL=https://e2e-project.supabase.co VITE_SUPABASE_ANON_KEY=e2e \
+  VITE_API_BASE_URL=http://127.0.0.1:8010 npx vite build --outDir ../e2e-out/dist && npx vite preview --outDir ../e2e-out/dist --port 4175
+# 4) 흐름 실행 (가입 → 학원 등록·승인 → 소속·반 배정 → 학원 작품·첨삭 → AI 정리 → 강사 승인 → 학생 확인 → 권한 차단 → 모바일)
+cd ../backend && python -X utf8 ../e2e/local_v10_flow.py ../e2e-out/tokens.json postgresql://postgres@127.0.0.1:5432/artmate_e2e ../e2e-out "$(pwd)"
+```
+
+같은 DB로 다시 돌리려면 DB를 새로 만들고 서버를 재시작한다 (토큰·계정이 새로 생김).
