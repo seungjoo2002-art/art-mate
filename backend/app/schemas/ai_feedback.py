@@ -356,6 +356,13 @@ class ReviewerFeedbackRead(FeedbackRead):
     rejected_reason: str | None
     artwork_title: str
     student: StudentRef | None = Field(description="강사 화면일 때 학생 정보")
+    source_segments: list[Evidence] = Field(
+        default_factory=list,
+        description=(
+            "v1.0 원문 전체: 녹음이면 전사 구간(재생 위치 포함), 텍스트 첨삭이면 문장. "
+            "이 응답을 받을 수 있는 검토자(담당 강사·개인 작품의 학생 본인)에게만"
+        ),
+    )
 
 
 class ReviewQueueItem(BaseModel):

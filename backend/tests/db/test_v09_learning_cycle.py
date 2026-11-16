@@ -644,6 +644,13 @@ async def test_academy_artwork_note_review_rules(  # type: ignore[no-untyped-def
         await client.get(f"{world.base}/feedbacks/{teacher_fb}", headers=world.teacher.headers)
     ).json()
     assert staff_view["weaknesses"][0]["evidence"][0]["text"]  # 원문 근거 함께
+    # v1.0: 강사 첨삭 텍스트 원문 전체 (문장 단위, 재생 위치 없음)
+    assert [s["index"] for s in staff_view["source_segments"]] == list(
+        range(len(staff_view["source_segments"]))
+    )
+    assert staff_view["source_segments"] and all(
+        s["start_ms"] is None and s["text"] for s in staff_view["source_segments"]
+    )
     assert (
         await client.post(
             f"{world.base}/feedbacks/{teacher_fb}/approve",

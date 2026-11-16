@@ -181,6 +181,9 @@ async def test_academy_flow_transcribe_summarize_review_approve(  # type: ignore
     assert detail["weaknesses"][0]["evidence"] == [
         {"index": 1, "start_ms": 4000, "end_ms": 7500, "text": SEGMENTS[1]}
     ]
+    # v1.0 강사 검토 화면: 원문(전사) 전체를 재생 위치와 함께
+    assert [s["text"] for s in detail["source_segments"]] == SEGMENTS
+    assert detail["source_segments"][1]["start_ms"] == 4000
     assert (detail["model_name"], detail["prompt_version"]) == (
         "gemini-3.1-flash-lite",
         "feedback-summary-v4",
@@ -267,6 +270,7 @@ async def test_academy_flow_transcribe_summarize_review_approve(  # type: ignore
     assert archive[0]["summary"] == edit["summary"] and "ai_draft" not in archive[0]
     view = (await client.get(f"{API}/feedbacks/{feedback_id}", headers=student.headers)).json()
     assert view["status"] == "APPROVED" and "ai_draft" not in view
+    assert "source_segments" not in view  # 학생 응답(FeedbackRead)에는 없음
 
     history = (
         await client.get(

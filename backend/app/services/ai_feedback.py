@@ -1059,10 +1059,12 @@ class AiFeedbackService:
             }
         return out
 
-    async def _read(self, summary: FeedbackSummary, artwork: Artwork) -> dict[str, Any]:
+    async def _read(
+        self, summary: FeedbackSummary, artwork: Artwork, *, include_source: bool = False
+    ) -> dict[str, Any]:
         items, categories, segments, names = await self._parts([summary])
         stages = await self._stage_refs([summary])
-        return (
+        data = (
             self._read_dict(
                 summary,
                 artwork,
@@ -1073,6 +1075,11 @@ class AiFeedbackService:
             )
             | stages[summary.id]
         )
+        if include_source:
+            # v1.0 검토자 화면: 원문 전체 (녹음 전사 구간 또는 텍스트 첨삭 문장)
+            source = segments.get(summary.id, {})
+            data["source_segments"] = [source[i] for i in sorted(source)]
+        return data
 
     async def _reviewer_read(
         self, summary: FeedbackSummary, artwork: Artwork, membership: AcademyMembership | None
@@ -1088,7 +1095,7 @@ class AiFeedbackService:
             ).one()
             student = student_ref(m, p)
         return ReviewerFeedbackRead(
-            **await self._read(summary, artwork),
+            **await self._read(summary, artwork, include_source=True),
             ai_draft=summary.ai_output,
             model_name=summary.model_name,
             prompt_version=summary.prompt_version,
