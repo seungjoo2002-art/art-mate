@@ -65,6 +65,7 @@ from app.models.enums import (
     ClassMemberRole,
     ClassMemberStatus,
     ClassStatus,
+    Difficulty,
     FeedbackItemKind,
     FeedbackSource,
     FeedbackStatus,
@@ -80,6 +81,7 @@ from app.models.enums import (
     ReportStatus,
     ReviewMode,
     TaskTargetType,
+    TrendDirection,
     WeaknessCategory,
 )
 from app.models.growth import (
@@ -426,7 +428,10 @@ class GrowthService:
         for s in metrics["strengths"]:
             ids += [e["item_id"] for e in s["evidence"]]
         ids += [g["based_on_item_id"] for g in metrics["next_goals"] if g["based_on_item_id"]]
+        tips = metrics.get("practice_tips", [])
+        ids += [t["item_id"] for t in tips]
         evidence = await self.resolve_evidence(scope, ids)
+        tasks = await self._tip_tasks(scope, [t["item_id"] for t in tips])
 
         def resolve(entries: list[dict[str, Any]]) -> list[Evidence]:
             return [evidence[e["item_id"]] for e in entries if e["item_id"] in evidence]
@@ -465,11 +470,165 @@ class GrowthService:
                     "source_breakdown",
                     "unverified_mentions",
                     "guidance",
+                    # v1.0
+                    "tags",
+                    "top_tags",
+                    "comparison_context",
                 )
                 if key in metrics
             },
+            practice_tips=[
+                {
+                    "tip": evidence[t["item_id"]],
+                    "tag": t["tag"],
+                    "related_repeated": t["related_repeated"],
+                    "task": tasks.get(t["item_id"]),
+                }
+                for t in tips
+                if t["item_id"] in evidence
+            ],
             notes=metrics["notes"],
         )
+
+    # ============================================================ v1.0 첨삭 연습 과제 (NEXT_TIP)
+
+    @staticmethod
+    def _tip_batch(item_id: str | uuid.UUID) -> str:
+        return f"tip:{item_id}"
+
+    async def _tip_tasks(self, scope: Scope, item_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """연습 과제(NEXT_TIP)를 과제로 담았는지·완료했는지 (본인 개인 과제만)."""
+        if not item_ids or scope.staff:
+            return {}
+        rows = (
+            await self.session.execute(
+                select(PracticeRecommendation).where(
+                    PracticeRecommendation.owner_id == scope.owner_id,
+                    PracticeRecommendation.scope == GrowthScope.PERSONAL,
+                    PracticeRecommendation.batch_key.in_([self._tip_batch(i) for i in item_ids]),
+                    PracticeRecommendation.status.not_in(
+                        [RecommendationStatus.REJECTED, RecommendationStatus.SUPERSEDED]
+                    ),
+                )
+            )
+        ).scalars()
+        return {
+            rec.batch_key.removeprefix("tip:"): {
+                "id": rec.id,
+                "status": rec.status,
+                "version": rec.version,
+                "completed_at": rec.completed_at,
+            }
+            for rec in rows
+        }
+
+    async def create_tip_task(self, owner: Profile, item_id: uuid.UUID) -> RecommendationRead:
+        """첨삭의 '다음 작품 연습 과제'를 내 연습 과제로 담는다 (AI 호출 없음, 이미 있으면 그 과제).
+
+        본인의 확정(APPROVED) 첨삭에 있는 NEXT_TIP 항목만. 담은 과제는 바로 채택(ADOPTED) 상태라
+        기존 완료 기록 API(PUT .../completion)로 완료·해제한다.
+        """
+        row = (
+            await self.session.execute(
+                select(FeedbackItem, FeedbackSummary, Artwork)
+                .join(FeedbackSummary, FeedbackSummary.id == FeedbackItem.summary_id)
+                .join(Artwork, Artwork.id == FeedbackSummary.artwork_id)
+                .where(
+                    FeedbackItem.id == item_id,
+                    FeedbackItem.kind == FeedbackItemKind.NEXT_TIP,
+                    FeedbackSummary.owner_id == owner.id,
+                    FeedbackSummary.status == FeedbackStatus.APPROVED,
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            raise NotFoundError("Practice tip not found")
+        item, summary, artwork = row
+        scope = Scope(owner.id, GrowthScope.PERSONAL)
+        batch_key = self._tip_batch(item.id)
+        existing = (
+            await self.session.execute(
+                select(PracticeRecommendation).where(
+                    PracticeRecommendation.owner_id == owner.id,
+                    PracticeRecommendation.batch_key == batch_key,
+                    PracticeRecommendation.status.not_in(
+                        [RecommendationStatus.REJECTED, RecommendationStatus.SUPERSEDED]
+                    ),
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            return await self.owner_view(owner, existing.id)
+
+        dataset = await self.load(scope)
+        metrics = self._analyze(dataset)
+        category = item.category or WeaknessCategory.OTHER
+        stat = next(
+            (w for w in metrics["weaknesses"] if w["category"] == category.value),
+            {
+                "artwork_count": 0,
+                "recent": {"analyzed_artwork_count": 0, "artwork_count": 0, "ratio": None},
+                "trend": TrendDirection.INSUFFICIENT_DATA.value,
+            },
+        )
+        content = item.content.strip()
+        reason = (
+            f"{artwork.work_date.isoformat()} '{artwork.title}' 첨삭에서 받은 "
+            "다음 작품 연습 과제예요."
+        )
+        rec = self._new_recommendation(
+            scope,
+            RecommendationSource.RULE,
+            batch_key,
+            category,
+            artwork.practical_type,
+            title=content[:200],
+            description=content,
+            steps=[content],
+            minutes=30,
+            difficulty=Difficulty.NORMAL,
+            reason=reason,
+            origin={"source": "NEXT_TIP", "item_id": str(item.id), "feedback_id": str(summary.id)},
+            evidence=[
+                {
+                    "item_id": str(item.id),
+                    "feedback_id": str(summary.id),
+                    "artwork_id": str(artwork.id),
+                }
+            ],
+            metrics=metrics,
+            stat=stat,
+            actor_id=owner.id,
+            model_name=None,
+            prompt_version=None,
+        )
+        # 학생이 직접 고른 과제 → 바로 채택 (완료 기록 가능)
+        rec.status = RecommendationStatus.ADOPTED
+        rec.approved_by = owner.id
+        rec.approved_at = clock.utc_now()
+        self._history(
+            rec,
+            owner.id,
+            ReviewMode.SELF,
+            RecommendationAction.ADOPTED,
+            RecommendationStatus.DRAFT,
+            note="from NEXT_TIP",
+        )
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            # 동시에 두 번 눌렀을 때: 먼저 만든 과제를 돌려준다
+            await self.session.rollback()
+            existing = (
+                await self.session.execute(
+                    select(PracticeRecommendation).where(
+                        PracticeRecommendation.owner_id == owner.id,
+                        PracticeRecommendation.batch_key == batch_key,
+                    )
+                )
+            ).scalar_one()
+            return await self.owner_view(owner, existing.id)
+        return await self.owner_view(owner, rec.id)
 
     def _analyze(
         self, dataset: Dataset, *, recent_window: int | None = None, bucket: Bucket = "month"

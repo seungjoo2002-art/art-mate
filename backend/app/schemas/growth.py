@@ -14,6 +14,7 @@ from app.models.enums import (
     Difficulty,
     FeedbackItemKind,
     FeedbackSource,
+    FeedbackTag,
     GrowthScope,
     NarrativeStatus,
     PracticalType,
@@ -92,6 +93,55 @@ class TimelineBucket(BaseModel):
     bucket_start: dt.date
     analyzed_artwork_count: int
     categories: dict[str, int] = Field(description="카테고리 → 지적된 작품 수")
+    # v1.0 (이전 리포트에는 없어서 기본값)
+    tags: dict[str, int] = Field(
+        default_factory=dict, description="9개 태그 → 지적된 작품 수 (작품당 태그마다 1번)"
+    )
+    feedback_count: int = Field(default=0, description="이 기간 작품의 승인 첨삭 수 (강사 첨삭)")
+
+
+class TagStat(BaseModel):
+    """v1.0 9개 태그 기준 반복 실수·강점 (11개 카테고리를 묶음, 작품당 태그마다 1번)."""
+
+    tag: FeedbackTag
+    label: str
+    categories: list[WeaknessCategory] = Field(description="이 태그로 묶인 카테고리")
+    weakness_artwork_count: int = Field(description="개선할 점으로 지적된 작품 수")
+    weakness_ratio: float | None = Field(description="분석 대상 작품 중 지적된 비율")
+    strength_artwork_count: int = Field(description="잘한 점으로 언급된 작품 수")
+    recent: WindowStat
+    previous: WindowStat | None
+    trend: TrendDirection = Field(
+        description="최근·이전 구간의 지적 비율 비교. LESS_FREQUENT는 '개선'을 뜻하지 않는다"
+    )
+    repeated: bool = Field(description="2개 이상 작품에서 지적됨")
+    last_seen_work_date: dt.date | None
+
+
+class ComparisonContext(BaseModel):
+    """최근·이전 비교 맥락: 첨삭 분량·작품 조건이 다르면 지적 비율 변화를 그대로 해석하지 않는다."""
+
+    recent_items_per_feedback: float | None
+    previous_items_per_feedback: float | None
+    recent_mock_exam_ratio: float | None
+    previous_mock_exam_ratio: float | None
+    cautions: list[str]
+
+
+class PracticeTipTask(BaseModel):
+    id: uuid.UUID
+    status: RecommendationStatus
+    version: int
+    completed_at: AwareDatetime | None
+
+
+class PracticeTip(BaseModel):
+    """최근 승인 첨삭의 '다음 작품 연습 과제' (NEXT_TIP). AI 호출 없이 저장된 첨삭에서 꺼냄."""
+
+    tip: Evidence
+    tag: FeedbackTag
+    related_repeated: bool = Field(description="반복 실수 태그와 관련됨")
+    task: PracticeTipTask | None = Field(description="연습 과제로 담았으면 그 과제 (완료 기록)")
 
 
 class Distribution(BaseModel):
@@ -191,6 +241,15 @@ class WeaknessAnalysis(BaseModel):
     )
     guidance: list[str] = Field(
         default_factory=list, description="데이터가 부족할 때 다음에 기록할 것 안내"
+    )
+    # v1.0 (이전 리포트에는 없어서 기본값)
+    tags: list[TagStat] = Field(default_factory=list, description="9개 태그 기준 반복 실수·강점")
+    top_tags: list[FeedbackTag] = Field(default_factory=list, description="반복 실수 태그 TOP 3")
+    comparison_context: ComparisonContext | None = Field(
+        default=None, description="최근·이전 비교 맥락 (비교할 작품이 부족하면 null)"
+    )
+    practice_tips: list[PracticeTip] = Field(
+        default_factory=list, description="최근 첨삭의 다음 연습 과제 (최신순)"
     )
     notes: list[str] = Field(description="해석 시 주의 문구 (화면에 함께 표시)")
 

@@ -46,8 +46,16 @@ export function summaryLine(analysis) {
   if (analysis.status !== 'READY') {
     return '피드백 기록이 쌓이면 반복되는 항목과 변화 흐름을 확인할 수 있습니다.'
   }
-  const top = analysis.weaknesses.find((w) => w.category === analysis.top_weaknesses[0])
-  const strength = analysis.strengths?.[0]
+  // v1.0 9개 태그 기준 (이전 응답이면 기존 카테고리)
+  const tags = analysis.tags
+  const top = tags
+    ? tags.find((t) => t.tag === analysis.top_tags?.[0])
+    : analysis.weaknesses.find((w) => w.category === analysis.top_weaknesses[0])
+  const strength = tags
+    ? [...tags]
+        .filter((t) => t.strength_artwork_count > 0)
+        .sort((a, b) => b.strength_artwork_count - a.strength_artwork_count)[0]
+    : analysis.strengths?.[0]
   if (!top && !strength) return '아직 반복해서 언급된 항목이 없어요.'
   const parts = []
   if (top) parts.push(`최근 첨삭에서 '${top.label}'이(가) 가장 자주 언급됐어요`)
