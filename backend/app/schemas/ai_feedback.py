@@ -4,9 +4,11 @@ import datetime as dt
 import uuid
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import BaseModel, Field, StringConstraints, computed_field, model_validator
 
 from app.models.enums import (
+    CATEGORY_TAG,
+    FEEDBACK_TAG_LABELS,
     AiAgeBand,
     AiConsentPurpose,
     AiJobStatus,
@@ -17,6 +19,7 @@ from app.models.enums import (
     FeedbackItemOrigin,
     FeedbackSource,
     FeedbackStatus,
+    FeedbackTag,
     GuardianRelationship,
     ReviewAction,
     ReviewMode,
@@ -251,6 +254,55 @@ class FeedbackItemRead(BaseModel):
     origin: FeedbackItemOrigin
 
 
+class FeedbackTagRead(BaseModel):
+    """v0.9.9 첨삭 분류 태그 1개 (항목 카테고리에서 계산, 저장하지 않음)."""
+
+    code: FeedbackTag
+    label: str
+    categories: list[WeaknessCategory] = Field(description="이 태그로 묶인 항목 카테고리")
+    kinds: list[FeedbackItemKind] = Field(description="이 태그가 나온 항목 종류")
+    needs_work: bool = Field(description="개선할 점·수정 방법에서 언급됨 (약점 카테고리 포함)")
+
+
+_KIND_ORDER = list(FeedbackItemKind)
+_NEEDS_WORK = {FeedbackItemKind.WEAKNESS, FeedbackItemKind.FIX}
+
+
+def feedback_tags(
+    items: list[FeedbackItemRead], weakness_categories: list[WeaknessCategory]
+) -> list[FeedbackTagRead]:
+    """첨삭에서 실제로 다룬 주제 태그 (원문 근거가 있는 저장 항목의 카테고리만, 순서 고정).
+
+    AI가 새로 판단하지 않는다: 근거 대조를 통과해 저장된 항목과 기존 약점 카테고리만 묶는다.
+    """
+    seen: dict[FeedbackTag, tuple[set[WeaknessCategory], set[FeedbackItemKind], bool]] = {}
+
+    def add(category: WeaknessCategory, kind: FeedbackItemKind | None) -> None:
+        tag = CATEGORY_TAG[category]
+        cats, kinds, needs = seen.get(tag, (set(), set(), False))
+        cats.add(category)
+        if kind is not None:
+            kinds.add(kind)
+        seen[tag] = (cats, kinds, needs or kind is None or kind in _NEEDS_WORK)
+
+    for item in items:
+        if item.category is not None:
+            add(item.category, item.kind)
+    for category in weakness_categories:
+        add(category, None)
+    return [
+        FeedbackTagRead(
+            code=tag,
+            label=FEEDBACK_TAG_LABELS[tag],
+            categories=[c for c in WeaknessCategory if c in seen[tag][0]],
+            kinds=[k for k in _KIND_ORDER if k in seen[tag][1]],
+            needs_work=seen[tag][2],
+        )
+        for tag in FeedbackTag
+        if tag in seen
+    ]
+
+
 class FeedbackRead(BaseModel):
     id: uuid.UUID
     recording_id: uuid.UUID | None = Field(description="녹음 첨삭이면 녹음 id")
@@ -281,6 +333,17 @@ class FeedbackRead(BaseModel):
     approved_by_name: str | None
     created_at: dt.datetime
     updated_at: dt.datetime
+
+    @computed_field(  # type: ignore[prop-decorator]
+        description=(
+            "v0.9.9 첨삭 분류 태그: 잘한 점·개선할 점·수정 방법·연습 과제 항목이 다룬 주제 "
+            "(9개 묶음, 저장된 항목에서 계산). categories(약점 카테고리)는 그대로 유지"
+        )
+    )
+    @property
+    def tags(self) -> list[FeedbackTagRead]:
+        items = [*self.strengths, *self.weaknesses, *self.fixes, *self.next_tips]
+        return feedback_tags(items, self.categories)
 
 
 class ReviewerFeedbackRead(FeedbackRead):

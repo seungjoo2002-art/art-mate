@@ -20,3 +20,15 @@ export function repeatedWeaknesses(feedback, growth) {
   if (growth.status === 'INSUFFICIENT_DATA') return { status: 'insufficient', items: [] }
   return { status: 'none', items: [] }
 }
+
+/**
+ * v0.9.9 첨삭 분류 태그 (요약 아래 칩). 서버 tags(9개 묶음)를 쓰고,
+ * tags가 없는 응답(이전 서버)이면 기존 약점 카테고리로 대신한다.
+ * 반환: [{ key, label, needsWork }]
+ */
+export function displayTags(feedback, categoryLabel = (code) => code) {
+  if (Array.isArray(feedback?.tags)) {
+    return feedback.tags.map((tag) => ({ key: tag.code, label: tag.label, needsWork: Boolean(tag.needs_work) }))
+  }
+  return (feedback?.categories ?? []).map((code) => ({ key: code, label: categoryLabel(code), needsWork: true }))
+}
