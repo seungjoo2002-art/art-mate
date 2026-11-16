@@ -2,7 +2,8 @@
 
 - DB URL은 app.core.config.Settings(DATABASE_URL)에서 읽는다.
 - `app.models`를 import 해야 autogenerate가 모델을 인식한다.
-- 안전장치: APP_ENV=production 에서는 ALLOW_PRODUCTION_MIGRATIONS=true 일 때만 실행된다.
+- 안전장치: APP_ENV=production 이거나 DATABASE_URL이 Supabase 호스트이면
+  ALLOW_PRODUCTION_MIGRATIONS=true 일 때만 실행된다 (app/db/migration_guard.py).
   (운영 DB 마이그레이션은 자동 실행하지 않고, 리뷰된 리비전을 사람이 명시적으로 적용한다)
 """
 
@@ -16,6 +17,7 @@ import app.models  # noqa: F401 - 모델 등록
 from alembic import context
 from app.core.config import Settings, get_settings
 from app.db.base import Base
+from app.db.migration_guard import ALLOW_ENV, migration_block_reason
 from app.db.session import build_engine
 
 config = context.config
@@ -29,10 +31,15 @@ def _load_settings() -> Settings:
     settings = get_settings()
     if settings.database_url is None:
         raise SystemExit("DATABASE_URL이 설정되지 않았습니다. backend/.env 를 확인하세요.")
-    if settings.app_env == "production" and os.environ.get("ALLOW_PRODUCTION_MIGRATIONS") != "true":
+    reason = migration_block_reason(
+        settings.app_env,
+        settings.database_url.get_secret_value(),
+        os.environ.get(ALLOW_ENV),
+    )
+    if reason:
         raise SystemExit(
-            "APP_ENV=production 대상 마이그레이션이 차단되었습니다. 의도한 작업이라면 "
-            "ALLOW_PRODUCTION_MIGRATIONS=true 를 명시하고 다시 실행하세요."
+            f"{reason} 대상 마이그레이션이 차단되었습니다. 의도한 작업이라면 "
+            f"{ALLOW_ENV}=true 를 명시하고 다시 실행하세요."
         )
     return settings
 

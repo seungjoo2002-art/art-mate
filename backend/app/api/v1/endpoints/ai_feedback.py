@@ -901,8 +901,13 @@ async def create_note(
     owner: Student,
     session: DbSession,
     settings: AppSettings,
+    kick: Kick,
 ) -> FeedbackNoteRead:
-    return await _notes(session, settings).create(owner, artwork_id, data)
+    note = await _notes(session, settings).create(owner, artwork_id, data)
+    # request_summary=true로 큐에 들어간 요약 작업도 바로 Worker를 깨운다
+    # (없으면 예약 실행·주기 점검까지 대기)
+    kick(note.summary_job, "note_summary")
+    return note
 
 
 @artwork_notes.get("", summary="작품의 텍스트 첨삭 목록 (학생 본인)", responses=READ)

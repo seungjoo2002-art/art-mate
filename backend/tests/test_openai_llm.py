@@ -100,16 +100,41 @@ async def test_request_shape_and_success_parsing() -> None:
     ("status", "body", "code", "retryable"),
     [
         (429, {"error": {"message": "rate"}}, "LLM_RATE_LIMITED", True),
+        (
+            429,
+            {"error": {"code": "rate_limit_exceeded", "type": "requests"}},
+            "LLM_RATE_LIMITED",
+            True,
+        ),
+        # 크레딧·결제 부족: 다시 보내도 같은 실패 → 재시도·과금 반복 없음
+        (
+            429,
+            {"error": {"code": "insufficient_quota", "type": "insufficient_quota", "message": "x"}},
+            "LLM_QUOTA_EXCEEDED",
+            False,
+        ),
+        (429, "not json", "LLM_RATE_LIMITED", True),
+        (404, {"error": {"code": "model_not_found"}}, "LLM_BAD_REQUEST", False),
         (500, {}, "LLM_UNAVAILABLE", True),
         (401, {}, "LLM_AUTH_FAILED", False),
         (400, {}, "LLM_BAD_REQUEST", False),
     ],
 )
 async def test_http_errors_map_to_existing_codes(status, body, code, retryable) -> None:  # type: ignore[no-untyped-def]
-    client = _client(lambda request: httpx.Response(status, json=body))
+    def respond(request: httpx.Request) -> httpx.Response:
+        if isinstance(body, str):
+            return httpx.Response(status, text=body)
+        return httpx.Response(status, json=body)
+
+    client = _client(respond)
     with pytest.raises(LlmError) as info:
         await client.generate(system="s", prompt="p", schema=RESPONSE_SCHEMA)
     assert (info.value.code, info.value.retryable) == (code, retryable)
+    # 작업 오류 메시지에는 상태·OpenAI 오류 코드만 (오류 메시지 본문은 넣지 않음)
+    assert str(status) in str(info.value)
+    if isinstance(body, dict) and body.get("error", {}).get("code"):
+        assert body["error"]["code"] in str(info.value)
+    assert '"x"' not in str(info.value) and "message" not in str(info.value)
 
 
 @pytest.mark.parametrize(

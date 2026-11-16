@@ -6,12 +6,16 @@ import { labelOf } from '../../../lib/options'
 import { formatMonthDay } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getAiConsent } from '../aiApi'
+import { noteSummaryState } from '../aiStatus'
 import { deleteNote, requestNoteSummary } from '../notesApi'
 import aiStyles from './RecordingAiStatus.module.css'
 import styles from './NoteCard.module.css'
 
-const ACTIVE = ['QUEUED', 'RUNNING']
 const NOT_CONFIGURED = ['AI_NOT_CONFIGURED']
+
+function formatTime(iso) {
+  return new Date(iso).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })
+}
 
 /** 타임라인의 텍스트 첨삭 카드. onChanged: 목록 다시 불러오기 */
 export default function NoteCard({ note, options, onChanged }) {
@@ -21,9 +25,8 @@ export default function NoteCard({ note, options, onChanged }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  const job = note.summary_job
-  const summarizing = !note.feedback_id && ACTIVE.includes(job?.status)
-  usePolling(summarizing, job?.attempts > 0 ? 10_000 : 5_000, onChanged, [note])
+  const ai = noteSummaryState(note)
+  usePolling(ai.pollMs !== null, ai.pollMs ?? 0, onChanged, [note])
 
   const sourceLabel = options ? labelOf(options.feedback_sources, note.source) : note.source
   const long = note.body.length > 120
@@ -59,8 +62,6 @@ export default function NoteCard({ note, options, onChanged }) {
       return
     run(() => deleteNote(note.id))
   }
-
-  const failed = !note.feedback_id && job?.status === 'FAILED'
 
   return (
     <div className={styles.card}>
@@ -110,15 +111,27 @@ export default function NoteCard({ note, options, onChanged }) {
             </span>
             <ChevronRight size={18} aria-hidden />
           </Link>
-        ) : summarizing ? (
+        ) : ai.kind === 'working' ? (
           <p className={aiStyles.progress} role="status">
             <span className={aiStyles.spinner} aria-hidden />
-            {job.attempts > 0 ? '다시 시도하는 중…' : 'AI가 정리하는 중…'}
+            AI가 정리하는 중…
           </p>
-        ) : failed ? (
+        ) : ai.kind === 'retrying' ? (
+          <p className={aiStyles.muted} role="status">
+            {ai.reason}
+            {ai.retryAt && ` (${formatTime(ai.retryAt)}쯤)`}
+          </p>
+        ) : ai.kind === 'stalled' ? (
+          <div className={aiStyles.failed} role="status">
+            <span>AI 정리가 생각보다 오래 걸리고 있어요. 끝나면 여기에 보여 드려요.</span>
+            <button type="button" className={aiStyles.link} onClick={onChanged}>
+              새로고침
+            </button>
+          </div>
+        ) : ai.kind === 'failed' ? (
           <div className={aiStyles.failed}>
-            <span>AI가 정리하지 못했어요.</span>
-            {job.retryable && (
+            <span>AI가 정리하지 못했어요. {ai.message}</span>
+            {ai.canRetry && (
               <button
                 type="button"
                 className={aiStyles.link}

@@ -152,3 +152,40 @@ async def test_dispatcher_posts_workflow_dispatch_once_per_interval(app) -> None
     assert await dispatcher.notify(on, "summary") is False  # 403 → 실패, 다음에 다시 시도
     assert len(calls) == 3
     assert await dispatcher.notify(on, "summary") is True  # 실패 직후에는 간격 없이 다시 시도
+
+
+async def test_note_created_with_summary_request_kicks_worker(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, app
+) -> None:
+    """텍스트 첨삭 저장 시 request_summary=true로 생긴 요약 작업도 바로 Worker 실행을 요청한다."""
+    spy = _spy(app)
+    student = await actors.signup("STUDENT")
+    created = await client.post(f"{API}/artworks", json={"title": "노트"}, headers=student.headers)
+    artwork_id = created.json()["id"]
+    body = {"source": "INSTRUCTOR", "body": "명암 대비를 더 강하게 주세요."}
+
+    # 동의가 없으면 저장만 (요약 작업 없음 → 실행 요청 없음)
+    plain = await client.post(
+        f"{API}/artworks/{artwork_id}/feedback-notes",
+        json={**body, "request_summary": True},
+        headers=student.headers,
+    )
+    assert plain.status_code == 201, plain.text
+    assert plain.json()["summary_job"] is None
+    assert spy.reasons == []
+
+    await _ai_consent(client, student)
+    saved = await client.post(
+        f"{API}/artworks/{artwork_id}/feedback-notes",
+        json={**body, "request_summary": True},
+        headers=student.headers,
+    )
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["summary_job"]["status"] == "QUEUED"
+    assert spy.reasons == ["note_summary"]
+
+    # 요약 요청 없이 저장하면 깨우지 않는다
+    await client.post(
+        f"{API}/artworks/{artwork_id}/feedback-notes", json=body, headers=student.headers
+    )
+    assert spy.reasons == ["note_summary"]

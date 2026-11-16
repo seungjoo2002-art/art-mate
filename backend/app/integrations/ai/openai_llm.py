@@ -6,7 +6,8 @@
 - SDK 대신 httpx (의존성 최소화, MockTransport로 테스트). API 키는 Authorization 헤더로만.
 - 요청·응답 본문(전사문·요약)은 로그에 남기지 않는다. 오류는 코드·HTTP 상태만.
 - 오류 코드는 Gemini와 같다 → 작업 재시도·화면 문구 변경 없음.
-  429 LLM_RATE_LIMITED(재시도) / 5xx·타임아웃 재시도 / 401·403 LLM_AUTH_FAILED / 그 밖 4xx
+  429 LLM_RATE_LIMITED(재시도) / 429 insufficient_quota → LLM_QUOTA_EXCEEDED
+  (재시도 안 함, 크레딧·결제) / 5xx·타임아웃 재시도 / 401·403 LLM_AUTH_FAILED / 그 밖 4xx
   LLM_BAD_REQUEST / max_output_tokens 도달 LLM_OUTPUT_TRUNCATED / 거절·콘텐츠 필터 LLM_BLOCKED
 - 공식 문서 확인 (2026-11): gpt-6.1-terra·gpt-6-luna 모두 Responses API·Structured Outputs 지원,
   응답의 `output_text`는 SDK 전용 편의 속성이라 `output[].content[]`에서 직접 읽는다.
@@ -53,6 +54,29 @@ def to_strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
     visit(result, "$")
     return result
+
+
+_SAFE_FIELD = 64
+
+
+def _error_fields(response: httpx.Response) -> tuple[str | None, str | None]:
+    """OpenAI 오류 본문의 `error.code`·`error.type`만 (메시지 본문은 읽지 않음).
+
+    429는 `rate_limit_exceeded`(잠시 후 재시도)와 `insufficient_quota`(크레딧·결제)를 구분해야 한다.
+    """
+    try:
+        error = (response.json() or {}).get("error") or {}
+    except ValueError:
+        return None, None
+    if not isinstance(error, dict):
+        return None, None
+
+    def clean(value: object) -> str | None:
+        if not isinstance(value, str) or not value:
+            return None
+        return "".join(ch for ch in value if ch.isalnum() or ch in "_-.")[:_SAFE_FIELD] or None
+
+    return clean(error.get("code")), clean(error.get("type"))
 
 
 class OpenAiClient:
@@ -107,14 +131,27 @@ class OpenAiClient:
 
         status = response.status_code
         if status >= 400:
-            logger.warning("openai error response", extra={"status": status})
+            err_code, err_type = _error_fields(response)
+            logger.warning(
+                "openai error response",
+                extra={"status": status, "error_code": err_code, "error_type": err_type},
+            )
+            # 작업의 last_error_message에 남는다: 상태·OpenAI 오류 코드만 (본문·키 없음)
+            detail = f"{status} {err_code or err_type or ''}".strip()
+            if status == 429 and err_code == "insufficient_quota":
+                # 크레딧·결제·프로젝트 예산 문제: 다시 보내도 같은 실패 → 재시도하지 않는다
+                raise LlmError(
+                    "LLM_QUOTA_EXCEEDED", f"OpenAI quota exceeded ({detail})", retryable=False
+                )
             if status == 429:
-                raise LlmError("LLM_RATE_LIMITED", "OpenAI rate limit", retryable=True)
+                raise LlmError("LLM_RATE_LIMITED", f"OpenAI rate limit ({detail})", retryable=True)
             if status >= 500:
-                raise LlmError("LLM_UNAVAILABLE", f"OpenAI responded {status}", retryable=True)
+                raise LlmError("LLM_UNAVAILABLE", f"OpenAI responded {detail}", retryable=True)
             if status in (401, 403):
-                raise LlmError("LLM_AUTH_FAILED", "OpenAI API key rejected", retryable=False)
-            raise LlmError("LLM_BAD_REQUEST", f"OpenAI responded {status}", retryable=False)
+                raise LlmError(
+                    "LLM_AUTH_FAILED", f"OpenAI API key rejected ({detail})", retryable=False
+                )
+            raise LlmError("LLM_BAD_REQUEST", f"OpenAI responded {detail}", retryable=False)
 
         try:
             data = response.json()
