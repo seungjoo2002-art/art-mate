@@ -377,6 +377,12 @@ async def test_text_feedback_cycle_without_academy(  # type: ignore[no-untyped-d
     )
     assert draft["prompt_version"] == "feedback-text-summary-v1"
     assert draft["categories"] == ["VALUE", "TIME_MANAGEMENT"]
+    # v0.9.9 분류 태그: 잘한 점(구도)까지 포함, 약점 카테고리는 그대로
+    assert [(t["code"], t["label"], t["needs_work"]) for t in draft["tags"]] == [
+        ("COMPOSITION", "구도", False),
+        ("VALUE", "명암", True),
+        ("TIME_MANAGEMENT", "시간 관리", True),
+    ]
     assert draft["weaknesses"][1]["evidence"] == [
         {
             "index": 3,
@@ -581,6 +587,8 @@ async def test_grounding_drops_items_not_in_source(  # type: ignore[no-untyped-d
     ).json()["feedback_id"]
     detail = (await client.get(f"{API}/feedbacks/{feedback_id}", headers=student.headers)).json()
     assert detail["strengths"] == [] and detail["dropped_item_count"] == 1
+    # v0.9.9: 원문에 없는 내용은 태그도 만들지 않는다 (버려진 COLOR 항목 → 색채 태그 없음)
+    assert [t["code"] for t in detail["tags"]] == ["VALUE", "TIME_MANAGEMENT"]
 
 
 async def test_academy_artwork_note_review_rules(  # type: ignore[no-untyped-def]

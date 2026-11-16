@@ -445,6 +445,51 @@ WEAKNESS_CATEGORY_LABELS: dict[WeaknessCategory, str] = {
     WeaknessCategory.TIME_MANAGEMENT: "시간 관리",
 }
 
+
+class FeedbackTag(StrEnum):
+    """v0.9.9 첨삭 분류 태그 (학생 화면 표시 단위). 저장하지 않고 항목 카테고리에서 계산한다.
+
+    WeaknessCategory(성장 분석 키, 값 변경 금지)를 9개 표시 묶음으로 모은 것이다.
+    """
+
+    COMPOSITION = "COMPOSITION"  # 구도
+    FORM_PROPORTION = "FORM_PROPORTION"  # 형태·비례
+    VALUE = "VALUE"  # 명암
+    COLOR = "COLOR"  # 색채
+    PERSPECTIVE_SPACE = "PERSPECTIVE_SPACE"  # 원근·공간감
+    TEXTURE_EXPRESSION = "TEXTURE_EXPRESSION"  # 질감·표현
+    FINISH = "FINISH"  # 완성도
+    TIME_MANAGEMENT = "TIME_MANAGEMENT"  # 시간 관리
+    OTHER = "OTHER"  # 기타
+
+
+FEEDBACK_TAG_LABELS: dict[FeedbackTag, str] = {
+    FeedbackTag.COMPOSITION: "구도",
+    FeedbackTag.FORM_PROPORTION: "형태·비례",
+    FeedbackTag.VALUE: "명암",
+    FeedbackTag.COLOR: "색채",
+    FeedbackTag.PERSPECTIVE_SPACE: "원근·공간감",
+    FeedbackTag.TEXTURE_EXPRESSION: "질감·표현",
+    FeedbackTag.FINISH: "완성도",
+    FeedbackTag.TIME_MANAGEMENT: "시간 관리",
+    FeedbackTag.OTHER: "기타",
+}
+
+# 모든 WeaknessCategory는 정확히 하나의 태그에 속한다 (테스트로 고정)
+CATEGORY_TAG: dict[WeaknessCategory, FeedbackTag] = {
+    WeaknessCategory.COMPOSITION: FeedbackTag.COMPOSITION,
+    WeaknessCategory.FORM: FeedbackTag.FORM_PROPORTION,
+    WeaknessCategory.PROPORTION: FeedbackTag.FORM_PROPORTION,
+    WeaknessCategory.VALUE: FeedbackTag.VALUE,
+    WeaknessCategory.COLOR: FeedbackTag.COLOR,
+    WeaknessCategory.PERSPECTIVE: FeedbackTag.PERSPECTIVE_SPACE,
+    WeaknessCategory.TEXTURE: FeedbackTag.TEXTURE_EXPRESSION,
+    WeaknessCategory.RENDERING: FeedbackTag.TEXTURE_EXPRESSION,
+    WeaknessCategory.FINISH: FeedbackTag.FINISH,
+    WeaknessCategory.TIME_MANAGEMENT: FeedbackTag.TIME_MANAGEMENT,
+    WeaknessCategory.OTHER: FeedbackTag.OTHER,
+}
+
 FEEDBACK_ITEM_KIND_LABELS: dict[FeedbackItemKind, str] = {
     FeedbackItemKind.STRENGTH: "잘한 점",
     FeedbackItemKind.WEAKNESS: "부족한 점",

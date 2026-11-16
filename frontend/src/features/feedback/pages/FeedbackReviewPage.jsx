@@ -12,7 +12,7 @@ import { approveFeedback, getFeedback, reopenFeedback, updateFeedback } from '..
 import FeedbackEditor from '../components/FeedbackEditor'
 import { getGrowthSummary } from '../../growth/api'
 import { ORIGIN_LABELS } from '../feedbackKinds'
-import { repeatedWeaknesses } from '../reviewSections'
+import { displayTags, repeatedWeaknesses } from '../reviewSections'
 import { useEvidencePlayer } from '../useEvidencePlayer'
 import styles from './FeedbackReviewPage.module.css'
 
@@ -60,6 +60,7 @@ export default function FeedbackReviewPage() {
     options ? labelOf(options.feedback_item_kinds, kind) : fallback
   const categoryLabel = (code) => (options ? labelOf(options.weakness_categories, code) : code)
   const repeated = repeatedWeaknesses(feedback, growth)
+  const tags = displayTags(feedback, categoryLabel)
 
   const renderItems = (items) =>
     items.length === 0 ? (
@@ -178,12 +179,26 @@ export default function FeedbackReviewPage() {
               ) : (
                 <p className={styles.empty}>언급되지 않음</p>
               )}
-              {feedback.categories.length > 0 && (
-                <div className={styles.chips}>
-                  {feedback.categories.map((code) => (
-                    <Badge key={code}>{categoryLabel(code)}</Badge>
-                  ))}
-                </div>
+              {tags.length > 0 && (
+                <>
+                  <ul className={styles.chips} aria-label="첨삭 분류">
+                    {tags.map((tag) => (
+                      <li key={tag.key}>
+                        <Badge className={tag.needsWork ? undefined : styles.tagPraise}>
+                          {tag.label}
+                          <span className={styles.srOnly}>
+                            {tag.needsWork ? ' (개선할 점 있음)' : ' (잘한 점)'}
+                          </span>
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                  {tags.some((t) => !t.needsWork) && tags.some((t) => t.needsWork) && (
+                    <p className={styles.tagLegend} aria-hidden>
+                      주황색은 개선할 점이 나온 주제예요.
+                    </p>
+                  )}
+                </>
               )}
             </section>
 
