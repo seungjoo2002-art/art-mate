@@ -14,6 +14,7 @@ const PERMANENT_ERRORS = {
   LLM_BLOCKED: 'AI가 정리할 수 없는 녹음이에요.',
   LLM_AUTH_FAILED: 'AI 정리 기능에 문제가 있어요. 잠시 후 이용해 주세요.',
   LLM_BAD_REQUEST: 'AI 정리 기능에 문제가 있어요. 잠시 후 이용해 주세요.',
+  LLM_QUOTA_EXCEEDED: '지금은 AI 정리를 사용할 수 없어요. 운영자에게 알려 주세요.',
   STT_NOT_CONFIGURED: '서버 음성 변환이 아직 설정되지 않았어요.',
   AI_NOT_CONFIGURED: 'AI 정리 기능이 아직 설정되지 않았어요.',
   SOURCE_URL_EXPIRED: '변환 대기 시간이 길어 다시 요청이 필요해요.',
@@ -140,4 +141,49 @@ export function recordingCardState({
     default:
       return { ...common, kind: 'idle' }
   }
+}
+
+// 재시도 대기 중(QUEUED + 이전 시도 실패)일 때 보여 줄 이유
+const RETRY_REASONS = {
+  LLM_RATE_LIMITED: 'AI 서비스에 요청이 몰려 잠시 후 다시 시도해요.',
+  LLM_TIMEOUT: 'AI 응답이 늦어 다시 시도해요.',
+  LLM_UNAVAILABLE: 'AI 서비스 연결이 불안정해 다시 시도해요.',
+}
+
+/**
+ * 텍스트 첨삭 카드의 AI 요약 상태 (무한 로딩 방지).
+ * kind:
+ *  - idle      요청 전 → "AI로 정리하기"
+ *  - working   정리 중 (스피너)
+ *  - retrying  이전 시도가 실패해 자동 재시도 대기·진행 중 (reason, retryAt)
+ *  - stalled   SERVER_DELAY_MS 넘게 끝나지 않음 → 늦어짐 안내 (천천히 계속 확인)
+ *  - failed    최종 실패 (message, canRetry: 다시 보내도 되는 실패일 때만 → 중복 과금 방지)
+ *  - ready     결과 있음
+ * pollMs: 상태를 다시 확인할 간격 (진행 중이 아니면 null)
+ */
+export function noteSummaryState(note, now = Date.now()) {
+  const job = note?.summary_job
+  if (note?.feedback_id) return { kind: 'ready', pollMs: null }
+  if (job && ACTIVE.includes(job.status)) {
+    if (job.created_at && now - Date.parse(job.created_at) > SERVER_DELAY_MS) {
+      return { kind: 'stalled', pollMs: 30_000 }
+    }
+    if (job.attempts > 0 && job.error_code) {
+      const retryAt =
+        job.status === 'QUEUED' && job.next_attempt_at && Date.parse(job.next_attempt_at) > now
+          ? job.next_attempt_at
+          : null
+      return {
+        kind: 'retrying',
+        reason: RETRY_REASONS[job.error_code] ?? '일시적인 문제로 다시 시도해요.',
+        retryAt,
+        pollMs: 15_000,
+      }
+    }
+    return { kind: 'working', pollMs: 5_000 }
+  }
+  if (job && ['FAILED', 'CANCELLED'].includes(job.status)) {
+    return { kind: 'failed', message: jobMessage(job), canRetry: Boolean(job.retryable), pollMs: null }
+  }
+  return { kind: 'idle', pollMs: null }
 }
