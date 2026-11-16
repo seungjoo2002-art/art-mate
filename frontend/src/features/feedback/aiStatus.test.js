@@ -78,4 +78,9 @@ describe('noteSummaryState (텍스트 첨삭 AI 요약, 무한 로딩 방지)', 
     const rate = noteSummaryState(note(sjob('FAILED', { attempts: 3, error_code: 'LLM_RATE_LIMITED' })), now)
     expect(rate).toMatchObject({ kind: 'failed', canRetry: true, message: '잠시 후 다시 시도해 주세요.' })
   })
+
+  it('첨삭 수정 등으로 취소된 작업은 실패가 아니라 다시 요청 가능한 상태 (기존 동작 유지)', () => {
+    const cancelled = sjob('CANCELLED', { attempts: 1, error_code: 'NOTE_CHANGED' })
+    expect(noteSummaryState(note(cancelled), now)).toEqual({ kind: 'idle', pollMs: null })
+  })
 })

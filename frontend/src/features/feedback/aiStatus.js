@@ -182,8 +182,9 @@ export function noteSummaryState(note, now = Date.now()) {
     }
     return { kind: 'working', pollMs: 5_000 }
   }
-  if (job && ['FAILED', 'CANCELLED'].includes(job.status)) {
+  if (job?.status === 'FAILED') {
     return { kind: 'failed', message: jobMessage(job), canRetry: Boolean(job.retryable), pollMs: null }
   }
+  // CANCELLED(첨삭 수정 NOTE_CHANGED 등)는 기존처럼 다시 요청할 수 있는 상태로 둔다
   return { kind: 'idle', pollMs: null }
 }
