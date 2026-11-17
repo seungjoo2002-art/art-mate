@@ -24,6 +24,7 @@ from app.api.v1.endpoints import (
     meta,
     notifications,
     recordings,
+    reference_photos,
     schedules,
     tasks,
     users,
@@ -45,6 +46,7 @@ api_v1_router.include_router(ai_feedback.artwork_notes)
 api_v1_router.include_router(ai_feedback.notes)
 api_v1_router.include_router(artworks.router)
 api_v1_router.include_router(artworks.staff_router)
+api_v1_router.include_router(reference_photos.router)
 api_v1_router.include_router(classes.router)
 api_v1_router.include_router(community.sharing)
 api_v1_router.include_router(community.references_me)

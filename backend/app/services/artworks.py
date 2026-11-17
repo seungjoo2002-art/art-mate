@@ -58,7 +58,13 @@ from app.integrations.supabase.storage import (
 )
 from app.models.academy_class import AcademyClass
 from app.models.ai_feedback import FeedbackNote
-from app.models.artwork import MAX_WORK_MINUTES, Artwork, ArtworkPhoto, ArtworkStageDef
+from app.models.artwork import (
+    MAX_WORK_MINUTES,
+    Artwork,
+    ArtworkPhoto,
+    ArtworkReferencePhoto,
+    ArtworkStageDef,
+)
 from app.models.community import SharedArtworkImage
 from app.models.enums import (
     ARTWORK_STAGE_ORDER,
@@ -96,6 +102,7 @@ from app.schemas.artworks import (
     UploadRequest,
     UploadTarget,
     UploadTicket,
+    normalize_methods,
 )
 from app.schemas.common import PaginationParams
 from app.services.access import AccessService, managed_student_ids
@@ -250,6 +257,10 @@ def artwork_read(  # type: ignore[type-arg]
         "time_limit_minutes": artwork.time_limit_minutes,
         "time_source": artwork.time_source,
         "over_time_limit": over_time_limit(artwork),
+        "paper_size": artwork.paper_size,
+        "exam_conditions": artwork.exam_conditions,
+        "expression_methods": artwork.expression_methods or [],
+        "expression_intent": artwork.expression_intent,
         "created_at": artwork.created_at,
         "updated_at": artwork.updated_at,
         "stages": summary.stages,
@@ -489,6 +500,11 @@ class ArtworkService:
             actual_minutes=data.actual_minutes,
             time_limit_minutes=data.time_limit_minutes,
             time_source=TimeSource.MANUAL if data.actual_minutes is not None else None,
+            # v1.1 시험 조건·표현 의도
+            paper_size=data.paper_size,
+            exam_conditions=data.exam_conditions,
+            expression_methods=normalize_methods(data.expression_methods) or [],
+            expression_intent=data.expression_intent,
             **links,
         )
         self.session.add(artwork)
@@ -561,9 +577,14 @@ class ArtworkService:
             "exam_materials",
             "work_method",
             "time_limit_minutes",
+            "paper_size",
+            "exam_conditions",
+            "expression_intent",
         ):
             if field in changes:
                 setattr(artwork, field, changes[field])
+        if "expression_methods" in changes:
+            artwork.expression_methods = normalize_methods(data.expression_methods) or []
         if "actual_minutes" in changes:
             artwork.actual_minutes = changes["actual_minutes"]
             artwork.time_source = TimeSource.MANUAL if artwork.actual_minutes else None
@@ -638,6 +659,20 @@ class ArtworkService:
                 status=PhotoStatus.DELETED,
                 deleted_at=now,
                 is_representative=False,
+                storage_cleanup_pending=True,
+                updated_at=func.now(),
+            )
+        )
+        # v1.1 원본 제시물 사진도 함께 삭제 처리 (파일은 아래 cleanup_storage가 정리)
+        await self.session.execute(
+            update(ArtworkReferencePhoto)
+            .where(
+                ArtworkReferencePhoto.artwork_id == artwork.id,
+                ArtworkReferencePhoto.status.in_(_LIVE),
+            )
+            .values(
+                status=PhotoStatus.DELETED,
+                deleted_at=now,
                 storage_cleanup_pending=True,
                 updated_at=func.now(),
             )
@@ -1079,29 +1114,33 @@ class ArtworkService:
         return await self.photo_url(artwork_id, photo_id, token)
 
     async def cleanup_storage(self, owner: Profile, token: str) -> None:
-        """DELETED인데 Storage 정리가 안 된 파일을 지운다 (실패하면 다음 기회에 재시도)."""
+        """DELETED인데 Storage 정리가 안 된 파일을 지운다 (실패하면 다음 기회에 재시도).
+
+        작품 사진과 v1.1 원본 제시물 사진(같은 버킷)을 함께 정리한다.
+        """
         if self.storage is None:
             return
-        rows = (
+        for model in (ArtworkPhoto, ArtworkReferencePhoto):
+            rows = (
+                await self.session.execute(
+                    select(model.id, model.storage_path)
+                    .where(model.owner_id == owner.id, model.storage_cleanup_pending)
+                    .limit(CLEANUP_BATCH)
+                )
+            ).all()
+            if not rows:
+                continue
+            try:
+                await self.storage.delete([path for _, path in rows], access_token=token)
+            except StorageError:
+                logger.warning("storage cleanup deferred", extra={"count": len(rows)})
+                return
             await self.session.execute(
-                select(ArtworkPhoto.id, ArtworkPhoto.storage_path)
-                .where(ArtworkPhoto.owner_id == owner.id, ArtworkPhoto.storage_cleanup_pending)
-                .limit(CLEANUP_BATCH)
+                update(model)
+                .where(model.id.in_([row_id for row_id, _ in rows]))
+                .values(storage_cleanup_pending=False, updated_at=func.now())
             )
-        ).all()
-        if not rows:
-            return
-        try:
-            await self.storage.delete([path for _, path in rows], access_token=token)
-        except StorageError:
-            logger.warning("storage cleanup deferred", extra={"count": len(rows)})
-            return
-        await self.session.execute(
-            update(ArtworkPhoto)
-            .where(ArtworkPhoto.id.in_([photo_id for photo_id, _ in rows]))
-            .values(storage_cleanup_pending=False, updated_at=func.now())
-        )
-        await self.session.commit()
+            await self.session.commit()
 
     # ------------------------------------------------------------------ staff (read only)
 

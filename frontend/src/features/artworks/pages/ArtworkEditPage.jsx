@@ -7,7 +7,10 @@ import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getArtwork, listStages, replaceStages, updateArtwork } from '../api'
+import ExamIntentFields from '../components/ExamIntentFields'
+import ReferencePhotoManager from '../components/ReferencePhotoManager'
 import StageEditor from '../components/StageEditor'
+import { examIntentFromArtwork, examIntentPayload } from '../referencePhotos'
 import { stageListError, toStageSpecs } from '../stages'
 import styles from './ArtworkPage.module.css'
 
@@ -31,7 +34,12 @@ export default function ArtworkEditPage() {
   return <ArtworkEditForm artwork={data[0]} stagePlan={data[1]} />
 }
 
-const toRow = (s) => ({ key: s.id, id: s.id, name: s.name, minutes: s.target_minutes ?? 30 })
+const toRow = (s) => ({
+  key: s.id,
+  id: s.id,
+  name: s.name,
+  minutes: s.target_minutes ?? 30,
+})
 const sameStages = (a, b) =>
   JSON.stringify(a.map((s) => [s.id, s.name.trim()])) ===
   JSON.stringify(b.map((s) => [s.id, s.name.trim()]))
@@ -54,6 +62,7 @@ function ArtworkEditForm({ artwork, stagePlan }) {
   const initialStages = stagePlan.filter((s) => !s.archived).map(toRow)
   const [stages, setStages] = useState(initialStages)
   const archived = stagePlan.filter((s) => s.archived && !stages.some((row) => row.id === s.id))
+  const [details, setDetails] = useState(() => examIntentFromArtwork(artwork))
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const set = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))
@@ -96,6 +105,7 @@ function ArtworkEditForm({ artwork, stagePlan }) {
         work_method: form.work_method.trim() || null,
         actual_minutes: minutes[0],
         time_limit_minutes: minutes[1],
+        ...examIntentPayload(details), // v1.1 화지·추가 조건·메모·표현 의도
       })
       // 단계는 바뀐 경우에만 (시험 작품은 단계 목표 시간의 합이 제한 시간이 됨)
       if (!sameStages(stages, initialStages)) {
@@ -170,6 +180,16 @@ function ArtworkEditForm({ artwork, stagePlan }) {
           placeholder="예: 300"
           value={form.time_limit_minutes}
           onChange={set('time_limit_minutes')}
+        />
+        <div className={styles.field}>
+          <span className={styles.fieldLabel}>원본 제시물 사진</span>
+          <ReferencePhotoManager artworkId={artwork.id} />
+        </div>
+        <ExamIntentFields
+          value={details}
+          onChange={setDetails}
+          methodOptions={options?.expression_methods}
+          showTime={false}
         />
         <StageEditor
           stages={stages}

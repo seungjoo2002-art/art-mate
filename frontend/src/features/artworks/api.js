@@ -25,6 +25,10 @@ export const createArtwork = ({
   timeLimitMinutes,
   stages,
   examMaterials,
+  paperSize,
+  examConditions,
+  expressionMethods,
+  expressionIntent,
 }) =>
   api('/artworks', {
     method: 'POST',
@@ -38,6 +42,11 @@ export const createArtwork = ({
       ...(workCategory ? { work_category: workCategory } : {}),
       ...(timeLimitMinutes ? { time_limit_minutes: timeLimitMinutes } : {}),
       ...(stages?.length ? { stages } : {}), // v0.9.7 [{ name, target_minutes? }]
+      // v1.1 시험 조건·표현 의도 (모두 선택)
+      ...(paperSize ? { paper_size: paperSize } : {}),
+      ...(examConditions ? { exam_conditions: examConditions } : {}),
+      ...(expressionMethods?.length ? { expression_methods: expressionMethods } : {}),
+      ...(expressionIntent ? { expression_intent: expressionIntent } : {}),
     },
   })
 
@@ -94,7 +103,10 @@ export const getTimer = (artworkId) => api(`/artworks/${artworkId}/timer`)
 
 /** event: START | PAUSE | RESUME | STOP | RESET. STOP하면 actual_minutes 저장 */
 export const sendTimerEvent = (artworkId, event) =>
-  api(`/artworks/${artworkId}/timer/events`, { method: 'POST', body: { event } })
+  api(`/artworks/${artworkId}/timer/events`, {
+    method: 'POST',
+    body: { event },
+  })
 
 /** VER.2 실기시험 단계 (서버 저장, 다른 기기에서도 같은 값) */
 export const getExam = (artworkId) => api(`/artworks/${artworkId}/exam`)
@@ -105,7 +117,10 @@ export const putExamPlan = (artworkId, stages) =>
 
 /** 현재 단계를 끝내고 다음 단계 시작. 마지막 단계면 409 EXAM_LAST_STAGE (타이머 STOP으로 끝냄) */
 export const nextExamStage = (artworkId, currentStage) =>
-  api(`/artworks/${artworkId}/exam/next`, { method: 'POST', body: { current_stage: currentStage } })
+  api(`/artworks/${artworkId}/exam/next`, {
+    method: 'POST',
+    body: { current_stage: currentStage },
+  })
 
 /** 내 기본 단계 목표 시간 (모든 기기 공통). 저장한 적 없으면 source=DEFAULT */
 export const getExamDefaults = () => api('/users/me/exam-defaults')
@@ -125,6 +140,19 @@ const LEGACY_STAGES = ['SKETCH', 'PROGRESS', 'FINAL']
  * stage: 작품 단계 id (v0.9.7) 또는 예전 SKETCH | PROGRESS | FINAL
  * kind REVISION: 피드백을 반영한 수정 사진 → feedbackNoteId 또는 feedbackRecordingId 1개 필수
  */
+/** 업로드 전에 형식·크기 확인 (서버가 다시 검증). 문제가 있으면 { userMessage } 를 던진다 */
+export function checkImageFile(file) {
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    const isHeic = /heic|heif/i.test(file.type) || /\.hei[cf]$/i.test(file.name)
+    throw {
+      userMessage: isHeic
+        ? '아이폰 HEIC 사진은 올릴 수 없어요. 설정 > 카메라 > 포맷에서 "높은 호환성"으로 바꿔 주세요.'
+        : 'JPG, PNG, WEBP 사진만 올릴 수 있어요.',
+    }
+  }
+  if (file.size > MAX_BYTES) throw { userMessage: '10MB 이하 사진만 올릴 수 있어요.' }
+}
+
 export async function uploadStagePhoto(
   artworkId,
   stage,
@@ -159,9 +187,47 @@ export async function uploadStagePhoto(
   // 2) Storage 업로드
   const { error } = await supabase.storage
     .from(ticket.upload.bucket)
-    .uploadToSignedUrl(ticket.upload.path, ticket.upload.token, file, { contentType: file.type })
+    .uploadToSignedUrl(ticket.upload.path, ticket.upload.token, file, {
+      contentType: file.type,
+    })
   if (error) throw { userMessage: '사진을 올리지 못했어요. 다시 시도해 주세요.' }
 
   // 3) 완료 처리 (멱등)
-  return api(`/artworks/${artworkId}/photos/${ticket.photo.id}/complete`, { method: 'POST' })
+  return api(`/artworks/${artworkId}/photos/${ticket.photo.id}/complete`, {
+    method: 'POST',
+  })
 }
+
+// ---------------------------------------------------------------- v1.1 원본 제시물 사진
+
+/** 업로드된 원본 사진 (순서대로) + 최대 장수. includeUrls면 짧은 만료 미리보기 URL 포함 */
+export const listReferencePhotos = (artworkId, { includeUrls = true } = {}) =>
+  api(`/artworks/${artworkId}/reference-photos${includeUrls ? '?include_urls=true' : ''}`)
+
+/** 원본 사진 1장 올리기 (요청 → Storage 직접 업로드 → 완료). replacesPhotoId면 그 자리 교체 */
+export async function uploadReferencePhoto(artworkId, file, { replacesPhotoId } = {}) {
+  checkImageFile(file)
+  const ticket = await api(`/artworks/${artworkId}/reference-photos`, {
+    method: 'POST',
+    body: {
+      content_type: file.type,
+      file_size: file.size,
+      file_name: file.name,
+      replaces_photo_id: replacesPhotoId ?? null,
+    },
+  })
+  const { error } = await supabase.storage
+    .from(ticket.upload.bucket)
+    .uploadToSignedUrl(ticket.upload.path, ticket.upload.token, file, {
+      contentType: file.type,
+    })
+  if (error) throw { userMessage: '사진을 올리지 못했어요. 다시 시도해 주세요.' }
+  return api(`/artworks/${artworkId}/reference-photos/${ticket.photo.id}/complete`, {
+    method: 'POST',
+  })
+}
+
+export const deleteReferencePhoto = (artworkId, photoId) =>
+  api(`/artworks/${artworkId}/reference-photos/${photoId}`, {
+    method: 'DELETE',
+  })

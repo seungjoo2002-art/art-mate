@@ -12,6 +12,7 @@ from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
 from app.models.enums import (
+    EXPRESSION_METHOD_LABELS,
     FEEDBACK_ITEM_KIND_LABELS,
     FEEDBACK_SOURCE_LABELS,
     GRADE_LABELS,
@@ -44,6 +45,9 @@ class Options(BaseModel):
         default_factory=list, description="첨삭 출처 (v0.9). INSTRUCTOR만 반복 약점 통계에 집계"
     )
     data_policy: "DataPolicy | None" = Field(default=None, description="데이터 이용 정책 (v0.9)")
+    expression_methods: list[Option] = Field(
+        default_factory=list, description="표현 방식 (v1.1, 다중 선택)"
+    )
 
 
 class DataPolicy(BaseModel):
@@ -86,6 +90,7 @@ async def get_options(request: Request, response: Response) -> Options:
         work_statuses=_options(WORK_STATUS_LABELS),
         weakness_categories=_options(WEAKNESS_CATEGORY_LABELS),
         feedback_item_kinds=_options(FEEDBACK_ITEM_KIND_LABELS),
+        expression_methods=_options(EXPRESSION_METHOD_LABELS),
     )
 
 
