@@ -11,6 +11,7 @@ from app.models.enums import (
     ArtworkStage,
     ArtworkWorkCategory,
     ArtworkWorkStatus,
+    ExpressionMethod,
     FeedbackSource,
     FeedbackStatus,
     PhotoKind,
@@ -33,6 +34,25 @@ ExamMaterials = Annotated[
 ]
 WorkMethod = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 Minutes = Annotated[int, Field(ge=1, le=MAX_WORK_MINUTES)]
+# v1.1 시험 조건·표현 의도
+PaperSize = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
+ExamConditions = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
+]
+ExpressionIntent = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)
+]
+ExpressionMethods = Annotated[list[ExpressionMethod], Field(max_length=len(ExpressionMethod))]
+
+
+def normalize_methods(methods: list[ExpressionMethod] | None) -> list[str] | None:
+    """중복 제거 + 정의 순서 (저장·응답 일관성)."""
+    if methods is None:
+        return None
+    chosen = set(methods)
+    return [m.value for m in ExpressionMethod if m in chosen]
+
+
 StageName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_STAGE_NAME)
 ]
@@ -109,6 +129,18 @@ class ArtworkCreate(InputModel):
     time_limit_minutes: Minutes | None = Field(
         default=None, description="제한 시간(분, 1~1440). 모의 실기시험이면 입력"
     )
+    # v1.1 시험 조건·표현 의도 (모두 선택)
+    paper_size: PaperSize | None = Field(default=None, description="화지 규격 (예: 4절, 3절)")
+    exam_conditions: ExamConditions | None = Field(
+        default=None, description="추가 시험 조건 (예: 제시물 2개 이상 사용, 배경 자유)"
+    )
+    expression_methods: ExpressionMethods | None = Field(
+        default=None,
+        description="표현 방식 다중 선택 (SCALE·ROTATE·REPEAT·CUT·DISTORT·REARRANGE·OTHER)",
+    )
+    expression_intent: ExpressionIntent | None = Field(
+        default=None, description="작품에서 의도한 점 (학생이 직접 작성, 선택)"
+    )
     # v0.9.7 사용자 정의 단계 (생략하면 스케치 / 채색 / 완성)
     stages: StageList | None = Field(
         default=None, description="작품 제작 단계 (1~10개, 순서대로). 생략하면 스케치·채색·완성"
@@ -121,7 +153,7 @@ class ArtworkCreate(InputModel):
 
 
 class ArtworkUpdate(PatchModel):
-    NOT_NULLABLE: ClassVar[frozenset[str]] = frozenset({"title", "work_date"})
+    NOT_NULLABLE: ClassVar[frozenset[str]] = frozenset({"title", "work_date", "expression_methods"})
 
     title: Title | None = None
     description: ArtworkDescription | None = None
@@ -138,6 +170,18 @@ class ArtworkUpdate(PatchModel):
         default=None, description="직접 입력(time_source=MANUAL). null이면 삭제"
     )
     time_limit_minutes: Minutes | None = Field(default=None, description="null이면 삭제")
+    # v1.1 시험 조건·표현 의도 (null이면 삭제, expression_methods는 []로 비움)
+    paper_size: PaperSize | None = Field(default=None, description="화지 규격 (예: 4절, 3절)")
+    exam_conditions: ExamConditions | None = Field(
+        default=None, description="추가 시험 조건 (예: 제시물 2개 이상 사용, 배경 자유)"
+    )
+    expression_methods: ExpressionMethods | None = Field(
+        default=None,
+        description="표현 방식 다중 선택 (SCALE·ROTATE·REPEAT·CUT·DISTORT·REARRANGE·OTHER)",
+    )
+    expression_intent: ExpressionIntent | None = Field(
+        default=None, description="작품에서 의도한 점 (학생이 직접 작성, 선택)"
+    )
 
 
 class StageSummary(BaseModel):
@@ -188,6 +232,11 @@ class ArtworkRead(BaseModel):
     over_time_limit: bool | None = Field(
         default=None, description="실제 시간 > 제한 시간 (둘 다 있을 때만 판단)"
     )
+    # v1.1 (기본값: 이전 응답·기존 작품과 호환)
+    paper_size: str | None = None
+    exam_conditions: str | None = None
+    expression_methods: list[ExpressionMethod] = Field(default_factory=list)
+    expression_intent: str | None = None
     created_at: dt.datetime
     updated_at: dt.datetime
 

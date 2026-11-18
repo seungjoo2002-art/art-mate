@@ -28,6 +28,7 @@ from sqlalchemy import (
     false,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
@@ -89,6 +90,12 @@ class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "(actual_minutes IS NULL) = (time_source IS NULL)", name="actual_minutes_source"
         ),
+        # v1.1 표현 방식은 정해진 값만 (ExpressionMethod)
+        CheckConstraint(
+            "expression_methods <@ ARRAY['SCALE', 'ROTATE', 'REPEAT', 'CUT', 'DISTORT', "
+            "'REARRANGE', 'OTHER']::varchar[]",
+            name="expression_methods_valid",
+        ),
         Index("ix_artworks_owner_work_date", "owner_id", "work_date"),
         Index("ix_artworks_academy_student", "academy_id", "student_membership_id", "work_date"),
     )
@@ -126,6 +133,70 @@ class Artwork(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     actual_minutes: Mapped[int | None] = mapped_column(Integer)  # 실제 소요 시간 (분)
     time_limit_minutes: Mapped[int | None] = mapped_column(Integer)  # 제한 시간 (분, 모의시험)
     time_source: Mapped[TimeSource | None] = mapped_column(enum_column(TimeSource, "time_source"))
+    # v1.1 시험 조건·표현 의도 (모두 선택). 실기 주제=topic, 제시물 설명=exam_materials,
+    # 시험 시간=time_limit_minutes, 자유 메모=description 을 그대로 쓴다
+    paper_size: Mapped[str | None] = mapped_column(String(50))  # 화지 규격 (예: 4절)
+    exam_conditions: Mapped[str | None] = mapped_column(String(500))  # 추가 시험 조건
+    # 학생이 고른 표현 방식 (ExpressionMethod 값, 순서 무관). 없으면 빈 배열
+    expression_methods: Mapped[list[str]] = mapped_column(
+        ARRAY(String(20)), server_default=text("'{}'::varchar[]"), default=list
+    )
+    # 학생이 직접 쓴 표현 의도. 비어 있으면 AI가 의도를 추정·확정하지 않는다 (v1.2)
+    expression_intent: Mapped[str | None] = mapped_column(String(1000))
+
+
+class ArtworkReferencePhoto(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """v1.1 원본 제시물 사진 (작품당 0~N장, 모든 단계 공통 참고).
+
+    학생 작품 사진(artwork_photos: 단계·대표·진행률·공유에 쓰임)과 분리한다. 같은 비공개 버킷의
+    `{owner}/{artwork}/ref-{id}.{ext}` 경로에 저장하고,
+    Storage 정책 함수가 이 표의 소유자만 허용한다.
+    """
+
+    __tablename__ = "artwork_reference_photos"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["artwork_id", "owner_id"], ["artworks.id", "artworks.owner_id"], ondelete="CASCADE"
+        ),
+        ForeignKeyConstraint(
+            ["replaces_photo_id"], ["artwork_reference_photos.id"], ondelete="SET NULL"
+        ),
+        CheckConstraint("position >= 0", name="position_nonnegative"),
+        Index("ix_artwork_reference_photos_artwork", "artwork_id", "status", "position"),
+        # 같은 작품에 같은 파일(내용 해시) 중복 방지
+        Index(
+            "uq_artwork_reference_photos_active_sha256",
+            "artwork_id",
+            "sha256",
+            unique=True,
+            postgresql_where=text("status = 'ACTIVE'"),
+        ),
+        Index(
+            "ix_artwork_reference_photos_owner_cleanup",
+            "owner_id",
+            postgresql_where=text("storage_cleanup_pending"),
+        ),
+    )
+
+    artwork_id: Mapped[uuid.UUID]
+    owner_id: Mapped[uuid.UUID]
+    position: Mapped[int] = mapped_column(Integer)  # 보여 줄 순서 (올린 순서, 교체하면 그 자리)
+    status: Mapped[PhotoStatus] = mapped_column(
+        enum_column(PhotoStatus, "status"), default=PhotoStatus.PENDING
+    )
+    storage_path: Mapped[str] = mapped_column(String(512), unique=True)
+    content_type: Mapped[str] = mapped_column(String(50))
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
+    sha256: Mapped[str | None] = mapped_column(String(64))
+    upload_expires_at: Mapped[datetime]
+    uploaded_at: Mapped[datetime | None]
+    deleted_at: Mapped[datetime | None]
+    replaces_photo_id: Mapped[uuid.UUID | None]
+    storage_cleanup_pending: Mapped[bool] = mapped_column(
+        Boolean, server_default=false(), default=False
+    )
 
 
 class ArtworkTimerEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):

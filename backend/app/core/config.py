@@ -96,6 +96,8 @@ class Settings(BaseSettings):
     artwork_max_photos_per_stage: int = Field(default=30, ge=1, le=100)
     # v0.9.7 피드백 반영 수정 사진 (단계별 상한)
     artwork_max_revision_photos_per_stage: int = Field(default=20, ge=1, le=100)
+    # v1.1 원본 제시물 사진 (작품당, 모든 단계 공통). 형식·크기 제한은 작품 사진과 같다
+    artwork_max_reference_photos: int = Field(default=5, ge=1, le=20)
     # 디컴프레션 폭탄 방지: 이미지 최대 픽셀 수
     artwork_max_image_pixels: int = Field(default=50_000_000, ge=1_000_000, le=200_000_000)
 

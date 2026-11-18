@@ -8,6 +8,8 @@ import { useOptions } from '../../../hooks/useOptions'
 import { labelOf } from '../../../lib/options'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { createArtwork, deleteArtwork, putExamPlan } from '../api'
+import ExamIntentFields from '../components/ExamIntentFields'
+import ReferenceGrid from '../components/ReferenceGrid'
 import StageEditor from '../components/StageEditor'
 import {
   DEFAULT_STAGE_TARGETS,
@@ -18,7 +20,14 @@ import {
   saveExamDefaults,
   totalMinutes,
 } from '../exam'
+import {
+  acceptFiles,
+  DEFAULT_MAX_REFERENCE_PHOTOS,
+  examIntentFromArtwork,
+  examIntentPayload,
+} from '../referencePhotos'
 import { DEFAULT_STAGE_NAMES, newStageRow, stageListError, toStageSpecs } from '../stages'
+import { useReferenceUploads } from '../useReferenceUploads'
 import styles from './ArtworkPage.module.css'
 
 /** 작품명을 비우면 쓰는 임시 제목. 예: "기초디자인 · 11월 11일" */
@@ -62,11 +71,53 @@ export default function ArtworkCreatePage() {
   const [practicalType, setPracticalType] = useState(profile.practical_type ?? '')
   const [topic, setTopic] = useState('')
   const [examMaterials, setExamMaterials] = useState('')
+  const [details, setDetails] = useState(() => examIntentFromArtwork())
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // v1.1 원본 제시물: 작품을 만든 뒤 올린다. 일부 실패하면 만든 작품에 남은 파일만 다시 올림 (입력 보존)
+  const references = useReferenceUploads()
+  const [refMessages, setRefMessages] = useState([])
+  const [created, setCreated] = useState(null)
+
+  function addReferences(files) {
+    const used = references.queue.length
+    const { accepted, rejected } = acceptFiles(files, DEFAULT_MAX_REFERENCE_PHOTOS - used)
+    setRefMessages(rejected.map((r) => `${r.name}: ${r.message}`))
+    if (accepted.length) references.add(accepted)
+  }
+
+  function goToArtwork(artwork) {
+    navigate(exam ? `/artworks/${artwork.id}/exam` : `/artworks/${artwork.id}`, { replace: true })
+  }
+
+  /** 원본 사진 올리기 → 모두 성공하면 이동, 실패가 있으면 이 화면에서 다시 시도·건너뛰기 */
+  async function uploadReferencesThenGo(artwork) {
+    const failed = await references.uploadAll(artwork.id)
+    if (failed) {
+      setCreated(artwork)
+      setFormError(
+        `원본 사진 ${failed}장을 올리지 못했어요. 다시 시도하거나 건너뛰고 나중에 작품 수정에서 추가할 수 있어요.`,
+      )
+      setSubmitting(false)
+      return
+    }
+    goToArtwork(artwork)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (created) {
+      // 작품은 이미 만들어짐 → 실패한 원본 사진만 다시
+      setSubmitting(true)
+      setFormError('')
+      await uploadReferencesThenGo(created)
+      return
+    }
+    const limit = details.time_limit_minutes === '' ? null : Number(details.time_limit_minutes)
+    if (!exam && limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 1440)) {
+      setFormError('시험 시간은 1분에서 1440분(24시간) 사이로 입력해 주세요.')
+      return
+    }
     const stageError =
       stageListError(stages, { withMinutes: exam }) ||
       (exam && stages.length > MAX_EXAM_STAGES
@@ -87,6 +138,7 @@ export default function ArtworkCreatePage() {
           stages.map((s, i) => ({ key: EXAM_CODES[i], minutes: s.minutes })),
         ).catch(() => {})
       }
+      const extra = examIntentPayload(details)
       const artwork = await createArtwork({
         title: title.trim() || fallbackTitle(typeLabel, exam),
         topic: topic.trim(),
@@ -94,8 +146,13 @@ export default function ArtworkCreatePage() {
         recommendationId,
         practicalType: practicalType || undefined,
         workCategory: exam ? 'MOCK_EXAM' : undefined,
-        timeLimitMinutes: exam ? totalMinutes(stages) : undefined,
+        timeLimitMinutes: exam ? totalMinutes(stages) : limit || undefined,
         stages: toStageSpecs(stages, { withMinutes: exam }),
+        paperSize: extra.paper_size,
+        examConditions: extra.exam_conditions,
+        description: extra.description,
+        expressionMethods: extra.expression_methods,
+        expressionIntent: extra.expression_intent,
       })
       if (exam) {
         // 단계 계획은 타이머 START 전에 저장해야 첫 단계가 함께 시작됨 (실패하면 작품을 지우고 다시)
@@ -105,10 +162,8 @@ export default function ArtworkCreatePage() {
           await deleteArtwork(artwork.id).catch(() => {})
           throw err
         }
-        navigate(`/artworks/${artwork.id}/exam`, { replace: true })
-      } else {
-        navigate(`/artworks/${artwork.id}`, { replace: true })
       }
+      await uploadReferencesThenGo(artwork)
     } catch (error) {
       setFormError(toErrorMessage(error))
       setSubmitting(false)
@@ -155,6 +210,31 @@ export default function ArtworkCreatePage() {
           onChange={(e) => setExamMaterials(e.target.value)}
         />
 
+        <div className={styles.field}>
+          <span className={styles.fieldLabel}>
+            원본 제시물 사진 (선택, 최대 {DEFAULT_MAX_REFERENCE_PHOTOS}장)
+          </span>
+          <ReferenceGrid
+            queue={references.queue}
+            max={DEFAULT_MAX_REFERENCE_PHOTOS}
+            disabled={submitting}
+            onAdd={created ? undefined : addReferences}
+            onRemoveQueued={(item) => references.remove(item.key)}
+          />
+          {refMessages.map((m) => (
+            <p key={m} className={styles.error}>
+              {m}
+            </p>
+          ))}
+        </div>
+
+        <ExamIntentFields
+          value={details}
+          onChange={setDetails}
+          methodOptions={options?.expression_methods}
+          showTime={!exam}
+        />
+
         <StageEditor
           stages={stages}
           onChange={setStages}
@@ -166,8 +246,21 @@ export default function ArtworkCreatePage() {
         {formError && <p className={styles.error}>{formError}</p>}
         <div className={styles.submit}>
           <Button type="submit" withArrow disabled={submitting}>
-            {submitting ? '만드는 중…' : exam ? '시험 시작하기' : '작품 기록 시작하기'}
+            {submitting
+              ? references.queue.some((q) => q.status === 'uploading')
+                ? '원본 사진 올리는 중…'
+                : '만드는 중…'
+              : created
+                ? '원본 사진 다시 올리기'
+                : exam
+                  ? '시험 시작하기'
+                  : '작품 기록 시작하기'}
           </Button>
+          {created && !submitting && (
+            <Button type="button" variant="soft" onClick={() => goToArtwork(created)}>
+              건너뛰고 계속하기
+            </Button>
+          )}
           <p className={styles.caption}>
             작품명을 입력하지 않으면 자동으로 임시 제목이 지정됩니다. 시작 버튼을 누르면 단계별 기록
             화면으로 이동합니다.

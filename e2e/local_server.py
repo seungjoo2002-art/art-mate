@@ -3,6 +3,7 @@
 Replaced external services only: Supabase Auth (test ES256 key), Storage (in-memory),
 LLM (grounded fake that echoes source sentences). Writes user tokens to argv[2].
 POST /__e2e/drain runs the job queue once (like the GitHub Actions worker).
+POST /__e2e/storage/put stores a browser upload (relayed by Playwright) in the in-memory Storage.
 """
 
 import json
@@ -17,6 +18,7 @@ DB = sys.argv[3]
 sys.path.insert(0, BACKEND)
 
 import uvicorn  # noqa: E402
+from fastapi import Request  # noqa: E402
 
 from tests.conftest import make_settings  # noqa: E402  (sets ENV_FILE='' — no .env)
 from tests.auth_utils import TEST_SUPABASE_URL, TokenFactory, make_verifier  # noqa: E402
@@ -101,6 +103,17 @@ async def drain() -> dict:
     while count < 20 and await runner.run_once():
         count += 1
     return {"processed": count, "llm_calls": llm.calls}
+
+
+@app.post("/__e2e/storage/put", include_in_schema=False)
+async def storage_put(request: Request, bucket: str, path: str) -> dict:
+    """브라우저가 Signed upload URL로 올린 파일을 메모리 Storage에 저장 (E2E 전용, Playwright가 중계)."""
+    target = {
+        s.bucket: s
+        for s in (app.state.storage, app.state.audio_storage, app.state.shared_storage)
+    }[bucket]
+    target.put(path, await request.body())
+    return {"Key": f"{bucket}/{path}"}
 
 
 if __name__ == "__main__":

@@ -17,11 +17,14 @@ import {
   uploadStagePhoto,
 } from '../api'
 import FeedbackRefs from '../components/FeedbackRefs'
+import ReferenceCompare from '../components/ReferenceCompare'
+import refStyles from '../components/ReferenceGrid.module.css'
 import StageHeader from '../components/StageHeader'
 import StageStepper from '../components/StageStepper'
 import TimelinePhotoCard from '../components/TimelinePhotoCard'
 import { hasFinalPhoto, isCompleted, photoTime, stagePhotos, stagesWithPhotos } from '../stages'
 import { formatMinutes } from '../exam'
+import { artworkConditions, EXPRESSION_METHODS } from '../referencePhotos'
 import styles from './ArtworkPage.module.css'
 
 /**
@@ -198,10 +201,17 @@ export default function ArtworkDetailPage({ renderTimeline }) {
           </Card>
         )}
 
+        <ArtworkConditions artwork={artwork} options={options} />
+        <ReferenceCompare key={artwork.updated_at} artwork={artwork} />
+
         <StageStepper stages={stages} />
 
         {renderTimeline ? (
-          renderTimeline({ artworkId: artwork.id, sections, renderFeedbackExtras })
+          renderTimeline({
+            artworkId: artwork.id,
+            sections,
+            renderFeedbackExtras,
+          })
         ) : (
           <div className={styles.stageList}>
             {sections.map((section) => (
@@ -270,4 +280,30 @@ function ArtworkMeta({ artwork, options }) {
   ].filter(Boolean)
   if (!parts.length) return null
   return <p className={styles.meta}>{parts.join(' · ')}</p>
+}
+
+/** v1.1 시험 조건·표현 의도 (값이 있는 것만). 주제·시간은 위에서 이미 보여 줌 */
+function ArtworkConditions({ artwork, options }) {
+  const methodLabel = (code) =>
+    labelOf(
+      options?.expression_methods?.length ? options.expression_methods : EXPRESSION_METHODS,
+      code,
+    )
+  const shown = new Set(['실기 주제', '시험 시간'])
+  const rows = artworkConditions(artwork, methodLabel).filter(
+    (r) => !shown.has(r.label) && !(r.label === '메모' && !artwork.topic),
+  )
+  if (!rows.length) return null
+  return (
+    <Card>
+      <dl className={refStyles.conditions}>
+        {rows.map((r) => (
+          <div key={r.label} style={{ display: 'contents' }}>
+            <dt>{r.label}</dt>
+            <dd>{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  )
 }

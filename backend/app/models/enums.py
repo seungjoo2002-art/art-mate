@@ -885,3 +885,30 @@ class LabelVerification(StrEnum):
 class DatasetConsentStatus(StrEnum):
     ACTIVE = "ACTIVE"
     REVOKED = "REVOKED"
+
+
+class ExpressionMethod(StrEnum):
+    """v1.1 학생이 고른 표현 방식 (기초디자인 등에서 원본 제시물을 의도적으로 바꾼 방식, 다중 선택).
+
+    v1.2 AI 비교 첨삭에서 '의도한 변형'을 형태 오류로 판단하지 않도록 쓰는 입력값
+    (값 변경 금지, 추가만).
+    """
+
+    SCALE = "SCALE"  # 확대·축소
+    ROTATE = "ROTATE"  # 회전·기울이기
+    REPEAT = "REPEAT"  # 반복·중첩
+    CUT = "CUT"  # 절단·분해
+    DISTORT = "DISTORT"  # 형태 과장·왜곡
+    REARRANGE = "REARRANGE"  # 재배치
+    OTHER = "OTHER"  # 기타
+
+
+EXPRESSION_METHOD_LABELS: dict[ExpressionMethod, str] = {
+    ExpressionMethod.SCALE: "확대·축소",
+    ExpressionMethod.ROTATE: "회전·기울이기",
+    ExpressionMethod.REPEAT: "반복·중첩",
+    ExpressionMethod.CUT: "절단·분해",
+    ExpressionMethod.DISTORT: "형태 과장·왜곡",
+    ExpressionMethod.REARRANGE: "재배치",
+    ExpressionMethod.OTHER: "기타",
+}
