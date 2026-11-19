@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../../../components/ui'
 import AuthHero from '../components/AuthHero'
+import LandingTitle from '../components/LandingTitle'
 import styles from './AuthForm.module.css'
 
 export default function LandingPage() {
@@ -11,7 +12,8 @@ export default function LandingPage() {
       <main className={`${styles.body} ${styles.landing}`}>
         <AuthHero
           large
-          title="ART MATE"
+          visual={null}
+          title={<LandingTitle />}
           description={'작품을 기록하고, 피드백을 모으고\n나의 성장을 확인하세요.'}
         />
         <div className={styles.landingActions}>

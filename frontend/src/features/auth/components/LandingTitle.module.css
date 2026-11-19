@@ -1,0 +1,99 @@
+/*
+ * 영상: 832×480, 24fps, 5.17초, 투명 배경
+ *   주황 줄(마지막 장면): 가로 16–91%(가운데 53.7%), 세로 87–95%
+ *   줄이 칠해지는 때: 약 1.9–3.3초 → 글자가 이때 왼쪽부터 나타남
+ * 줄 가운데를 글자 가운데(50%)에 맞추려고 영상을 왼쪽으로 3.7% 옮김
+ */
+.box {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(400px, calc(100vw - 32px));
+  padding-bottom: 16px; /* 줄 아래로 나온 글자 몫 */
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 영상이 오기 전에도 자리를 잡아 둠 (글자가 위아래로 튀지 않게) */
+.stage {
+  display: block;
+  width: 100%;
+  aspect-ratio: 832 / 480;
+}
+
+.media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  translate: -3.7% 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/*
+ * 글자를 영상 속 주황 줄 위에 올림 (줄 세로 가운데 90.7%, 글자 아랫부분이 줄에 걸침)
+ * 줄과 MATE가 같은 주황이라 배경색 테두리로 글자를 줄에서 떼어 냄
+ */
+.visual {
+  position: absolute;
+  top: calc((100% - 16px) * 0.907); /* 100% = 영상 높이 + padding-bottom */
+  left: 50%;
+  translate: -50% -80%;
+  -webkit-text-stroke: 2px var(--color-bg); /* 글자 뒤에 그려져 바깥으로 보이는 건 절반(1px) */
+  paint-order: stroke fill;
+  text-shadow: 0 4px 8px rgb(0 0 0 / 0.42); /* 줄 위에 살짝 떠 보이게 */
+  display: inline-flex; /* 단어 사이 간격 = ART 끝 글자의 letter-spacing → 모든 글자 간격 동일 */
+  white-space: nowrap;
+  font-size: clamp(32px, 11vw, 44px);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.14em;
+  margin-right: -0.14em; /* 마지막 글자 뒤 간격 제거 */
+  -webkit-mask-image: linear-gradient(to right, #000 47%, transparent 53%);
+  mask-image: linear-gradient(to right, #000 47%, transparent 53%);
+  -webkit-mask-size: 300% 100%;
+  mask-size: 300% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  /* 처음엔 숨김 (경계가 글자 줄 왼쪽 밖) */
+  -webkit-mask-position: 80% 0;
+  mask-position: 80% 0;
+}
+
+.playing .visual {
+  animation: soak 1.4s linear 1.9s both;
+}
+
+.still .visual {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.ink {
+  color: var(--color-text);
+}
+
+.paint {
+  color: var(--color-primary);
+}
+
+/* 마스크 300% 폭: 위치 80% → 20%로 옮기면 경계가 글자 줄 왼쪽 밖 → 오른쪽 밖 */
+@keyframes soak {
+  from {
+    -webkit-mask-position: 80% 0;
+    mask-position: 80% 0;
+  }
+  to {
+    -webkit-mask-position: 20% 0;
+    mask-position: 20% 0;
+  }
+}
