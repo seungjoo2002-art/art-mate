@@ -46,7 +46,7 @@
 /* 랜딩: 로고를 가운데, 버튼을 아래에 */
 .landing {
   justify-content: space-between;
-  padding-top: 30dvh;
+  padding-top: 12dvh;
   padding-bottom: var(--space-10);
 }
 
