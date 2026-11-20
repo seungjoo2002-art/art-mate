@@ -1,10 +1,14 @@
 import { useCallback } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, PenLine, Timer } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Card, PageIntro } from '../../components/ui'
+import mascotStanding from '../../assets/mascot/mascot-standing.webp'
+import mascotTimer from '../../assets/mascot/mascot-timer.webp'
+import { PageIntro } from '../../components/ui'
 import { listArtworks } from '../../features/artworks/api'
-import ArtworkCard from '../../features/artworks/components/ArtworkCard'
+import GalleryStrip from '../../features/artworks/components/GalleryStrip'
 import { formatMinutes, loadExamDefaults, totalMinutes } from '../../features/artworks/exam'
+import { tabColor } from '../../features/artworks/sectionTabs'
+import tabStyles from '../../features/artworks/SectionTabs.module.css'
 import { useAsync } from '../../hooks/useAsync'
 import { formatMonthDay } from '../../utils/date'
 import styles from './PracticePage.module.css'
@@ -16,38 +20,56 @@ export default function PracticePage() {
     <>
       <PageIntro title="실기" description="작품을 자유롭게 기록하거나 실기시험을 진행하세요." />
 
-      <LastExamCard />
+      {/* 두 모드: 글자는 시험 왼쪽 · 새 작품 오른쪽, 반대쪽 빈자리에 고양이 (시험 = 시계 든 고양이) */}
+      <div className={styles.modes}>
+        <ModeCard
+          to="/artworks/new?mode=exam"
+          paint={tabColor(2)}
+          icon={Timer}
+          title="실기시험 모드"
+          description="아이디어·스케치·채색 목표 시간을 설정하고 단계별 사진, 메모와 녹음을 남깁니다."
+          action={
+            targets ? `목표 ${formatMinutes(totalMinutes(targets))} · 시험 시작하기` : '시험 시작하기'
+          }
+          cat={{ src: mascotTimer, side: 'right' }}
+        />
+        <ModeCard
+          to="/artworks/new"
+          paint="var(--color-primary)"
+          icon={PenLine}
+          title="새 작품 기록"
+          description="시간 제한 없이 단계별 사진·첨삭·메모를 저장합니다."
+          action="기록 시작하기"
+          cat={{ src: mascotStanding, side: 'left' }}
+        />
+      </div>
 
-      <ModeCard
-        to="/artworks/new?mode=exam"
-        title="실기시험 모드"
-        description="아이디어·스케치·채색 목표 시간을 설정하고 단계별 사진, 메모와 녹음을 남깁니다."
-        action={
-          targets ? `목표 ${formatMinutes(totalMinutes(targets))} · 시험 시작하기` : '시험 시작하기'
-        }
-      />
-      <ModeCard
-        to="/artworks/new"
-        title="새 작품 기록"
-        description="시간 제한 없이 단계별 사진·첨삭·메모를 저장합니다."
-        action="기록 시작하기"
-      />
+      <LastExamCard />
 
       <RecentArtworks />
     </>
   )
 }
 
-function ModeCard({ to, title, description, action }) {
+function ModeCard({ to, paint, icon: Icon, title, description, action, cat }) {
   return (
-    <Card as={Link} to={to} className={styles.mode}>
-      <span className={styles.modeHeader}>
-        <span className={styles.modeTitle}>{title}</span>
-        <ChevronRight size={24} aria-hidden />
+    <Link to={to} className={styles.mode} style={{ '--paint': paint }}>
+      {cat && (
+        <img
+          className={`${styles.cat} ${cat.side === 'right' ? styles.catRight : styles.catLeft}`}
+          src={cat.src}
+          alt=""
+        />
+      )}
+      <span className={styles.modeIcon}>
+        <Icon size={24} aria-hidden />
       </span>
+      <span className={styles.modeTitle}>{title}</span>
       <span className={styles.modeDescription}>{description}</span>
-      <span className={styles.modeAction}>{action}</span>
-    </Card>
+      <span className={styles.modeAction}>
+        {action} <ChevronRight size={16} aria-hidden />
+      </span>
+    </Link>
   )
 }
 
@@ -59,8 +81,8 @@ function LastExamCard() {
   const exam = data.items[0]
 
   return (
-    <Card className={styles.lastExam}>
-      <span className={styles.eyebrow}>직전 시험 참고</span>
+    <section className={tabStyles.card} style={{ '--tab': tabColor(4) }}>
+      <h2 className={tabStyles.tab}>직전 시험 참고</h2>
       {exam ? (
         <Link to={`/artworks/${exam.id}`} className={styles.lastExamBody}>
           <span className={styles.lastExamTitle}>{exam.title}</span>
@@ -81,7 +103,7 @@ function LastExamCard() {
           </span>
         </>
       )}
-    </Card>
+    </section>
   )
 }
 
@@ -98,11 +120,7 @@ function RecentArtworks() {
         </Link>
       </div>
       {data?.items.length ? (
-        <div className={styles.grid}>
-          {data.items.map((artwork) => (
-            <ArtworkCard key={artwork.id} artwork={artwork} />
-          ))}
-        </div>
+        <GalleryStrip artworks={data.items} />
       ) : (
         data && <p className={styles.lastExamSub}>아직 기록한 작품이 없어요.</p>
       )}
