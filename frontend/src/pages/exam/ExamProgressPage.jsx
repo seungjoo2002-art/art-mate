@@ -3,6 +3,8 @@ import { ImagePlus, Mic } from 'lucide-react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../components/layout/FullScreenStatus'
 import TopBar from '../../components/layout/TopBar'
+import Highlight from '../../components/decor/Highlight'
+import PaintSplash from '../../components/decor/PaintSplash'
 import MascotCheer from '../../components/mascot/MascotCheer'
 import { Button, Card, Chip, Textarea } from '../../components/ui'
 import { deleteArtwork, getArtwork, uploadStagePhoto } from '../../features/artworks/api'
@@ -164,11 +166,20 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
             .filter(Boolean)
             .join(' · ')}
         >
-          {remaining < 0
-            ? '목표 시간을 넘겼어요. 마무리해 볼까요? ⏰'
-            : stage
-              ? `지금은 ${stageLabel} 단계! 집중해서 그려 봐요 ✏️`
-              : '집중해서 그려 봐요 ✏️'}
+          {remaining < 0 ? (
+            <>
+              목표 시간을 넘겼어요. <Highlight>마무리</Highlight>해 볼까요?
+            </>
+          ) : stage ? (
+            <>
+              지금은 <Highlight>{stageLabel} 단계</Highlight>! 집중해서 그려 봐요
+            </>
+          ) : (
+            <>
+              <Highlight>집중해서</Highlight> 그려 봐요
+            </>
+          )}
+          <PaintSplash />
         </MascotCheer>
 
         <Card className={styles.clockCard}>

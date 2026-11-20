@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import mascotStanding from '../../../assets/mascot/mascot-standing.webp'
+import Highlight from '../../../components/decor/Highlight'
+import PaintSplash from '../../../components/decor/PaintSplash'
 import { Button, Checkbox, Input } from '../../../components/ui'
 import { supabase } from '../../../lib/supabase'
 import { toErrorMessage } from '../../../utils/errorMessages'
-import AuthHero from '../components/AuthHero'
 import { clearPendingProfile, savePendingProfile } from '../pendingProfile'
 import styles from './AuthForm.module.css'
 
@@ -76,62 +78,69 @@ export default function SignupPage() {
   return (
     <div className={styles.page}>
       <main className={styles.body}>
-        <AuthHero
-          title="ART MATE 시작하기"
-          description="미술 입시 학습 기록을 한곳에서 관리해 보세요."
-        />
+        <header className={styles.intro}>
+          <h1 className={styles.introTitle}>
+            {'ART MATE\n'}
+            <Highlight>시작하기</Highlight>
+            <PaintSplash />
+          </h1>
+          <p className={styles.introText}>미술 입시 학습 기록을 한곳에서 관리해 보세요.</p>
+        </header>
 
-        <form className={styles.form} onSubmit={handleSubmit} noValidate>
-          <Input
-            label="이름 (선택)"
-            placeholder="김서연"
-            autoComplete="name"
-            maxLength={50}
-            value={form.realName}
-            onChange={onInput('realName')}
-          />
-          <p className={styles.hint}>나만 볼 수 있어요. 다른 사람에게는 닉네임만 보여요.</p>
-          <Input
-            label="공개 닉네임"
-            placeholder="서연의작업실"
-            autoComplete="nickname"
-            maxLength={50}
-            value={form.displayName}
-            onChange={onInput('displayName')}
-            error={errors.displayName}
-          />
-          <p className={styles.hint}>커뮤니티 등에서 다른 사람에게 보이는 이름이에요.</p>
-          <Input
-            label="이메일"
-            type="email"
-            placeholder="student@example.com"
-            autoComplete="email"
-            value={form.email}
-            onChange={onInput('email')}
-            error={errors.email}
-          />
-          <Input
-            label="비밀번호"
-            type="password"
-            placeholder="8자 이상 입력"
-            autoComplete="new-password"
-            value={form.password}
-            onChange={onInput('password')}
-            error={errors.password}
-          />
-          <Checkbox checked={form.agreed} onChange={update('agreed')}>
-            서비스 이용약관과 개인정보 처리방침에 동의합니다.
-          </Checkbox>
-          {errors.agreed && <p className={styles.formError}>{errors.agreed}</p>}
-          {formError && <p className={styles.formError}>{formError}</p>}
+        <div className={styles.cardWrap}>
+          <img className={styles.peek} src={mascotStanding} alt="" />
+          <form className={`${styles.form} ${styles.formCard}`} onSubmit={handleSubmit} noValidate>
+            <Input
+              label="이름 (선택)"
+              placeholder="김서연"
+              autoComplete="name"
+              maxLength={50}
+              value={form.realName}
+              onChange={onInput('realName')}
+            />
+            <p className={styles.hint}>나만 볼 수 있어요. 다른 사람에게는 닉네임만 보여요.</p>
+            <Input
+              label="공개 닉네임"
+              placeholder="서연의작업실"
+              autoComplete="nickname"
+              maxLength={50}
+              value={form.displayName}
+              onChange={onInput('displayName')}
+              error={errors.displayName}
+            />
+            <p className={styles.hint}>커뮤니티 등에서 다른 사람에게 보이는 이름이에요.</p>
+            <Input
+              label="이메일"
+              type="email"
+              placeholder="student@example.com"
+              autoComplete="email"
+              value={form.email}
+              onChange={onInput('email')}
+              error={errors.email}
+            />
+            <Input
+              label="비밀번호"
+              type="password"
+              placeholder="8자 이상 입력"
+              autoComplete="new-password"
+              value={form.password}
+              onChange={onInput('password')}
+              error={errors.password}
+            />
+            <Checkbox checked={form.agreed} onChange={update('agreed')}>
+              서비스 이용약관과 개인정보 처리방침에 동의합니다.
+            </Checkbox>
+            {errors.agreed && <p className={styles.formError}>{errors.agreed}</p>}
+            {formError && <p className={styles.formError}>{formError}</p>}
 
-          <Button type="submit" size="compact" disabled={submitting}>
-            {submitting ? '가입하는 중…' : '회원가입'}
-          </Button>
-          <Link to="/login" className={styles.switch}>
-            이미 계정이 있으신가요? <span className={styles.switchAction}>로그인</span>
-          </Link>
-        </form>
+            <Button type="submit" size="compact" disabled={submitting}>
+              {submitting ? '가입하는 중…' : '회원가입'}
+            </Button>
+            <Link to="/login" className={styles.switch}>
+              이미 계정이 있으신가요? <span className={styles.switchAction}>로그인</span>
+            </Link>
+          </form>
+        </div>
       </main>
     </div>
   )

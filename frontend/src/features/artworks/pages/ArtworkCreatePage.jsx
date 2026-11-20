@@ -4,6 +4,8 @@ import { useAuth } from '../../../app/providers/AuthContext'
 import TopBar from '../../../components/layout/TopBar'
 import { PencilLine } from 'lucide-react'
 import mascotCat from '../../../assets/mascot/mascot-cat.webp'
+import Highlight from '../../../components/decor/Highlight'
+import PaintSplash from '../../../components/decor/PaintSplash'
 import { Button, Card, Input } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
@@ -196,7 +198,16 @@ export default function ArtworkCreatePage() {
         <div className={createStyles.hero}>
           <img className={createStyles.cat} src={mascotCat} alt="" />
           <p className={createStyles.bubble}>
-            {exam ? '시험 조건부터 확인해요 ⏱️' : '오늘은 뭘 그려 볼까요? 🎨'}
+            {exam ? (
+              <>
+                <Highlight>시험 조건</Highlight>부터 확인해요
+              </>
+            ) : (
+              <>
+                오늘은 <Highlight>뭘 그려</Highlight> 볼까요?
+              </>
+            )}
+            <PaintSplash />
           </p>
         </div>
         {recommendationId && <Card variant="soft">맞춤 연습 과제를 수행한 작품으로 기록돼요.</Card>}
