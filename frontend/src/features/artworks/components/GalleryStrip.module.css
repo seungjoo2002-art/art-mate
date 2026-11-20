@@ -1,0 +1,74 @@
+/* 최근 작품: 살짝 우드톤 갈색 액자 + 흰 매트, 옆으로 넘김 (오른쪽은 화면 끝까지) */
+.strip {
+  display: flex;
+  gap: var(--space-4);
+  margin-right: calc(var(--gutter) * -1);
+  /* 위쪽 여백 = 액자 뒤로 고양이 머리가 나올 자리 */
+  padding: 64px var(--gutter) var(--space-4) 2px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.strip::-webkit-scrollbar {
+  display: none;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  flex: 0 0 128px;
+  flex-direction: column;
+  gap: var(--space-1);
+  scroll-snap-align: start;
+}
+
+/* 액자 뒤에서 빼꼼 (액자보다 아래 층) */
+.cat {
+  position: absolute;
+  top: -54px;
+  right: -26px;
+  z-index: 0;
+  width: 84px;
+  height: auto;
+  rotate: 12deg;
+  pointer-events: none;
+  user-select: none;
+}
+
+.frame {
+  position: relative;
+  z-index: 1;
+  display: block;
+  padding: var(--space-2);
+  /* 호두나무 같은 갈색, 결은 아주 살짝만 (밝은 쪽 → 어두운 쪽) */
+  border: 5px solid #6b4a33;
+  border-image: linear-gradient(135deg, #7a5639, #5c3d27 45%, #6f4c33 70%, #5a3b25) 1;
+  background: var(--color-surface);
+  box-shadow: 0 8px 16px rgba(70, 40, 20, 0.18);
+}
+
+.photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--color-surface-muted);
+  object-fit: cover;
+}
+
+.title {
+  position: relative;
+  z-index: 1;
+  margin-top: var(--space-2);
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  position: relative;
+  z-index: 1;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}

@@ -1,15 +1,3 @@
-.lastExam {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.eyebrow {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
-  color: var(--color-primary-text);
-}
-
 .lastExamBody {
   display: flex;
   flex-direction: column;
@@ -37,17 +25,73 @@
   color: var(--color-danger);
 }
 
+/* 두 모드: 모눈 도화지 타일. 글자는 지그재그 (시험 왼쪽 · 새 작품 오른쪽) */
+.modes {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mode:nth-child(2) {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.mode:nth-child(2) .modeAction {
+  align-self: flex-end;
+}
+
+/* 글자 반대쪽 빈자리의 서 있는 고양이 (높이 약 170px, 칸 바닥에 서 있게) */
+.cat {
+  position: absolute;
+  bottom: var(--space-3);
+  height: min(70%, 172px);
+  width: auto;
+  pointer-events: none;
+  user-select: none;
+}
+
+.catRight {
+  right: var(--space-5);
+}
+
+.catLeft {
+  left: var(--space-5);
+}
+
 .mode {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-6) var(--space-5);
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background-color: var(--color-surface);
+  background-image:
+    linear-gradient(var(--color-surface-muted) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-surface-muted) 1px, transparent 1px);
+  background-size: 18px 18px;
+  box-shadow: 0 0 0 1px var(--color-border);
+  transition: transform 0.1s;
 }
 
-.modeHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.mode:active {
+  transform: scale(0.99);
+}
+
+/* 물감 방울 아이콘 */
+.modeIcon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--space-2);
+  border-radius: 50% 45% 52% 48%;
+  background: var(--paint);
+  color: var(--color-text-on-primary);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--paint) 40%, transparent);
 }
 
 .modeTitle {
@@ -56,16 +100,26 @@
 }
 
 .modeDescription {
+  max-width: 62%; /* 반대쪽은 그림 자리 */
   font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--color-text-sub);
 }
 
+/* 시작하기: 연주황 알약 */
 .modeAction {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
   margin-top: var(--space-2);
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--color-primary-text);
 }
 
 .recent {
@@ -91,10 +145,4 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   color: var(--color-primary-text);
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-6) var(--space-4);
 }
