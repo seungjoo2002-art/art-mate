@@ -59,7 +59,7 @@ export default function OnboardingPage() {
           />
           <p className={styles.hint}>이름은 나만 볼 수 있어요.</p>
           {formError && <p className={styles.formError}>{formError}</p>}
-          <Button type="submit" disabled={!name || submitting}>
+          <Button type="submit" size="compact" disabled={!name || submitting}>
             {submitting ? '저장하는 중…' : '다음'}
           </Button>
         </form>

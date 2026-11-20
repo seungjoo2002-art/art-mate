@@ -1,18 +1,59 @@
 /* v1.1 시험 조건·표현 의도 접는 영역 */
 .section {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   background: var(--color-surface);
+  box-shadow: var(--shadow-card), 0 0 0 1px var(--color-border);
+}
+
+/* 새 작품 기록: 스케치북 인덱스 탭 카드 (pages/ArtworkCreate.module.css .card와 같은 모양) */
+.tabbed {
+  position: relative;
+  margin-top: 28px;
+  border-radius: 0 var(--radius-xl) var(--radius-xl) var(--radius-xl);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.tabbed .summary {
+  list-style: none;
+}
+
+.tabbed .summary::-webkit-details-marker {
+  display: none;
+}
+
+.tab {
+  position: absolute;
+  top: -28px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--tab);
+  color: var(--color-text-on-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.chevron {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  transition: rotate 0.15s;
+}
+
+.tabbed[open] .chevron {
+  rotate: 180deg;
 }
 
 .summary {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 48px;
+  min-height: 56px;
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-md, 1rem);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   color: var(--color-text);
   cursor: pointer;
 }

@@ -2,7 +2,9 @@ import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../app/providers/AuthContext'
 import TopBar from '../../../components/layout/TopBar'
-import { Button, Card, Input, Select } from '../../../components/ui'
+import { PencilLine } from 'lucide-react'
+import mascotCat from '../../../assets/mascot/mascot-cat.webp'
+import { Button, Card, Input } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { labelOf } from '../../../lib/options'
@@ -11,6 +13,7 @@ import { createArtwork, deleteArtwork, putExamPlan } from '../api'
 import ExamIntentFields from '../components/ExamIntentFields'
 import ReferenceGrid from '../components/ReferenceGrid'
 import StageEditor from '../components/StageEditor'
+import StagePath from '../components/StagePath'
 import {
   DEFAULT_STAGE_TARGETS,
   EXAM_CODES,
@@ -27,8 +30,21 @@ import {
   examIntentPayload,
 } from '../referencePhotos'
 import { DEFAULT_STAGE_NAMES, newStageRow, stageListError, toStageSpecs } from '../stages'
+import { tabColor, tabLabel } from '../sectionTabs'
+import tabStyles from '../SectionTabs.module.css'
 import { useReferenceUploads } from '../useReferenceUploads'
+import createStyles from './ArtworkCreate.module.css'
 import styles from './ArtworkPage.module.css'
+
+/** 실기 유형 칩의 물감 점 색 (코드에 없는 유형은 주황) */
+const TYPE_COLORS = {
+  BASIC_DESIGN: '#f2933a',
+  THINKING_SHIFT: '#7c6ee6',
+  IDEA_EXPRESSION: '#e0607e',
+  DRAWING: '#555555',
+  WATERCOLOR: '#3fa7d6',
+  OTHER: '#9aa33f',
+}
 
 /** 작품명을 비우면 쓰는 임시 제목. 예: "기초디자인 · 11월 11일" */
 function fallbackTitle(typeLabel, exam) {
@@ -66,6 +82,7 @@ export default function ArtworkCreatePage() {
     [exam, defaults],
   )
   const [editedStages, setStages] = useState(null)
+  const [editingStages, setEditingStages] = useState(false)
   const stages = editedStages ?? initialRows
   const [title, setTitle] = useState('')
   const [practicalType, setPracticalType] = useState(profile.practical_type ?? '')
@@ -78,6 +95,8 @@ export default function ArtworkCreatePage() {
   const references = useReferenceUploads()
   const [refMessages, setRefMessages] = useState([])
   const [created, setCreated] = useState(null)
+
+  const typeLabelOf = (code) => (code && options ? labelOf(options.practical_types, code) : '')
 
   function addReferences(files) {
     const used = references.queue.length
@@ -129,8 +148,7 @@ export default function ArtworkCreatePage() {
     }
     setSubmitting(true)
     setFormError('')
-    const typeLabel =
-      practicalType && options ? labelOf(options.practical_types, practicalType) : ''
+    const typeLabel = typeLabelOf(practicalType)
     try {
       // 다음 시험 기본값 (단계 코드·목표 시간만 계정에 저장, 실패해도 시험은 시작)
       if (exam && editedStages) {
@@ -173,47 +191,81 @@ export default function ArtworkCreatePage() {
   return (
     <>
       <TopBar title={exam ? '실기시험 준비' : '새 작품 기록'} belowHeader plain />
-      <form className={styles.body} onSubmit={handleSubmit} noValidate>
-        <p className={styles.lead}>
-          {exam
-            ? '시험 조건을 확인하고 시작하면 단계별 기록 화면으로 이동합니다.'
-            : '작품 정보를 입력하고 바로 단계별 기록을 시작하세요.'}
-        </p>
+      <form className={`${styles.body} ${createStyles.form}`} onSubmit={handleSubmit} noValidate>
+        {/* 고양이 인사 */}
+        <div className={createStyles.hero}>
+          <img className={createStyles.cat} src={mascotCat} alt="" />
+          <p className={createStyles.bubble}>
+            {exam ? '시험 조건부터 확인해요 ⏱️' : '오늘은 뭘 그려 볼까요? 🎨'}
+          </p>
+        </div>
         {recommendationId && <Card variant="soft">맞춤 연습 과제를 수행한 작품으로 기록돼요.</Card>}
 
-        <Input
-          label="작품명"
-          placeholder="예: 유리컵과 사과 연습"
-          maxLength={200}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <Select
-          label="실기 유형"
-          placeholder="실기 유형 선택"
-          options={options?.practical_types}
-          value={practicalType}
-          onChange={(e) => setPracticalType(e.target.value)}
-        />
-        <Input
-          label="주제 또는 소재 (선택)"
-          placeholder="예: 유리컵과 운동화"
-          maxLength={200}
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-        />
-        <Input
-          label="제시물 (선택)"
-          placeholder="예: 유리컵, 사과 2개, 흰 천"
-          maxLength={500}
-          value={examMaterials}
-          onChange={(e) => setExamMaterials(e.target.value)}
-        />
+        {/* 스케치북 표지 같은 제목 */}
+        <div className={createStyles.titleField}>
+          <input
+            className={createStyles.title}
+            aria-label="작품명"
+            placeholder="작품 제목을 지어 주세요"
+            maxLength={200}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
 
-        <div className={styles.field}>
-          <span className={styles.fieldLabel}>
-            원본 제시물 사진 (선택, 최대 {DEFAULT_MAX_REFERENCE_PHOTOS}장)
+        {/* 실기 유형: 물감 점 칩 (다시 누르면 선택 해제) */}
+        <div className={createStyles.typeField}>
+          <span className={createStyles.typeLabel} id="practical-type-label">
+            실기 유형
           </span>
+          <div className={createStyles.chips} role="radiogroup" aria-labelledby="practical-type-label">
+            {(options?.practical_types ?? []).map((o) => (
+              <button
+                key={o.code}
+                type="button"
+                role="radio"
+                aria-checked={practicalType === o.code}
+                className={createStyles.chip}
+                style={{ '--paint': TYPE_COLORS[o.code] ?? 'var(--color-primary)' }}
+                onClick={() => setPracticalType(practicalType === o.code ? '' : o.code)}
+              >
+                <i className={createStyles.paint} aria-hidden />
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 원래 입력 순서 그대로, 칸마다 인덱스 탭 */}
+        <section className={tabStyles.card} style={{ '--tab': tabColor(1) }}>
+          <h2 className={tabStyles.tab}>{tabLabel(1, '주제 또는 소재')}</h2>
+          <small className={tabStyles.cardMeta}>선택</small>
+          <Input
+            aria-label="주제 또는 소재"
+            placeholder="예: 유리컵과 운동화"
+            maxLength={200}
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+          />
+        </section>
+
+        <section className={tabStyles.card} style={{ '--tab': tabColor(2) }}>
+          <h2 className={tabStyles.tab}>{tabLabel(2, '제시물')}</h2>
+          <small className={tabStyles.cardMeta}>선택</small>
+          <Input
+            aria-label="제시물"
+            placeholder="예: 유리컵, 사과 2개, 흰 천"
+            maxLength={500}
+            value={examMaterials}
+            onChange={(e) => setExamMaterials(e.target.value)}
+          />
+        </section>
+
+        <section className={tabStyles.card} style={{ '--tab': tabColor(3) }}>
+          <h2 className={tabStyles.tab}>{tabLabel(3, '원본 제시물 사진')}</h2>
+          <small className={tabStyles.cardMeta}>
+            선택 · 최대 {DEFAULT_MAX_REFERENCE_PHOTOS}장
+          </small>
           <ReferenceGrid
             queue={references.queue}
             max={DEFAULT_MAX_REFERENCE_PHOTOS}
@@ -226,26 +278,48 @@ export default function ArtworkCreatePage() {
               {m}
             </p>
           ))}
-        </div>
+        </section>
 
         <ExamIntentFields
           value={details}
           onChange={setDetails}
           methodOptions={options?.expression_methods}
           showTime={!exam}
+          startNumber={4}
         />
 
-        <StageEditor
-          stages={stages}
-          onChange={setStages}
-          withMinutes={exam}
-          maxStages={exam ? MAX_EXAM_STAGES : undefined}
-          note="단계마다 사진과 피드백, 피드백을 반영한 수정 사진을 따로 기록할 수 있어요. 단계는 나중에 작품 정보 수정에서 바꿀 수 있어요."
-        />
+        <section className={tabStyles.card} style={{ '--tab': tabColor(6) }}>
+          <h2 className={tabStyles.tab}>
+            {tabLabel(6, exam ? '시험 단계와 목표 시간' : '제작 단계')}
+          </h2>
+          <small className={tabStyles.cardMeta}>{stages.length}단계</small>
+          {/* 시험은 단계마다 시간을 정해야 해서 바로 편집 목록, 그 밖에는 물감 길 + 편집 열기 */}
+          {!exam && <StagePath stages={stages} />}
+          {exam || editingStages ? (
+            <StageEditor
+              embedded
+              stages={stages}
+              onChange={setStages}
+              withMinutes={exam}
+              maxStages={exam ? MAX_EXAM_STAGES : undefined}
+              note="단계마다 사진과 피드백, 피드백을 반영한 수정 사진을 따로 기록할 수 있어요. 단계는 나중에 작품 정보 수정에서 바꿀 수 있어요."
+            />
+          ) : (
+            <button
+              type="button"
+              className={createStyles.editStages}
+              onClick={() => setEditingStages(true)}
+            >
+              <PencilLine size={14} aria-hidden />
+              단계 바꾸기
+            </button>
+          )}
+        </section>
 
         {formError && <p className={styles.error}>{formError}</p>}
-        <div className={styles.submit}>
-          <Button type="submit" withArrow disabled={submitting}>
+        {/* 시작 버튼은 화면 아래에 늘 보이게 */}
+        <div className={createStyles.bar}>
+          <Button type="submit" size="compact" withArrow disabled={submitting}>
             {submitting
               ? references.queue.some((q) => q.status === 'uploading')
                 ? '원본 사진 올리는 중…'
@@ -257,14 +331,10 @@ export default function ArtworkCreatePage() {
                   : '작품 기록 시작하기'}
           </Button>
           {created && !submitting && (
-            <Button type="button" variant="soft" onClick={() => goToArtwork(created)}>
+            <Button type="button" variant="soft" size="compact" onClick={() => goToArtwork(created)}>
               건너뛰고 계속하기
             </Button>
           )}
-          <p className={styles.caption}>
-            작품명을 입력하지 않으면 자동으로 임시 제목이 지정됩니다. 시작 버튼을 누르면 단계별 기록
-            화면으로 이동합니다.
-          </p>
         </div>
       </form>
     </>

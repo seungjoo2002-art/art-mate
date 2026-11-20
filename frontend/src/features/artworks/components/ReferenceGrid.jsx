@@ -113,7 +113,9 @@ export default function ReferenceGrid({
               disabled={disabled}
               onClick={() => addRef.current?.click()}
             >
-              <ImagePlus size={24} aria-hidden />
+              <span className={styles.addIcon}>
+                <ImagePlus size={18} aria-hidden />
+              </span>
               <span>사진 추가</span>
             </button>
           </li>

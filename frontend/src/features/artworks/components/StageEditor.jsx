@@ -10,6 +10,7 @@ const STEP = 10 // 분
  * 작품 제작 단계 편집 (v0.9.7): 추가 · 삭제 · 이름 변경 · 순서 변경
  * withMinutes: 실기시험 모드 → 단계별 목표 시간(10분 단위)과 합계
  * stages: [{ key, id?, name, minutes? }]
+ * embedded: 다른 카드 안에 넣을 때 → 카드 테두리·제목 줄 없이 목록만
  */
 export default function StageEditor({
   stages,
@@ -18,6 +19,7 @@ export default function StageEditor({
   maxStages = MAX_STAGES,
   title,
   note,
+  embedded = false,
 }) {
   const total = stages.reduce((sum, s) => sum + (s.minutes || 0), 0)
 
@@ -32,16 +34,20 @@ export default function StageEditor({
   const remove = (key) => onChange(stages.filter((s) => s.key !== key))
   const add = () => onChange([...stages, newStageRow('', withMinutes ? { minutes: 30 } : {})])
 
+  const Root = embedded ? 'div' : Card
+
   return (
-    <Card className={styles.card}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>
-          {title ?? (withMinutes ? '시험 단계와 목표 시간' : '제작 단계')}
-        </h2>
-        <span className={styles.count}>
-          {stages.length}/{maxStages}
-        </span>
-      </div>
+    <Root className={embedded ? styles.embedded : styles.card}>
+      {!embedded && (
+        <div className={styles.header}>
+          <h2 className={styles.title}>
+            {title ?? (withMinutes ? '시험 단계와 목표 시간' : '제작 단계')}
+          </h2>
+          <span className={styles.count}>
+            {stages.length}/{maxStages}
+          </span>
+        </div>
+      )}
 
       <ol className={styles.list}>
         {stages.map((stage, index) => (
@@ -125,6 +131,6 @@ export default function StageEditor({
         </div>
       )}
       {note && <p className={styles.note}>{note}</p>}
-    </Card>
+    </Root>
   )
 }

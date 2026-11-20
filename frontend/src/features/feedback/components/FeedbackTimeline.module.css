@@ -42,7 +42,7 @@
   gap: var(--space-1);
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .row {
@@ -73,23 +73,31 @@
   font-size: var(--text-sm);
 }
 
+/* 녹음·글 첨삭 추가 버튼: 화면을 나눠 차지하지 않는 작은 알약 */
 .recordButton {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
-  height: 56px;
+  gap: 6px;
+  height: 40px;
+  padding: 0 var(--space-4);
   border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-full);
   background: var(--color-surface);
-  font-size: var(--text-lg);
+  font-size: var(--text-sm);
   font-weight: var(--weight-bold);
 }
 
+/* 녹음·글 첨삭: 동그란 아이콘 버튼 */
+.iconOnly {
+  width: 40px;
+  padding: 0;
+  color: var(--color-primary-text);
+}
+
 .buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
+  display: flex;
+  gap: var(--space-2);
 }
 
 /* v0.9.7 단계별 묶음 */
@@ -149,10 +157,17 @@
   font-size: var(--text-xs);
 }
 
+/* 단계 안: 조금 더 작게, 테두리 없이 연주황 동그라미 */
 .compact .recordButton {
-  gap: var(--space-2);
-  height: 44px;
-  border-style: dashed;
-  font-size: var(--text-md);
-  color: var(--color-primary);
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-color: transparent;
+  background: var(--color-primary-soft);
+  font-size: var(--text-xs);
+  color: var(--color-primary-text);
+}
+
+.compact .iconOnly {
+  width: 36px;
+  padding: 0;
 }

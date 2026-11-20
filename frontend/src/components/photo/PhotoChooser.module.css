@@ -63,7 +63,7 @@
   padding: 0 4px;
   border-radius: 11px;
   background: var(--color-primary);
-  color: var(--color-text-on-dark);
+  color: var(--color-text-on-primary);
   font-size: 12px;
   font-weight: var(--weight-bold);
 }

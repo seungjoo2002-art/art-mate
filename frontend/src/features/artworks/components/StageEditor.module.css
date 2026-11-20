@@ -5,6 +5,12 @@
   padding: var(--space-6) var(--space-5) var(--space-4);
 }
 
+.embedded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -51,7 +57,7 @@
   height: 28px;
   border-radius: 50%;
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
 }
@@ -117,17 +123,20 @@
   flex-shrink: 0;
 }
 
+/* 단계 추가: 점선 대신 연주황 알약 */
 .add {
-  display: flex;
+  display: inline-flex;
+  align-self: center;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  height: 48px;
-  border: 1.5px dashed var(--color-border);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-md);
+  gap: var(--space-1);
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .add:disabled {

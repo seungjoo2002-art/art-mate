@@ -14,7 +14,7 @@
   margin-bottom: var(--space-4);
   border-radius: var(--radius-xl);
   background: var(--color-primary);
-  color: var(--color-text-on-dark);
+  color: var(--color-text-on-dark); /* 로고: 주황 바탕 흰 A (로고는 대비 기준 예외) */
   font-size: var(--text-2xl);
   font-weight: var(--weight-bold);
 }

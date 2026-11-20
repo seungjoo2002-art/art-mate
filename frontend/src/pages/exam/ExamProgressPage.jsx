@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react'
-import { Image as ImageIcon, Mic } from 'lucide-react'
+import { ImagePlus, Mic } from 'lucide-react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../components/layout/FullScreenStatus'
 import TopBar from '../../components/layout/TopBar'
+import MascotCheer from '../../components/mascot/MascotCheer'
 import { Button, Card, Chip, Textarea } from '../../components/ui'
 import { deleteArtwork, getArtwork, uploadStagePhoto } from '../../features/artworks/api'
 import {
@@ -14,6 +15,9 @@ import {
   formatMinutes,
   liveStageSeconds,
 } from '../../features/artworks/exam'
+import StagePath from '../../features/artworks/components/StagePath'
+import { tabColor, tabLabel } from '../../features/artworks/sectionTabs'
+import tabStyles from '../../features/artworks/SectionTabs.module.css'
 import { createNote } from '../../features/feedback/notesApi'
 import { useAsync } from '../../hooks/useAsync'
 import { useOptions } from '../../hooks/useOptions'
@@ -154,11 +158,18 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
     <>
       <TopBar title="실기시험 진행" belowHeader plain />
       <main className={styles.body}>
-        <p className={styles.lead}>
-          {[artwork.title, typeLabel, stage && `${index + 1}/${stages.length}단계`]
+        {/* 서 있는 고양이 응원 */}
+        <MascotCheer
+          sub={[artwork.title, typeLabel, stage && `${index + 1}/${stages.length}단계`]
             .filter(Boolean)
             .join(' · ')}
-        </p>
+        >
+          {remaining < 0
+            ? '목표 시간을 넘겼어요. 마무리해 볼까요? ⏰'
+            : stage
+              ? `지금은 ${stageLabel} 단계! 집중해서 그려 봐요 ✏️`
+              : '집중해서 그려 봐요 ✏️'}
+        </MascotCheer>
 
         <Card className={styles.clockCard}>
           <div className={styles.clockHead}>
@@ -178,46 +189,30 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
               style={{ width: `${Math.min(100, (elapsed / Math.max(1, limitSeconds)) * 100)}%` }}
             />
           </span>
+
+          {/* 단계 길: 지난 단계 ✓, 지금 단계 테두리, 남은 단계 흐리게 */}
+          {stage && (
+            <div className={styles.stagePath}>
+              <StagePath
+                label="시험 단계"
+                current={index}
+                stages={stages.map((t, i) => ({ key: t.stage, name: examStageName(artwork, stages, i) }))}
+              />
+              <p className={styles.stageNow}>
+                지금 <strong>{stageLabel}</strong> · 목표 {formatMinutes(stage.target_minutes)} /{' '}
+                <span
+                  className={stageElapsed > stage.target_minutes * 60 ? styles.overText : undefined}
+                >
+                  {formatDurationSeconds(stageElapsed)}
+                </span>
+              </p>
+            </div>
+          )}
         </Card>
 
-        {stage && (
-          <>
-            <div className={styles.stageChips} aria-label="시험 단계">
-              {stages.map((t, i) => (
-                <span
-                  key={t.stage}
-                  className={`${styles.stageChip} ${t.status === 'ACTIVE' ? styles.current : ''} ${t.status === 'DONE' ? styles.done : ''}`}
-                >
-                  {i + 1}. {examStageName(artwork, stages, i)}
-                </span>
-              ))}
-            </div>
-
-            <Card className={styles.list}>
-              <div className={styles.row}>
-                <span className={styles.rowLabel}>현재 단계</span>
-                <strong>{stageLabel}</strong>
-              </div>
-              <div className={styles.row}>
-                <span className={styles.rowLabel}>단계 목표 / 실제</span>
-                <span>
-                  <strong>{formatMinutes(stage.target_minutes)}</strong> /{' '}
-                  <span
-                    className={
-                      stageElapsed > stage.target_minutes * 60 ? styles.overText : styles.muted
-                    }
-                  >
-                    {formatDurationSeconds(stageElapsed)}
-                  </span>
-                </span>
-              </div>
-            </Card>
-          </>
-        )}
-
-        <section className={styles.section}>
-          <h2 className={styles.label}>{stageLabel} 단계 사진</h2>
-          <label className={styles.upload} aria-busy={uploading}>
+        <section className={tabStyles.card} style={{ '--tab': tabColor(1) }}>
+          <h2 className={tabStyles.tab}>{tabLabel(1, `${stageLabel} 단계 사진`)}</h2>
+          <label className={`${styles.upload} ${photo?.url ? styles.hasPhoto : ''}`} aria-busy={uploading}>
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
@@ -229,33 +224,42 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
               <img src={photo.url} alt={`${stageLabel} 단계 사진`} className={styles.photo} />
             ) : (
               <>
-                <ImageIcon size={28} aria-hidden />
-                <span>{uploading ? '올리는 중…' : '사진 촬영 또는 업로드'}</span>
-                <span className={styles.small}>이 단계의 사진으로 저장됩니다</span>
+                <span className={styles.uploadIcon}>
+                  <ImagePlus size={22} aria-hidden />
+                </span>
+                <span className={styles.uploadTitle}>{uploading ? '올리는 중…' : '사진 올리기'}</span>
+                <span className={styles.small}>탭해서 촬영하거나 앨범에서 골라요</span>
               </>
             )}
           </label>
           {photo && <p className={styles.small}>사진을 누르면 다시 올릴 수 있어요.</p>}
         </section>
 
-        <section className={styles.section}>
-          <h2 className={styles.label}>음성 첨삭 녹음</h2>
-          <Button
-            onClick={() =>
-              navigate(
-                `/artworks/${artwork.id}/recordings/new${stageId ? `?stage=${stageId}` : ''}`,
-              )
-            }
-          >
-            <Mic size={22} aria-hidden /> 음성 피드백 녹음하기
-          </Button>
-          <p className={styles.small}>
-            녹음 동의가 필요해요. 녹음하는 동안에도 시험 시간은 계속 흘러요.
-          </p>
+        <section className={tabStyles.card} style={{ '--tab': tabColor(2) }}>
+          <h2 className={tabStyles.tab}>{tabLabel(2, '음성 첨삭')}</h2>
+          <div className={styles.recordRow}>
+            {/* 마이크 아이콘만 크게. 화면 낭독기·툴팁은 "음성 피드백 녹음하기" */}
+            <button
+              type="button"
+              className={styles.micButton}
+              aria-label="음성 피드백 녹음하기"
+              title="음성 피드백 녹음하기"
+              onClick={() =>
+                navigate(
+                  `/artworks/${artwork.id}/recordings/new${stageId ? `?stage=${stageId}` : ''}`,
+                )
+              }
+            >
+              <Mic size={26} aria-hidden />
+            </button>
+            <p className={styles.small}>
+              녹음 동의가 필요해요. 녹음하는 동안에도 시험 시간은 계속 흘러요.
+            </p>
+          </div>
         </section>
 
-        <section className={styles.section}>
-          <h2 className={styles.label}>{stageLabel} 단계 텍스트 메모</h2>
+        <section className={tabStyles.card} style={{ '--tab': tabColor(3) }}>
+          <h2 className={tabStyles.tab}>{tabLabel(3, '텍스트 메모')}</h2>
           <div className={styles.chips} role="radiogroup" aria-label="메모 종류">
             <Chip
               role="radio"
@@ -286,25 +290,28 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
         </section>
 
         {actionError && <p className={styles.error}>{actionError}</p>}
-        <div className={styles.buttons}>
-          <Button variant="soft" className={styles.outline} onClick={cancel} disabled={busy}>
-            취소
-          </Button>
+        {/* 주 버튼은 화면 아래에 늘 보이게, 나머지는 작은 글자 버튼 */}
+        <div className={styles.actionBar}>
           {last ? (
-            <Button onClick={finish} disabled={busy}>
+            <Button size="compact" onClick={finish} disabled={busy}>
               시험 완료하기
             </Button>
           ) : (
-            <Button withArrow onClick={nextStage} disabled={busy}>
+            <Button size="compact" withArrow onClick={nextStage} disabled={busy}>
               다음 단계 기록
             </Button>
           )}
+          <div className={styles.textActions}>
+            {!last && (
+              <button type="button" onClick={finish} disabled={busy}>
+                지금 완료하고 결과 보기
+              </button>
+            )}
+            <button type="button" className={styles.cancel} onClick={cancel} disabled={busy}>
+              시험 취소
+            </button>
+          </div>
         </div>
-        {!last && (
-          <Button variant="soft" onClick={finish} disabled={busy}>
-            지금 시험 완료하고 결과 보기
-          </Button>
-        )}
       </main>
     </>
   )

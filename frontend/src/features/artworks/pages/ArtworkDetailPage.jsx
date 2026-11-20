@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react'
+import { PencilLine, Share2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
+import MascotCheer from '../../../components/mascot/MascotCheer'
 import { Button, Card } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
@@ -182,14 +184,28 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         }
       />
       <main className={styles.body}>
+        {/* 서 있는 고양이: 진행 상황에 맞춘 한마디 */}
+        <MascotCheer>
+          {completed
+            ? '작품 완성! 정말 수고했어요 🎉'
+            : finalPhoto
+              ? '마지막 사진까지 올렸어요! 완료해 볼까요? ✅'
+              : hasAnyPhoto
+                ? '오늘도 한 단계씩 기록해 봐요 ✏️'
+                : '첫 단계 사진부터 올려 볼까요? 📷'}
+        </MascotCheer>
         {/* 실기시험 작품: 진행 중이면 이어서 하기, 끝났으면(STOP으로 actual_minutes 저장) 결과 보기 */}
         {artwork.work_category === 'MOCK_EXAM' &&
           (artwork.actual_minutes ? (
-            <Button variant="soft" onClick={() => navigate(`/artworks/${artwork.id}/exam/result`)}>
+            <Button
+              variant="soft"
+              size="compact"
+              onClick={() => navigate(`/artworks/${artwork.id}/exam/result`)}
+            >
               시험 결과 보기
             </Button>
           ) : (
-            <Button onClick={() => navigate(`/artworks/${artwork.id}/exam`)}>
+            <Button size="compact" onClick={() => navigate(`/artworks/${artwork.id}/exam`)}>
               시험 이어서 하기
             </Button>
           ))}
@@ -228,7 +244,12 @@ export default function ArtworkDetailPage({ renderTimeline }) {
 
         {completed ? (
           <>
-            <Button variant="soft" onClick={() => setStatus(reopenArtwork)} disabled={statusBusy}>
+            <Button
+              variant="soft"
+              size="compact"
+              onClick={() => setStatus(reopenArtwork)}
+              disabled={statusBusy}
+            >
               {statusBusy ? '처리하는 중…' : '작업 재개'}
             </Button>
             <p className={styles.hint}>
@@ -237,7 +258,11 @@ export default function ArtworkDetailPage({ renderTimeline }) {
           </>
         ) : (
           <>
-            <Button onClick={() => setStatus(completeArtwork)} disabled={!finalPhoto || statusBusy}>
+            <Button
+              size="compact"
+              onClick={() => setStatus(completeArtwork)}
+              disabled={!finalPhoto || statusBusy}
+            >
               {statusBusy ? '처리하는 중…' : '작품 완료하기'}
             </Button>
             {!finalPhoto && (
@@ -247,14 +272,27 @@ export default function ArtworkDetailPage({ renderTimeline }) {
             )}
           </>
         )}
-        {hasAnyPhoto && (
-          <Button variant="soft" onClick={() => navigate(`/community/write?artwork=${artwork.id}`)}>
-            커뮤니티에 공유하기
-          </Button>
-        )}
-        <Button variant="soft" onClick={() => navigate(`/artworks/${artwork.id}/edit`)}>
-          작품 정보 수정
-        </Button>
+        {/* 보조 동작: 작은 테두리 알약, 한 줄 */}
+        <div className={styles.secondaryActions}>
+          <button
+            type="button"
+            className={styles.pillButton}
+            onClick={() => navigate(`/artworks/${artwork.id}/edit`)}
+          >
+            <PencilLine size={16} aria-hidden />
+            수정
+          </button>
+          {hasAnyPhoto && (
+            <button
+              type="button"
+              className={styles.pillButton}
+              onClick={() => navigate(`/community/write?artwork=${artwork.id}`)}
+            >
+              <Share2 size={16} aria-hidden />
+              커뮤니티에 공유
+            </button>
+          )}
+        </div>
         <button
           type="button"
           className={styles.deleteArtwork}

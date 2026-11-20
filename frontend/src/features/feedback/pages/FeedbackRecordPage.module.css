@@ -80,7 +80,7 @@
   border-radius: 50%;
   background: var(--color-primary);
   background-clip: padding-box;
-  color: var(--color-text-on-dark);
+  color: var(--color-text-on-primary);
   box-sizing: content-box;
   transition: transform 0.1s;
 }

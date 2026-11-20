@@ -34,13 +34,20 @@
   color: var(--color-text-muted);
 }
 
-/* "처음 이용하시나요? 회원가입" 같은 주황 링크 */
+/* "처음 이용하시나요? 회원가입" 같은 링크: 진한 주황 글자 + 누를 곳(회원가입)에만 주황 밑줄 */
 .switch {
   align-self: center;
   padding: var(--space-2);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
+}
+
+.switchAction {
+  text-decoration: underline;
+  text-decoration-color: var(--color-primary);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
 }
 
 /* 랜딩: 로고를 가운데, 버튼을 아래에 */
@@ -53,8 +60,10 @@
 .landingActions {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  align-items: center;
+  gap: var(--space-3);
 }
+
 
 /* 학습 정보 설정 단계 표시 */
 .steps {

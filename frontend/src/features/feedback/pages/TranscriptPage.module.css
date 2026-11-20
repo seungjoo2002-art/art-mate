@@ -13,7 +13,7 @@
 .edit {
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .notice {

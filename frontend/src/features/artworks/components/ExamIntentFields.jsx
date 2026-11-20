@@ -1,12 +1,21 @@
+import { ChevronDown } from 'lucide-react'
 import { Chip, Input, Textarea } from '../../../components/ui'
 import { EXPRESSION_METHODS, PAPER_SIZES, toggleMethod } from '../referencePhotos'
+import { tabColor, tabLabel } from '../sectionTabs'
 import styles from './ExamIntentFields.module.css'
 
 /**
  * v1.1 시험 조건(선택)·표현 의도(선택) 접는 영역. 입력하지 않아도 작품을 만들 수 있다.
  * methodOptions: /meta/options expression_methods (없으면 기본 목록), showTime: 제한 시간 입력 표시
+ * startNumber: 주면 두 칸을 스케치북 인덱스 탭 카드로 (새 작품 기록의 다른 칸과 맞춤)
  */
-export default function ExamIntentFields({ value, onChange, methodOptions, showTime = true }) {
+export default function ExamIntentFields({
+  value,
+  onChange,
+  methodOptions,
+  showTime = true,
+  startNumber,
+}) {
   const set = (key) => (e) => onChange({ ...value, [key]: e.target.value })
   const methods = methodOptions?.length ? methodOptions : EXPRESSION_METHODS
   const conditionCount = [
@@ -19,12 +28,21 @@ export default function ExamIntentFields({ value, onChange, methodOptions, showT
 
   return (
     <>
-      <details className={styles.section} open={conditionCount > 0 || undefined}>
+      <details
+        className={`${styles.section} ${startNumber ? styles.tabbed : ''}`}
+        style={startNumber ? { '--tab': tabColor(startNumber) } : undefined}
+        open={conditionCount > 0 || undefined}
+      >
         <summary className={styles.summary}>
-          시험 조건{' '}
+          {startNumber ? (
+            <span className={styles.tab}>{tabLabel(startNumber, '시험 조건')}</span>
+          ) : (
+            '시험 조건 '
+          )}
           <span className={styles.optional}>
             선택{conditionCount ? ` · ${conditionCount}개 입력` : ''}
           </span>
+          {startNumber && <ChevronDown size={18} className={styles.chevron} aria-hidden />}
         </summary>
         <div className={styles.content}>
           {showTime && (
@@ -69,9 +87,19 @@ export default function ExamIntentFields({ value, onChange, methodOptions, showT
         </div>
       </details>
 
-      <details className={styles.section} open={intentCount > 0 || undefined}>
+      <details
+        className={`${styles.section} ${startNumber ? styles.tabbed : ''}`}
+        style={startNumber ? { '--tab': tabColor(startNumber + 1) } : undefined}
+        open={intentCount > 0 || undefined}
+      >
         <summary className={styles.summary}>
-          표현 의도 <span className={styles.optional}>선택{intentCount ? ' · 입력함' : ''}</span>
+          {startNumber ? (
+            <span className={styles.tab}>{tabLabel(startNumber + 1, '표현 의도')}</span>
+          ) : (
+            '표현 의도 '
+          )}
+          <span className={styles.optional}>선택{intentCount ? ' · 입력함' : ''}</span>
+          {startNumber && <ChevronDown size={18} className={styles.chevron} aria-hidden />}
         </summary>
         <div className={styles.content}>
           <div className={styles.field}>

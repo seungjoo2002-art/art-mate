@@ -34,9 +34,22 @@
   font-size: var(--text-md);
 }
 
+/* 화면의 주 버튼: 꽉 채우지 않는 알약 모양, 부모가 flex든 block이든 가운데 */
+.compact {
+  display: flex;
+  align-self: center;
+  width: fit-content;
+  min-width: 200px;
+  height: 48px;
+  margin-inline: auto;
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-full);
+  font-size: var(--text-md);
+}
+
 .primary {
   background: var(--color-primary);
-  color: var(--color-text-on-dark);
+  color: var(--color-text-on-primary);
   box-shadow: var(--shadow-primary);
 }
 

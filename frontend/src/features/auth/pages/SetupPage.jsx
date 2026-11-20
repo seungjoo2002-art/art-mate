@@ -95,7 +95,7 @@ export default function SetupPage() {
             onChange={(e) => setGoal(e.target.value)}
           />
           {formError && <p className={styles.formError}>{formError}</p>}
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" size="compact" disabled={saving}>
             {saving ? '저장하는 중…' : '설정 완료'}
           </Button>
         </div>
