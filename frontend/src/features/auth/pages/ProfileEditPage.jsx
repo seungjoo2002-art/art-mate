@@ -98,7 +98,7 @@ export default function ProfileEditPage() {
             onChange={(e) => setGoal(e.target.value)}
           />
           {formError && <p className={styles.error}>{formError}</p>}
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" size="compact" disabled={saving}>
             {saving ? '저장하는 중…' : '프로필 저장'}
           </Button>
         </form>

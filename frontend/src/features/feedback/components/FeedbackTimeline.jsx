@@ -151,13 +151,22 @@ export default function FeedbackTimeline({
     const query = stageId ? `?stage=${stageId}` : ''
     return (
       <div className={`${styles.buttons} ${compact ? styles.compact : ''}`}>
-        <Link to={`/artworks/${artworkId}/recordings/new${query}`} className={styles.recordButton}>
-          <Mic size={compact ? 18 : 22} aria-hidden />
-          {compact ? '녹음' : '피드백 녹음'}
+        {/* 녹음·글 첨삭은 아이콘만 (글자 없이도 알아봄). 화면 낭독기·툴팁에는 이름을 줌 */}
+        <Link
+          to={`/artworks/${artworkId}/recordings/new${query}`}
+          className={`${styles.recordButton} ${styles.iconOnly}`}
+          aria-label="피드백 녹음"
+          title="피드백 녹음"
+        >
+          <Mic size={compact ? 16 : 18} aria-hidden />
         </Link>
-        <Link to={`/artworks/${artworkId}/notes/new${query}`} className={styles.recordButton}>
-          <PenLine size={compact ? 18 : 22} aria-hidden />
-          {compact ? '글 첨삭' : '글로 첨삭 남기기'}
+        <Link
+          to={`/artworks/${artworkId}/notes/new${query}`}
+          className={`${styles.recordButton} ${styles.iconOnly}`}
+          aria-label="글로 첨삭 남기기"
+          title="글로 첨삭 남기기"
+        >
+          <PenLine size={compact ? 16 : 18} aria-hidden />
         </Link>
       </div>
     )

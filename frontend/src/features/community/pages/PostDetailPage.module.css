@@ -14,7 +14,7 @@
 .category {
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .title {
@@ -76,7 +76,7 @@
 }
 
 .liked {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .postActions {
@@ -179,7 +179,7 @@
 .adopt {
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .form {
@@ -239,7 +239,7 @@
   display: block;
   margin-top: var(--space-2);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .editor {

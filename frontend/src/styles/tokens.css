@@ -6,6 +6,8 @@
   --color-primary-disabled: #f7c590;
   --color-primary-soft: #fdf3e1; /* 아이콘 배경, 배지 배경 */
   --color-primary-ink: #8a4b12; /* soft 배경 위 글자 */
+  --color-primary-text: #ad5209; /* 흰·soft 배경 위 주황 글자 (대비 4.5:1 이상. --color-primary는 2.3:1이라 글자에 안 씀) */
+  --color-text-on-primary: #1f1f1f; /* 주황 배경 위 글자·아이콘 (흰색은 대비 2.3:1이라 안 씀) */
 
   --color-dark: #3e2f30; /* 강조 카드, 선택된 칩 */
   --color-dark-2: #5e3f22; /* 보조 강조 카드 */
@@ -80,6 +82,7 @@
     --color-primary-disabled: color(display-p3 0.969 0.773 0.565);
     --color-primary-soft: color(display-p3 0.992 0.953 0.882);
     --color-primary-ink: color(display-p3 0.541 0.294 0.071);
+    --color-primary-text: color(display-p3 0.678 0.322 0.035);
     --color-dark: color(display-p3 0.243 0.184 0.188);
     --color-dark-2: color(display-p3 0.369 0.247 0.133);
     --color-danger: color(display-p3 0.541 0.231 0.231);

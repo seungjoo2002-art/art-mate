@@ -54,10 +54,10 @@
 }
 
 .done {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .done .circle {
   background: var(--color-primary);
-  color: var(--color-text-on-dark);
+  color: var(--color-text-on-primary);
 }

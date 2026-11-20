@@ -17,9 +17,11 @@ export default function LandingPage() {
           description={'작품을 기록하고, 피드백을 모으고\n나의 성장을 확인하세요.'}
         />
         <div className={styles.landingActions}>
-          <Button onClick={() => navigate('/login')}>시작하기</Button>
+          <Button size="compact" onClick={() => navigate('/login')}>
+            시작하기
+          </Button>
           <Link to="/signup" className={styles.switch}>
-            처음 이용하시나요? 회원가입
+            처음 이용하시나요? <span className={styles.switchAction}>회원가입</span>
           </Link>
         </div>
       </main>

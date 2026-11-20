@@ -53,11 +53,11 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
           {formError && <p className={styles.formError}>{formError}</p>}
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" size="compact" disabled={submitting}>
             {submitting ? '로그인 중…' : '로그인'}
           </Button>
           <Link to="/signup" className={styles.switch}>
-            처음 이용하시나요? 회원가입
+            처음 이용하시나요? <span className={styles.switchAction}>회원가입</span>
           </Link>
         </form>
       </main>

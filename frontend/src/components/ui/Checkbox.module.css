@@ -30,7 +30,7 @@
 .native:checked + .box {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: var(--color-text-on-dark);
+  color: var(--color-text-on-primary);
 }
 
 .native:focus-visible + .box {

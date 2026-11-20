@@ -3,7 +3,7 @@ import styles from './Button.module.css'
 
 /**
  * variant: primary(주황) | dark(갈색) | soft(연한 회색)
- * size: lg(하단 CTA, 56px) | md(카드 안, 48px)
+ * size: lg(56px) | md(카드 안, 48px) | compact(화면 주 버튼: 48px 알약, 가운데, 글자 길이만큼·최소 200px)
  */
 export default function Button({
   variant = 'primary',
@@ -18,7 +18,7 @@ export default function Button({
     styles.button,
     styles[variant],
     styles[size],
-    fullWidth && styles.fullWidth,
+    fullWidth && size !== 'compact' && styles.fullWidth,
     className,
   ]
     .filter(Boolean)

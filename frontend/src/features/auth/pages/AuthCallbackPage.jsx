@@ -16,7 +16,9 @@ export default function AuthCallbackPage() {
         title="인증 링크가 만료됐어요"
         description="이미 사용했거나 시간이 지난 링크예요. 로그인해 주세요."
       >
-        <Button onClick={() => window.location.replace('/login')}>로그인하기</Button>
+        <Button size="compact" onClick={() => window.location.replace('/login')}>
+          로그인하기
+        </Button>
       </FullScreenStatus>
     )
   }

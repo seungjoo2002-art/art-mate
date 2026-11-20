@@ -54,7 +54,7 @@
 .category {
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .title {

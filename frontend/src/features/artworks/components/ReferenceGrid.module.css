@@ -90,21 +90,44 @@
   opacity: 0.5;
 }
 
+/* 사진 추가 칸: 단계 업로드 칸(StageHeader .empty)과 같은 모눈 도화지 + 주황 동그라미 */
 .add {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   width: 100%;
   height: 100%;
-  border: 1px dashed var(--color-primary);
+  border: 0;
   border-radius: var(--radius-md);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-ink);
+  background-color: var(--color-surface);
+  background-image:
+    linear-gradient(var(--color-surface-muted) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-surface-muted) 1px, transparent 1px);
+  background-size: 14px 14px;
+  background-position: -1px -1px;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text);
   font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   cursor: pointer;
+}
+
+.addIcon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  box-shadow: var(--shadow-primary);
+}
+
+.add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .hint {

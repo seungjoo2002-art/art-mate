@@ -1,0 +1,84 @@
+/* 물감 점을 붓 선으로 이은 단계 길. 단계가 많으면 가로로 밀어서 봄 */
+.path {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-1); /* 지금 단계 점 테두리가 잘리지 않게 */
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: none;
+}
+
+/* 붓 선: 점 가운데 높이(15px)에 연한 주황 → 진한 갈주황 */
+.path::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--space-2) + 12px);
+  left: 24px;
+  right: 24px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    90deg,
+    var(--color-primary-disabled),
+    var(--color-primary),
+    var(--color-primary-ink)
+  );
+  opacity: 0.35;
+}
+
+.stop {
+  position: relative;
+  display: flex;
+  flex: 1 0 56px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 56px;
+}
+
+/* 살짝 일그러진 동그라미 = 물감 방울 */
+.dot {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50% 45% 52% 48%;
+  box-shadow: 0 0 0 4px var(--color-surface);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.name {
+  max-width: 72px;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 진행 표시 (실기시험 진행) */
+.now .dot {
+  scale: 1.15;
+  box-shadow:
+    0 0 0 3px var(--color-surface),
+    0 0 0 5px var(--color-text);
+}
+
+.now .name {
+  color: var(--color-text);
+}
+
+.done .name,
+.later .name {
+  font-weight: var(--weight-medium);
+  color: var(--color-text-sub);
+}
+
+.later .dot {
+  /* 투명하게 하면 뒤 선이 비쳐서, 흰 막을 덮어 연하게 */
+  background-image: linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.6));
+}

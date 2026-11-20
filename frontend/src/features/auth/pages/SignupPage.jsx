@@ -125,11 +125,11 @@ export default function SignupPage() {
           {errors.agreed && <p className={styles.formError}>{errors.agreed}</p>}
           {formError && <p className={styles.formError}>{formError}</p>}
 
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" size="compact" disabled={submitting}>
             {submitting ? '가입하는 중…' : '회원가입'}
           </Button>
           <Link to="/login" className={styles.switch}>
-            이미 계정이 있으신가요? 로그인
+            이미 계정이 있으신가요? <span className={styles.switchAction}>로그인</span>
           </Link>
         </form>
       </main>

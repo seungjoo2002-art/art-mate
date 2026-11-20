@@ -86,66 +86,70 @@
   transition: width 1s linear;
 }
 
-/* 단계 표시 */
-.stageChips {
+/* 시계 카드 안 단계 길 */
+.stagePath {
   display: flex;
-  gap: var(--space-2);
-}
-
-.stageChip {
-  padding: var(--space-2) var(--space-4);
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  color: var(--color-text-sub);
-}
-
-.current {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  font-weight: var(--weight-bold);
-}
-
-.done {
-  color: var(--color-text-muted);
-  text-decoration: line-through;
-}
-
-.list {
-  padding: 0 var(--space-5);
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 56px;
-}
-
-.row + .row {
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--color-border);
 }
 
-.rowLabel {
+.stageNow {
+  font-size: var(--text-sm);
   color: var(--color-text-sub);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.stageNow strong {
+  color: var(--color-text);
 }
 
 /* 사진 업로드 */
 .upload {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  min-height: 200px;
+  gap: 6px;
+  min-height: 180px;
   overflow: hidden;
-  border: 1.5px dashed var(--color-border);
-  border-radius: var(--radius-xl);
-  background: var(--color-surface-muted);
+  border-radius: var(--radius-lg);
+  /* 단계 업로드 칸과 같은 모눈 도화지 */
+  background-color: var(--color-surface);
+  background-image:
+    linear-gradient(var(--color-surface-muted) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-surface-muted) 1px, transparent 1px);
+  background-size: 18px 18px;
+  background-position: -1px -1px;
+  box-shadow: inset 0 0 0 1px var(--color-border);
   color: var(--color-text-sub);
   cursor: pointer;
+}
+
+.hasPhoto {
+  background-image: none;
+}
+
+.uploadIcon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--space-1);
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  box-shadow: var(--shadow-primary);
+}
+
+.uploadTitle {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
 }
 
 .upload:focus-within {
@@ -169,6 +173,62 @@
 .chips {
   display: flex;
   gap: var(--space-2);
+}
+
+/* 녹음: 큰 주황 마이크 동그라미 + 옆에 안내 */
+.recordRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.micButton {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  box-shadow: var(--shadow-primary);
+  transition: transform 0.1s;
+}
+
+.micButton:active {
+  transform: scale(0.95);
+}
+
+/* 아래 고정 버튼 줄: 주 버튼 + 작은 글자 버튼 */
+.actionBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 calc(var(--gutter) * -1) calc(var(--space-10) * -1);
+  padding: var(--space-6) var(--gutter) max(var(--space-4), env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--color-bg) 40%);
+}
+
+.textActions {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.textActions button {
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-sub);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.textActions .cancel {
+  color: var(--color-danger);
 }
 
 .buttons {
@@ -201,7 +261,7 @@
 .eyebrow {
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .resultTitle {
@@ -242,7 +302,7 @@
 .stageTime {
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .noteText {

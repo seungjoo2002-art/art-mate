@@ -87,7 +87,7 @@
   height: 32px;
   border-radius: 50%;
   background: var(--color-primary);
-  color: var(--color-text-on-dark);
+  color: var(--color-text-on-primary);
   font-weight: var(--weight-bold);
 }
 
