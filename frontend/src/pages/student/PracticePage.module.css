@@ -52,12 +52,15 @@
   user-select: none;
 }
 
-.catRight {
+.cat_right {
   right: var(--space-5);
 }
 
-.catLeft {
-  left: var(--space-5);
+/* 칸 밖에서 빼꼼: 그림의 잘린 왼쪽·아래 변을 칸 왼쪽·아래 끝에 붙임 */
+.cat_peek {
+  bottom: 0;
+  left: 0;
+  height: min(76%, 182px);
 }
 
 .mode {
@@ -66,6 +69,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  overflow: hidden; /* 빼꼼 고양이가 칸 모서리에서 잘리게 */
   padding: var(--space-5);
   border-radius: var(--radius-xl);
   background-color: var(--color-surface);

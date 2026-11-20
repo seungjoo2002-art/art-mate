@@ -10,6 +10,9 @@ import {
   stageOfNote,
 } from '../../features/artworks/exam'
 import { listNotes } from '../../features/feedback/notesApi'
+import Highlight from '../../components/decor/Highlight'
+import PaintSplash from '../../components/decor/PaintSplash'
+import MascotCheer from '../../components/mascot/MascotCheer'
 import { useAsync } from '../../hooks/useAsync'
 import { useOptions } from '../../hooks/useOptions'
 import { labelOf } from '../../lib/options'
@@ -81,6 +84,10 @@ export default function ExamResultPage() {
 
   return (
     <main className={styles.body}>
+      <MascotCheer pose="happy">
+        <Highlight>시험 완료!</Highlight> 정말 수고했어요
+        <PaintSplash />
+      </MascotCheer>
       <div className={styles.resultHead}>
         <span className={styles.eyebrow}>시험 기록 완료</span>
         <h1 className={styles.resultTitle}>{artwork.title}</h1>

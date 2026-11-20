@@ -27,3 +27,42 @@
   font-weight: var(--weight-bold);
   color: var(--color-text);
 }
+
+/* highlight: 바탕 없이 글자 탭 + 아래 얇은 선, 고른 탭은 진한 글자 + 주황 붓 형광펜 */
+.highlight {
+  display: flex;
+  gap: var(--space-5);
+  padding: 0;
+  border-bottom: 1.5px solid var(--color-border);
+  border-radius: 0;
+  background: none;
+}
+
+.highlight .tab {
+  flex: none;
+  height: auto;
+  padding: var(--space-2) 0 var(--space-3);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+}
+
+.highlight .active {
+  background: none;
+  box-shadow: none;
+  color: var(--color-text);
+}
+
+.highlight .active .label {
+  padding: 0 3px;
+  border-radius: 6px 2px 8px 3px;
+  background: linear-gradient(
+    transparent 56%,
+    color-mix(in srgb, var(--color-primary) 50%, transparent) 56%,
+    color-mix(in srgb, var(--color-primary) 50%, transparent) 94%,
+    transparent 94%
+  );
+}

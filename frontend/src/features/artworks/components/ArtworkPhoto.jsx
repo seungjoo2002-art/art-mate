@@ -4,8 +4,16 @@ import { getPhotoUrl } from '../api'
 /**
  * 비공개 버킷 사진. Signed URL은 몇 분 뒤 만료되므로 로드 실패 시 한 번 새 URL을 받아 재시도
  * url이 없으면(목록 썸네일) 처음에 URL을 받아 옴. 사진이 바뀌면 key로 새로 마운트할 것
+ * loading: 기본 lazy. 가로로 넘기는 칸(overflow 스크롤) 안에서는 사파리가 lazy 사진을 안 불러와서 'eager'
  */
-export default function ArtworkPhoto({ artworkId, photoId, url, alt = '', className = '' }) {
+export default function ArtworkPhoto({
+  artworkId,
+  photoId,
+  url,
+  alt = '',
+  className = '',
+  loading = 'lazy',
+}) {
   const [freshUrl, setFreshUrl] = useState(null)
   const [retried, setRetried] = useState(false)
   const needsUrl = !url
@@ -35,7 +43,7 @@ export default function ArtworkPhoto({ artworkId, photoId, url, alt = '', classN
 
   const src = freshUrl ?? url
   return src ? (
-    <img src={src} alt={alt} className={className} onError={handleError} loading="lazy" />
+    <img src={src} alt={alt} className={className} onError={handleError} loading={loading} />
   ) : (
     <span className={className} aria-hidden />
   )

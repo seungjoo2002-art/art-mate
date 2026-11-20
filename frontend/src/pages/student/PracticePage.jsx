@@ -1,8 +1,9 @@
 import { useCallback } from 'react'
 import { ChevronRight, PenLine, Timer } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import mascotStanding from '../../assets/mascot/mascot-standing.webp'
+import mascotNote from '../../assets/mascot/mascot-note.webp'
 import mascotTimer from '../../assets/mascot/mascot-timer.webp'
+import PawPrints from '../../components/decor/PawPrints'
 import { PageIntro } from '../../components/ui'
 import { listArtworks } from '../../features/artworks/api'
 import GalleryStrip from '../../features/artworks/components/GalleryStrip'
@@ -20,7 +21,7 @@ export default function PracticePage() {
     <>
       <PageIntro title="실기" description="작품을 자유롭게 기록하거나 실기시험을 진행하세요." />
 
-      {/* 두 모드: 글자는 시험 왼쪽 · 새 작품 오른쪽, 반대쪽 빈자리에 고양이 (시험 = 시계 든 고양이) */}
+      {/* 두 모드: 글자는 시험 왼쪽 · 새 작품 오른쪽, 반대쪽 빈자리에 고양이 (시험 = 시계 든 고양이, 새 작품 = 칸 밖에서 빼꼼 메모하는 고양이) */}
       <div className={styles.modes}>
         <ModeCard
           to="/artworks/new?mode=exam"
@@ -40,7 +41,7 @@ export default function PracticePage() {
           title="새 작품 기록"
           description="시간 제한 없이 단계별 사진·첨삭·메모를 저장합니다."
           action="기록 시작하기"
-          cat={{ src: mascotStanding, side: 'left' }}
+          cat={{ src: mascotNote, side: 'peek' }}
         />
       </div>
 
@@ -56,7 +57,7 @@ function ModeCard({ to, paint, icon: Icon, title, description, action, cat }) {
     <Link to={to} className={styles.mode} style={{ '--paint': paint }}>
       {cat && (
         <img
-          className={`${styles.cat} ${cat.side === 'right' ? styles.catRight : styles.catLeft}`}
+          className={`${styles.cat} ${styles[`cat_${cat.side}`]}`}
           src={cat.src}
           alt=""
         />
@@ -114,7 +115,10 @@ function RecentArtworks() {
   return (
     <section className={styles.recent}>
       <div className={styles.recentHeader}>
-        <h2 className={styles.recentTitle}>최근 내 작품</h2>
+        <h2 className={styles.recentTitle}>
+          최근 내 작품
+          <PawPrints />
+        </h2>
         <Link to="/archive" className={styles.more}>
           모든 기록 <ChevronRight size={18} aria-hidden />
         </Link>

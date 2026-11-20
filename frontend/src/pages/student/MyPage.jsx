@@ -1,8 +1,19 @@
 import { useCallback, useState } from 'react'
-import { ChevronRight, PencilLine } from 'lucide-react'
+import {
+  Bot,
+  ChevronRight,
+  GraduationCap,
+  Images,
+  LogOut,
+  Mic,
+  Palette,
+  PencilLine,
+  Sparkles,
+  Target,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../app/providers/AuthContext'
-import { Button, Card, PageIntro } from '../../components/ui'
+import { PageIntro } from '../../components/ui'
 import { listTargetUniversities } from '../../features/auth/api'
 import DatasetConsentCard from '../../features/dataset/DatasetConsentCard'
 import { getAiConsent, revokeAiConsent } from '../../features/feedback/aiApi'
@@ -29,9 +40,10 @@ export default function MyPage() {
 
   return (
     <>
-      <PageIntro title="마이페이지" description="학습 정보와 입시 목표를 관리합니다." />
+      <PageIntro title="마이페이지" />
 
-      <Card className={styles.profile}>
+      {/* 프로필: 물감 테두리 동그라미 + 이름 + 편집 */}
+      <div className={styles.profile}>
         <span className={styles.avatar}>{profile.display_name.slice(0, 1)}</span>
         <div className={styles.profileText}>
           <p className={styles.name}>
@@ -43,97 +55,124 @@ export default function MyPage() {
           </p>
         </div>
         <Link to="/my/edit" className={styles.edit}>
-          편집 <PencilLine size={16} aria-hidden />
+          <PencilLine size={14} aria-hidden /> 편집
         </Link>
-      </Card>
+      </div>
 
-      <section className={styles.section}>
-        <h2 className={styles.heading}>나의 입시 정보</h2>
-        <Card className={styles.list}>
-          <InfoRow label="주요 실기 유형" value={practicalType} />
-          <InfoRow
-            label="목표 대학"
-            value={
-              firstTarget &&
-              `${firstTarget.university_name}${targets.length > 1 ? ` 외 ${targets.length - 1}곳` : ''}`
-            }
-          />
-          <InfoRow label="학습 목표" value={profile.learning_goal} />
-        </Card>
-        <Link to="/my/edit" className={styles.outline}>
-          프로필·목표 대학 수정
-        </Link>
-      </section>
-
-      <section className={styles.section}>
-        <h2 className={styles.heading}>기록 설정</h2>
-        <SettingLink
-          to="/archive?tab=feed"
-          title="내 공개 작품 피드"
-          description="커뮤니티에 공유한 작품 확인"
+      <Group title="나의 입시 정보">
+        <Row
+          to="/my/edit"
+          icon={Palette}
+          tone="#f2933a"
+          label="주요 실기 유형"
+          value={practicalType}
         />
-      </section>
+        <Row
+          to="/my/edit"
+          icon={GraduationCap}
+          tone="#7c6ee6"
+          label="목표 대학"
+          value={
+            !firstTarget
+              ? null
+              : `${firstTarget.university_name}${targets.length > 1 ? ` 외 ${targets.length - 1}곳` : ''}`
+          }
+        />
+        <Row
+          to="/my/edit"
+          icon={Target}
+          tone="#e0607e"
+          label="학습 목표"
+          value={profile.learning_goal}
+        />
+      </Group>
+      <p className={styles.note}>지망 대학과 학습 목표는 커뮤니티에 공개하지 않습니다.</p>
 
-      <section className={styles.section}>
-        <h2 className={styles.heading}>녹음·AI 기능 동의</h2>
-        <Card className={styles.list}>
-          <ConsentRow
-            title="피드백 녹음"
-            load={getConsent}
-            revoke={revokeConsent}
-            confirmMessage="녹음 동의를 철회할까요? 새로 녹음하거나 녹음 파일을 올릴 수 없고, 대기 중인 글자 변환은 취소돼요. 이미 저장한 녹음은 남아요."
-          />
-          <ConsentRow
-            title="AI 피드백 정리"
-            load={loadAiSummaryConsent}
-            revoke={revokeAiSummaryConsent}
-            confirmMessage={AI_REVOKE_MESSAGE}
-          />
-          <ConsentRow
-            title="AI 성장 코칭"
-            load={loadGrowthConsent}
-            revoke={revokeGrowthConsent}
-            confirmMessage={AI_REVOKE_MESSAGE}
-          />
-        </Card>
-      </section>
+      <Group title="기록">
+        <Row to="/archive?tab=feed" icon={Images} tone="#3fa7d6" label="내 공개 작품 피드" />
+      </Group>
 
-      <section className={styles.section}>
-        <h2 className={styles.heading}>AI 첨삭 학습 데이터 (선택)</h2>
+      <Group title="녹음·AI 기능 동의">
+        <ConsentRow
+          icon={Mic}
+          tone="#f2933a"
+          title="피드백 녹음"
+          load={getConsent}
+          revoke={revokeConsent}
+          confirmMessage="녹음 동의를 철회할까요? 새로 녹음하거나 녹음 파일을 올릴 수 없고, 대기 중인 글자 변환은 취소돼요. 이미 저장한 녹음은 남아요."
+        />
+        <ConsentRow
+          icon={Bot}
+          tone="#7c6ee6"
+          title="AI 피드백 정리"
+          load={loadAiSummaryConsent}
+          revoke={revokeAiSummaryConsent}
+          confirmMessage={AI_REVOKE_MESSAGE}
+        />
+        <ConsentRow
+          icon={Sparkles}
+          tone="#e0607e"
+          title="AI 성장 코칭"
+          load={loadGrowthConsent}
+          revoke={revokeGrowthConsent}
+          confirmMessage={AI_REVOKE_MESSAGE}
+        />
+      </Group>
+
+      <section className={styles.group}>
+        <h2 className={styles.groupTitle}>AI 첨삭 학습 데이터 (선택)</h2>
         <DatasetConsentCard />
       </section>
 
-      <section className={styles.section}>
-        <h2 className={styles.heading}>설정</h2>
+      <section className={styles.group}>
+        <h2 className={styles.groupTitle}>알림</h2>
         <NotificationSettings />
-        <Button variant="soft" className={styles.logout} onClick={signOut}>
-          로그아웃
-        </Button>
       </section>
-      <p className={styles.footnote}>지망 대학과 학습 목표는 커뮤니티에 공개하지 않습니다.</p>
+
+      <div className={styles.list}>
+        <button type="button" className={`${styles.row} ${styles.logout}`} onClick={signOut}>
+          <span className={styles.icon} style={{ '--tone': 'var(--color-danger)' }}>
+            <LogOut size={16} aria-hidden />
+          </span>
+          <span className={styles.rowLabel}>로그아웃</span>
+        </button>
+      </div>
     </>
   )
 }
 
-/** 기록 설정의 이동 카드 (제목 + 설명 + >) */
-function SettingLink({ to, title, description }) {
+/** 작은 회색 제목 + 흰 묶음 목록 (설정 앱처럼) */
+function Group({ title, children }) {
   return (
-    <Card as={Link} to={to} className={styles.setting}>
-      <span className={styles.settingText}>
-        <span className={styles.settingTitle}>{title}</span>
-        <span className={styles.settingDescription}>{description}</span>
-      </span>
-      <ChevronRight size={22} aria-hidden />
-    </Card>
+    <section className={styles.group}>
+      <h2 className={styles.groupTitle}>{title}</h2>
+      <div className={styles.list}>{children}</div>
+    </section>
   )
 }
 
-function InfoRow({ label, value }) {
-  return (
-    <div className={styles.row}>
+/** 목록 한 줄: 색 아이콘 · 이름 · 값 · › (to가 있으면 누르면 이동) */
+function Row({ to, icon: Icon, tone, label, value }) {
+  const body = (
+    <>
+      <span className={styles.icon} style={{ '--tone': tone }}>
+        <Icon size={16} aria-hidden />
+      </span>
       <span className={styles.rowLabel}>{label}</span>
-      <span className={styles.rowValue}>{value || '미설정'}</span>
-    </div>
+      {value !== undefined && (
+        <span className={`${styles.rowValue} ${value ? '' : styles.unset}`}>
+          {value || '미설정'}
+        </span>
+      )}
+      {to && <ChevronRight size={18} className={styles.chevron} aria-hidden />}
+    </>
+  )
+  return to ? (
+    <Link to={to} className={styles.row}>
+      {body}
+    </Link>
+  ) : (
+    <div className={styles.row}>{body}</div>
   )
 }
 
@@ -146,7 +185,7 @@ const AI_REVOKE_MESSAGE =
   '동의를 철회할까요? 진행 중인 AI 작업은 취소되고, 이미 만든 결과는 남아요.'
 
 /** 동의 상태 + 철회 (각 동의서에 "마이페이지에서 언제든 철회 가능"으로 안내함) */
-function ConsentRow({ title, load, revoke, confirmMessage }) {
+function ConsentRow({ icon: Icon, tone, title, load, revoke, confirmMessage }) {
   const { data: consent, reload } = useAsync(load)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -166,14 +205,20 @@ function ConsentRow({ title, load, revoke, confirmMessage }) {
   }
 
   return (
-    <div className={styles.row}>
+    <div className={`${styles.row} ${styles.wrap}`}>
+      <span className={styles.icon} style={{ '--tone': tone }}>
+        <Icon size={16} aria-hidden />
+      </span>
       <span className={styles.rowLabel}>{title}</span>
       {consent?.is_valid ? (
-        <button type="button" className={styles.revoke} onClick={handleRevoke} disabled={busy}>
-          {busy ? '철회하는 중…' : '동의함 · 철회'}
-        </button>
+        <>
+          <span className={`${styles.badge} ${styles.on}`}>동의함</span>
+          <button type="button" className={styles.revoke} onClick={handleRevoke} disabled={busy}>
+            {busy ? '철회하는 중…' : '철회'}
+          </button>
+        </>
       ) : (
-        <span className={styles.rowValue}>{consent ? '동의 안 함' : ''}</span>
+        consent && <span className={styles.badge}>동의 안 함</span>
       )}
       {error && <p className={styles.error}>{error}</p>}
     </div>

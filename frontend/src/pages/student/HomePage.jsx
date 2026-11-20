@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../app/providers/AuthContext'
 import Highlight from '../../components/decor/Highlight'
 import PaintSplash from '../../components/decor/PaintSplash'
+import PawPrints from '../../components/decor/PawPrints'
 import MascotCheer from '../../components/mascot/MascotCheer'
 import { listArtworks } from '../../features/artworks/api'
 import GalleryStrip from '../../features/artworks/components/GalleryStrip'
@@ -45,7 +46,7 @@ export default function HomePage() {
 
   return (
     <>
-      <MascotCheer as="h1" size="lg" eyebrow={formatToday()}>
+      <MascotCheer as="h1" size="lg" pose="artist" eyebrow={formatToday()}>
         {profile.display_name}님, 오늘도 <Highlight>그려 볼까요?</Highlight>
         <PaintSplash />
       </MascotCheer>
@@ -187,7 +188,7 @@ function TodayPractice({ analysis, recommendations }) {
 function RecentArtworks({ artworks }) {
   return (
     <section className={styles.section}>
-      <SectionHeader title="최근 작품" to="/archive" action="전체 보기" />
+      <SectionHeader title="최근 작품" to="/archive" action="전체 보기" paws />
       {artworks.length ? (
         <GalleryStrip artworks={artworks} />
       ) : (
@@ -197,10 +198,13 @@ function RecentArtworks({ artworks }) {
   )
 }
 
-function SectionHeader({ title, to, action }) {
+function SectionHeader({ title, to, action, paws = false }) {
   return (
     <div className={styles.sectionHeader}>
-      <h2 className={styles.heading}>{title}</h2>
+      <h2 className={styles.heading}>
+        {title}
+        {paws && <PawPrints />}
+      </h2>
       {to && (
         <Link to={to} className={styles.more}>
           {action} <ChevronRight size={18} aria-hidden />

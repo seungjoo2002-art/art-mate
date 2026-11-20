@@ -26,8 +26,12 @@
   border-radius: 18px 18px 18px 4px;
   background: var(--color-surface);
   box-shadow: 0 4px 14px rgba(31, 31, 31, 0.08);
+  font-family: var(--font-soft); /* 말풍선은 Gowun Dodum */
   font-size: var(--text-md);
   font-weight: var(--weight-bold);
+  font-synthesis: none;
+  /* Gowun Dodum은 굵기가 하나뿐 → 같은 색 얇은 테두리로 굵게 */
+  -webkit-text-stroke: 0.5px currentColor;
 }
 
 /* 스케치북 표지 같은 제목: 큰 글자 + 굵은 밑줄 하나 */
@@ -70,43 +74,6 @@
 .typeLabel {
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 var(--space-4);
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  transition:
-    background-color 0.15s,
-    color 0.15s;
-}
-
-.chip[aria-checked='true'] {
-  border-color: var(--color-text);
-  background: var(--color-text);
-  color: var(--color-surface);
-}
-
-/* 살짝 일그러진 물감 방울 */
-.paint {
-  width: 12px;
-  height: 12px;
-  border-radius: 50% 40% 55% 45%;
-  background: var(--paint);
 }
 
 /* 단계 바꾸기: 작은 연주황 알약 */

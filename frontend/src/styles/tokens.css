@@ -29,6 +29,8 @@
   /* Typography */
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
     'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --font-display: 'Jua', var(--font-sans); /* 제목 (h1·h2): 둥글고 통통 */
+  --font-soft: 'Gowun Dodum', var(--font-sans); /* 고양이 말풍선: 부드러운 고딕 */
   --text-xs: 12px;
   --text-sm: 14px;
   --text-md: 16px;

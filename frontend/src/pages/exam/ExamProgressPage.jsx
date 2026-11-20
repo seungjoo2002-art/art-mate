@@ -162,6 +162,7 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
       <main className={styles.body}>
         {/* 서 있는 고양이 응원 */}
         <MascotCheer
+          pose={remaining < 0 ? 'worried' : 'cheer'}
           sub={[artwork.title, typeLabel, stage && `${index + 1}/${stages.length}단계`]
             .filter(Boolean)
             .join(' · ')}

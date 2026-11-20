@@ -45,6 +45,7 @@
  */
 .visual {
   position: absolute;
+  font-family: var(--font-sans); /* 로고는 Pretendard (다른 제목은 Jua) */
   top: calc((100% - 16px) * 0.907); /* 100% = 영상 높이 + padding-bottom */
   left: 50%;
   translate: -50% -80%;
