@@ -1,14 +1,16 @@
 import { useCallback } from 'react'
 import { Heart, MessageCircle } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { Badge, Card } from '../../../components/ui'
+import SketchPage from '../../artworks/components/SketchPage'
+import paperStyles from '../../artworks/components/SketchPage.module.css'
+import { typeColor } from '../../artworks/practicalTypes'
 import { useAsync } from '../../../hooks/useAsync'
 import { formatMonthDay } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { listMyPosts } from '../api'
 import styles from './MyPostsFeed.module.css'
 
-/** 아카이브 "공개 피드": 내가 커뮤니티에 공유한 작품 */
+/** 아카이브 "공개 피드": 내가 커뮤니티에 공유한 작품. 전체 기록과 같은 뜯어낸 스케치북 한 장, 클립 대신 압정(공개) */
 export default function MyPostsFeed() {
   const load = useCallback(() => listMyPosts(), [])
   const { data, error } = useAsync(load)
@@ -28,19 +30,24 @@ export default function MyPostsFeed() {
 
   return (
     <div className={styles.grid}>
-      {posts.map((post) => {
-        const card = (
-          <>
+      {posts.map((post) => (
+        <SketchPage
+          key={post.id}
+          to={`/community/posts/${post.id}`}
+          seed={post.id}
+          fastener="pin"
+          accent={typeColor(post.practical_type)}
+          media={
             <span className={styles.cover}>
               {post.image?.url ? (
                 <img
                   src={post.image.url}
                   alt={post.title}
-                  className={styles.image}
+                  className={paperStyles.photo}
                   loading="lazy"
                 />
               ) : (
-                <span className={styles.image} aria-hidden />
+                <span className={paperStyles.photo} aria-hidden />
               )}
               {post.status === 'HIDDEN' && (
                 <Badge variant="overlay" className={styles.badge}>
@@ -48,27 +55,28 @@ export default function MyPostsFeed() {
                 </Badge>
               )}
             </span>
-            <span className={styles.title}>{post.title}</span>
-            <span className={styles.meta}>
-              {formatMonthDay(post.created_at.slice(0, 10))}
-              <span className={styles.count}>
-                <Heart size={14} aria-hidden /> {post.like_count}
+          }
+          date={formatMonthDay(post.created_at.slice(0, 10))}
+          title={post.title}
+          footer={
+            <>
+              <span className={styles.counts}>
+                <span className={styles.likes}>
+                  <Heart size={13} fill="currentColor" aria-hidden />
+                  <span className={styles.srOnly}>좋아요</span> {post.like_count}
+                </span>
+                <span className={styles.comments}>
+                  <MessageCircle size={13} aria-hidden />
+                  <span className={styles.srOnly}>댓글</span> {post.comment_count}
+                </span>
               </span>
-              <span className={styles.count}>
-                <MessageCircle size={14} aria-hidden /> {post.comment_count}
-              </span>
-            </span>
-            {post.status === 'HIDDEN' && post.hidden_reason && (
-              <span className={styles.hidden}>{post.hidden_reason}</span>
-            )}
-          </>
-        )
-        return (
-          <Link key={post.id} to={`/community/posts/${post.id}`} className={styles.card}>
-            {card}
-          </Link>
-        )
-      })}
+              {post.status === 'HIDDEN' && post.hidden_reason && (
+                <span className={styles.hidden}>{post.hidden_reason}</span>
+              )}
+            </>
+          }
+        />
+      ))}
     </div>
   )
 }

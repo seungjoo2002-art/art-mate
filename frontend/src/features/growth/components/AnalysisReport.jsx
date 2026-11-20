@@ -1,7 +1,10 @@
 import { useCallback } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import MascotCheer from '../../../components/mascot/MascotCheer'
 import { Button, Card } from '../../../components/ui'
+import tabStyles from '../../artworks/SectionTabs.module.css'
+import { tabColor } from '../../artworks/sectionTabs'
 import { useAsync } from '../../../hooks/useAsync'
 import { formatMonthDay } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
@@ -72,16 +75,14 @@ export default function AnalysisReport() {
 
   return (
     <div className={styles.report}>
-      <p className={styles.eyebrow}>MY GROWTH · 첨삭 기록 기반</p>
-
       <Cheer totals={totals} ready={ready} required={analysis.required_artwork_count} />
 
-      <Section title="학습 기록 요약">
+      <Section title="학습 기록 요약" color={1}>
         <div className={styles.stats}>
-          <Stat label="기록된 작품" value={`${totals.artwork_count}점`} />
-          <Stat label="누적 첨삭" value={`${totals.approved_feedback_count}건`} />
-          <Stat label="첨삭 연결" value={`${totals.analyzed_artwork_count}점`} />
-          <Stat label="실기시험" value={`${mockExams}회`} />
+          <Stat label="기록된 작품" value={totals.artwork_count} unit="점" paint="var(--color-primary)" />
+          <Stat label="누적 첨삭" value={totals.approved_feedback_count} unit="건" paint="#7c6ee6" />
+          <Stat label="첨삭 연결" value={totals.analyzed_artwork_count} unit="점" paint="#e0607e" />
+          <Stat label="실기시험" value={mockExams} unit="회" paint="#3fa7d6" />
         </div>
         {latest && (
           <Link to={`/artworks/${latest.artworkId}`} className={styles.link}>
@@ -92,8 +93,8 @@ export default function AnalysisReport() {
         )}
       </Section>
 
-      <Section title="작품별 피드백 변화">
-        <Card className={styles.card}>
+      <Section title="작품별 피드백 변화" color={2}>
+        <div className={styles.body}>
           {trend.length >= 2 ? (
             <MentionTrendChart points={trend} />
           ) : (
@@ -108,26 +109,32 @@ export default function AnalysisReport() {
             최근 작품의 긍정 언급과 개선 요청 횟수입니다. 강사마다 평가 초점이 다를 수 있으므로 실제
             실력 점수·향상률이 아닙니다.
           </p>
-        </Card>
+        </div>
       </Section>
 
-      <Section title="핵심 한 줄 요약">
-        <Card className={styles.card}>
+      <Section title="핵심 한 줄 요약" color={3}>
+        <div className={styles.body}>
           <p className={styles.headline}>{summaryLine(analysis)}</p>
           <p className={styles.muted}>
             작품과 첨삭의 실제 문장을 근거로 분석하며, 사진만으로 작품 수준을 평가하지 않습니다.
           </p>
-        </Card>
+        </div>
       </Section>
 
-      <Section title="반복 실수 (9개 항목)">
-        <Card className={styles.card}>
+      <Section title="반복 실수 (9개 항목)" color={4}>
+        <div className={styles.body}>
           {repeated.length ? (
             repeated.map((w) => (
               <div key={w.key} className={styles.row}>
-                <span className={styles.rowTitle}>{w.label}</span>
-                <span className={styles.muted}>
-                  작품 {totals.analyzed_artwork_count}개 중 {w.count}개에서 지적 ({percent(w.ratio)})
+                <div className={styles.rowHead}>
+                  <span className={styles.rowTitle}>{w.label}</span>
+                  <strong className={styles.ratio}>{percent(w.ratio)}</strong>
+                </div>
+                <span className={styles.meter} aria-hidden>
+                  <span style={{ width: percent(w.ratio) }} />
+                </span>
+                <span className={styles.small}>
+                  작품 {totals.analyzed_artwork_count}개 중 {w.count}개에서 지적
                 </span>
               </div>
             ))
@@ -147,15 +154,15 @@ export default function AnalysisReport() {
                 .join(', ')}
             </p>
           )}
-        </Card>
+        </div>
       </Section>
 
-      <Section title="최근 연습 과제">
+      <Section title="최근 연습 과제" color={5}>
         <PracticeTips tips={analysis.practice_tips ?? []} onChanged={reload} />
       </Section>
 
-      <Section title="과거와 최근 피드백 비교">
-        <Card className={styles.card}>
+      <Section title="과거와 최근 피드백 비교" color={6}>
+        <div className={styles.body}>
           {compared.length ? (
             compared.map((w) => (
               <div key={w.key} className={styles.row}>
@@ -186,31 +193,31 @@ export default function AnalysisReport() {
               있어요.
             </p>
           )}
-        </Card>
+        </div>
       </Section>
 
       {analysis.tags?.length > 0 && (
-        <Section title="항목별 잘한 점·개선할 점">
-          <Card className={styles.card}>
+        <Section title="항목별 잘한 점·개선할 점" color={7}>
+          <div className={styles.body}>
             <TagMentionBars analysis={analysis} />
             <p className={styles.small}>
               확정한 첨삭에서 각 항목이 언급된 작품 수예요 (작품당 한 번).
             </p>
-          </Card>
+          </div>
         </Section>
       )}
 
       {analysis.timeline?.length > 0 && (
-        <Section title="기간별 첨삭 횟수">
-          <Card className={styles.card}>
+        <Section title="기간별 첨삭 횟수" color={8}>
+          <div className={styles.body}>
             <PeriodFeedbackBars analysis={analysis} />
             <p className={styles.small}>작업한 날짜 기준, 확정한 강사 첨삭 수예요.</p>
-          </Card>
+          </div>
         </Section>
       )}
 
-      <Section title="긍정적으로 언급된 부분">
-        <Card className={styles.card}>
+      <Section title="긍정적으로 언급된 부분" color={9}>
+        <div className={styles.body}>
           {analysis.strengths?.length ? (
             analysis.strengths.map((s) => (
               <div key={s.category} className={styles.block}>
@@ -223,28 +230,28 @@ export default function AnalysisReport() {
           ) : (
             <p className={styles.muted}>현재 긍정적 표현으로 분류된 첨삭이 없습니다.</p>
           )}
-        </Card>
+        </div>
       </Section>
 
-      <Section title="최근 개선 요청과 근거">
-        <Card className={styles.card}>
+      <Section title="최근 개선 요청과 근거" color={10}>
+        <div className={styles.body}>
           {recentImprovements.length ? (
             <EvidenceList evidence={recentImprovements} />
           ) : (
             <p className={styles.muted}>현재 개선 요청으로 분류된 첨삭이 없습니다.</p>
           )}
-        </Card>
+        </div>
       </Section>
 
-      <Section title="다음 학습 우선순위">
+      <Section title="다음 학습 우선순위" color={11}>
         <NextPriority analysis={analysis} recommendations={recommendations} />
       </Section>
 
-      <Section title="분석에 사용된 작품·첨삭 원문">
+      <Section title="분석에 사용된 작품·첨삭 원문" color={12}>
         {withFeedback.length ? (
           <div className={styles.sources}>
             {withFeedback.map((t) => (
-              <Card key={t.artwork_id} className={styles.card}>
+              <div key={t.artwork_id} className={styles.sourceItem}>
                 <Link to={`/artworks/${t.artwork_id}`} className={styles.rowTitle}>
                   {t.title} · {formatMonthDay(t.work_date)}
                 </Link>
@@ -253,7 +260,7 @@ export default function AnalysisReport() {
                     {f.summary}
                   </Link>
                 ))}
-              </Card>
+              </div>
             ))}
           </div>
         ) : (
@@ -262,10 +269,10 @@ export default function AnalysisReport() {
       </Section>
 
       <div className={styles.links}>
-        <Link to="/growth/reports" className={styles.link}>
+        <Link to="/growth/reports" className={styles.pill}>
           기간별 성장 리포트 <ChevronRight size={16} aria-hidden />
         </Link>
-        <Link to="/growth/recommendations" className={styles.link}>
+        <Link to="/growth/recommendations" className={styles.pill}>
           맞춤 연습 과제 <ChevronRight size={16} aria-hidden />
         </Link>
       </div>
@@ -292,11 +299,9 @@ function Cheer({ totals, ready, required }) {
             `확정 첨삭 ${totals.approved_feedback_count}개를 바탕으로 정리했어요.`,
           ]
   return (
-    <Card className={styles.card}>
-      <span className={styles.cheerLabel}>ART MATE의 응원</span>
-      <p className={styles.cheerTitle}>{title}</p>
-      <p className={styles.muted}>{text}</p>
-    </Card>
+    <MascotCheer pose="check" size="lg" eyebrow="ART MATE의 응원" sub={text}>
+      {title}
+    </MascotCheer>
   )
 }
 
@@ -306,7 +311,7 @@ function NextPriority({ analysis, recommendations }) {
   const card = pickNextPractice(analysis, recommendations)
 
   return (
-    <Card className={styles.card}>
+    <div className={styles.body}>
       <span className={styles.cheerLabel}>{card.label}</span>
       <p className={styles.cardTitle}>{card.title}</p>
       {card.goal && (
@@ -319,27 +324,33 @@ function NextPriority({ analysis, recommendations }) {
           <strong>연습 방법</strong> · {card.method}
         </p>
       )}
-      <Button withArrow onClick={() => navigate(card.to)}>
+      <Button size="compact" withArrow onClick={() => navigate(card.to)}>
         {card.action}
       </Button>
-    </Card>
+    </div>
   )
 }
 
-function Section({ title, children }) {
+/** 스케치북 인덱스 탭 카드. 탭 색은 순서대로 돌아가며 (sectionTabs.js) */
+function Section({ title, color, children }) {
   return (
-    <section className={styles.section}>
-      <h2 className={styles.heading}>{title}</h2>
+    <section className={tabStyles.card} style={{ '--tab': tabColor(color) }}>
+      <h2 className={tabStyles.tab}>{title}</h2>
       {children}
     </section>
   )
 }
 
-function Stat({ label, value }) {
+/** 물감 점 숫자 타일 (홈 학습 현황과 같은 모양) */
+function Stat({ label, value, unit, paint }) {
   return (
-    <Card className={styles.stat}>
+    <div className={styles.stat} style={{ '--paint': paint }}>
+      <i className={styles.paint} aria-hidden />
+      <span>
+        <strong className={styles.statValue}>{value}</strong>
+        <span className={styles.unit}>{unit}</span>
+      </span>
       <span className={styles.small}>{label}</span>
-      <strong className={styles.statValue}>{value}</strong>
-    </Card>
+    </div>
   )
 }

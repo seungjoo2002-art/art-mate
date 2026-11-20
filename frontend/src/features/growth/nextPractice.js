@@ -36,7 +36,7 @@ export function pickNextPractice(analysis, recommendations) {
     goal: '단계별 사진과 간단한 첨삭부터 저장해 보세요.',
     method: '사진 1장과 메모 1개부터 시작해도 괜찮습니다.',
     category: null,
-    action: '연습 시작 · 작품 기록',
+    action: '기록하기',
     to: '/artworks/new',
   }
 }

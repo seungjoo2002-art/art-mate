@@ -22,3 +22,25 @@
   rotate: -10deg;
   fill: var(--color-primary);
 }
+
+/* 고양이 발자국: 제목 오른쪽에 걸어간 듯 두 개 (뒤의 것은 연하고 살짝 위) */
+.paws {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  margin-left: 0.3em;
+  vertical-align: -0.05em;
+}
+
+.paw {
+  width: 0.95em;
+  height: 0.95em;
+  fill: var(--color-primary);
+  rotate: 20deg;
+}
+
+.pawNext {
+  margin-bottom: 0.3em;
+  opacity: 0.45;
+  rotate: 35deg;
+}

@@ -1,0 +1,50 @@
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* 한 줄 가로 스크롤 (오른쪽은 화면 끝까지) */
+.scroll {
+  flex-wrap: nowrap;
+  margin-right: calc(var(--gutter) * -1);
+  padding-right: var(--gutter);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 var(--space-4);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.chip[aria-checked='true'] {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+
+/* 살짝 일그러진 물감 방울 */
+.paint {
+  width: 12px;
+  height: 12px;
+  border-radius: 50% 40% 55% 45%;
+  background: var(--paint);
+}

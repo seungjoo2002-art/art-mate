@@ -1,8 +1,10 @@
 import { useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Button, Card, Chip, PageIntro, SegmentedTabs } from '../../components/ui'
+import MascotCheer from '../../components/mascot/MascotCheer'
+import { Button, Card, PageIntro, SegmentedTabs } from '../../components/ui'
 import { listArtworks } from '../../features/artworks/api'
-import ArtworkCard from '../../features/artworks/components/ArtworkCard'
+import PaintChips from '../../features/artworks/components/PaintChips'
+import SketchPageCard from '../../features/artworks/components/SketchPageCard'
 import MyPostsFeed from '../../features/community/components/MyPostsFeed'
 import AnalysisReport from '../../features/growth/components/AnalysisReport'
 import { useAsync } from '../../hooks/useAsync'
@@ -23,11 +25,9 @@ export default function ArchivePage() {
 
   return (
     <>
-      <PageIntro
-        title="아카이브"
-        description="나의 작품·공개 피드·학습 분석을 한 곳에서 확인하세요."
-      />
+      <PageIntro title="아카이브" />
       <SegmentedTabs
+        variant="highlight"
         label="아카이브"
         tabs={TABS}
         value={tab}
@@ -55,18 +55,14 @@ function ArtworkArchive({ practicalType, onTypeChange }) {
 
   return (
     <section className={styles.section}>
-      <h2 className={styles.heading}>내 작품</h2>
-      <div className={styles.chips}>
-        {types.map((t) => (
-          <Chip
-            key={t.code || 'all'}
-            selected={practicalType === t.code}
-            onClick={() => onTypeChange(t.code)}
-          >
-            {t.label}
-          </Chip>
-        ))}
-      </div>
+      <h2 className={styles.srOnly}>내 작품</h2>
+      <PaintChips
+        label="실기 유형"
+        options={types}
+        value={practicalType}
+        onChange={onTypeChange}
+        wrap={false}
+      />
 
       {error ? (
         <Card variant="soft" className={styles.message}>
@@ -77,20 +73,20 @@ function ArtworkArchive({ practicalType, onTypeChange }) {
         </Card>
       ) : !data ? null : data.items.length === 0 ? (
         <div className={styles.empty}>
-          <p className={styles.emptyTitle}>
-            {practicalType
-              ? '이 실기 유형으로 기록한 작품이 없습니다.'
-              : '아직 등록된 작품이 없습니다.'}
-          </p>
-          <p className={styles.emptySub}>실기 메뉴에서 작품을 기록하면 이곳에 자동 정리됩니다.</p>
-          <Button size="md" fullWidth={false} onClick={() => navigate('/artworks/new')}>
+          <MascotCheer
+            pose="curious"
+            sub="실기 메뉴에서 작품을 기록하면 이곳에 자동 정리돼요."
+          >
+            {practicalType ? '이 실기 유형으로 기록한 작품이 없어요' : '아직 기록한 작품이 없어요'}
+          </MascotCheer>
+          <Button size="compact" onClick={() => navigate('/artworks/new')}>
             새 작품 기록
           </Button>
         </div>
       ) : (
         <div className={styles.grid}>
           {data.items.map((artwork) => (
-            <ArtworkCard key={artwork.id} artwork={artwork} />
+            <SketchPageCard key={artwork.id} artwork={artwork} />
           ))}
         </div>
       )}

@@ -187,7 +187,9 @@ export default function ArtworkDetailPage({ renderTimeline }) {
       />
       <main className={styles.body}>
         {/* 서 있는 고양이: 진행 상황에 맞춘 한마디 */}
-        <MascotCheer>
+        <MascotCheer
+          pose={completed ? 'happy' : finalPhoto ? 'check' : hasAnyPhoto ? 'artist' : 'curious'}
+        >
           {completed ? (
             <>
               <Highlight>작품 완성!</Highlight> 정말 수고했어요

@@ -13,6 +13,8 @@ import { labelOf } from '../../../lib/options'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { createArtwork, deleteArtwork, putExamPlan } from '../api'
 import ExamIntentFields from '../components/ExamIntentFields'
+import ExamStagePlanner from '../components/ExamStagePlanner'
+import PaintChips from '../components/PaintChips'
 import ReferenceGrid from '../components/ReferenceGrid'
 import StageEditor from '../components/StageEditor'
 import StagePath from '../components/StagePath'
@@ -37,16 +39,6 @@ import tabStyles from '../SectionTabs.module.css'
 import { useReferenceUploads } from '../useReferenceUploads'
 import createStyles from './ArtworkCreate.module.css'
 import styles from './ArtworkPage.module.css'
-
-/** 실기 유형 칩의 물감 점 색 (코드에 없는 유형은 주황) */
-const TYPE_COLORS = {
-  BASIC_DESIGN: '#f2933a',
-  THINKING_SHIFT: '#7c6ee6',
-  IDEA_EXPRESSION: '#e0607e',
-  DRAWING: '#555555',
-  WATERCOLOR: '#3fa7d6',
-  OTHER: '#9aa33f',
-}
 
 /** 작품명을 비우면 쓰는 임시 제목. 예: "기초디자인 · 11월 11일" */
 function fallbackTitle(typeLabel, exam) {
@@ -229,22 +221,13 @@ export default function ArtworkCreatePage() {
           <span className={createStyles.typeLabel} id="practical-type-label">
             실기 유형
           </span>
-          <div className={createStyles.chips} role="radiogroup" aria-labelledby="practical-type-label">
-            {(options?.practical_types ?? []).map((o) => (
-              <button
-                key={o.code}
-                type="button"
-                role="radio"
-                aria-checked={practicalType === o.code}
-                className={createStyles.chip}
-                style={{ '--paint': TYPE_COLORS[o.code] ?? 'var(--color-primary)' }}
-                onClick={() => setPracticalType(practicalType === o.code ? '' : o.code)}
-              >
-                <i className={createStyles.paint} aria-hidden />
-                {o.label}
-              </button>
-            ))}
-          </div>
+          <PaintChips
+            label="실기 유형"
+            options={options?.practical_types ?? []}
+            value={practicalType}
+            onChange={setPracticalType}
+            toggleable
+          />
         </div>
 
         {/* 원래 입력 순서 그대로, 칸마다 인덱스 탭 */}
@@ -305,14 +288,17 @@ export default function ArtworkCreatePage() {
           </h2>
           <small className={tabStyles.cardMeta}>{stages.length}단계</small>
           {/* 시험은 단계마다 시간을 정해야 해서 바로 편집 목록, 그 밖에는 물감 길 + 편집 열기 */}
-          {!exam && <StagePath stages={stages} />}
-          {exam || editingStages ? (
+          {/* 시험: 원형 시계 + 단계별 슬라이더 / 그 밖: 물감 길 + 편집 열기 */}
+          {exam ? (
+            <ExamStagePlanner stages={stages} onChange={setStages} maxStages={MAX_EXAM_STAGES} />
+          ) : (
+            <StagePath stages={stages} />
+          )}
+          {exam ? null : editingStages ? (
             <StageEditor
               embedded
               stages={stages}
               onChange={setStages}
-              withMinutes={exam}
-              maxStages={exam ? MAX_EXAM_STAGES : undefined}
               note="단계마다 사진과 피드백, 피드백을 반영한 수정 사진을 따로 기록할 수 있어요. 단계는 나중에 작품 정보 수정에서 바꿀 수 있어요."
             />
           ) : (

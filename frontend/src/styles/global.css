@@ -34,6 +34,13 @@ p {
   margin: 0;
 }
 
+/* 제목은 Jua. Jua·Gowun Dodum은 굵기가 하나라 브라우저가 가짜 굵게를 만들지 않게 */
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-synthesis: none;
+}
+
 button,
 input,
 textarea,

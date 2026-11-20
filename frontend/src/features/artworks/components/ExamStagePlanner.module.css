@@ -1,0 +1,215 @@
+/* 실기시험 단계와 목표 시간: 원형 시계 + 단계별 슬라이더 */
+.planner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* 원형 시계 */
+.donut {
+  position: relative;
+  align-self: center;
+  width: 172px;
+  height: 172px;
+}
+
+.donut svg {
+  width: 100%;
+  height: 100%;
+  rotate: -90deg; /* 12시 방향에서 시작 */
+}
+
+.track {
+  fill: none;
+  stroke: var(--color-surface-muted);
+  stroke-width: 22;
+}
+
+.arc {
+  fill: none;
+  stroke-width: 22;
+  transition: stroke-dasharray 0.2s;
+}
+
+.center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.center small {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.center strong {
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 단계 줄: 이름 · 시간 · (위 아래 삭제) / 슬라이더 */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50% 40% 55% 45%;
+  background: var(--tone);
+}
+
+/* 이름은 글자처럼 보이다가 누르면 고칠 수 있게 */
+.name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-1);
+  border: 0;
+  border-bottom: 1.5px dashed transparent;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  outline: none;
+}
+
+.name:hover,
+.name:focus {
+  border-bottom-color: var(--color-border);
+}
+
+.name:focus {
+  border-bottom-color: var(--color-primary);
+}
+
+.time {
+  flex-shrink: 0;
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.actions button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--color-text-muted);
+}
+
+.actions button:disabled {
+  opacity: 0.3;
+}
+
+/* 슬라이더: 붓 자국처럼 고르지 않은 트랙(지나온 부분은 단계 색) + 물감 방울 손잡이 */
+.slider {
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 16px;
+  border-radius: 10px 4px 12px 6px / 8px 6px 10px 5px;
+  background: linear-gradient(
+    90deg,
+    var(--tone) var(--fill),
+    var(--color-surface-muted) var(--fill)
+  );
+}
+
+.slider::-moz-range-track {
+  height: 16px;
+  border-radius: 10px 4px 12px 6px / 8px 6px 10px 5px;
+  background: var(--color-surface-muted);
+}
+
+.slider::-moz-range-progress {
+  height: 16px;
+  border-radius: 12px 6px 14px 5px / 9px 5px 11px 6px;
+  background: var(--tone);
+}
+
+/* 물감 방울: 한쪽 모서리만 뾰족한 동그라미를 45° 돌려 아래로 떨어지는 모양 */
+.slider::-webkit-slider-thumb {
+  width: 26px;
+  height: 26px;
+  margin-top: -7px;
+  border: 3px solid var(--tone);
+  border-radius: 50% 50% 50% 0;
+  background: var(--color-surface);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+  transform: rotate(-45deg);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--tone);
+  border-radius: 50% 50% 50% 0;
+  background: var(--color-surface);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+  transform: rotate(-45deg);
+}
+
+.slider:active::-webkit-slider-thumb {
+  transform: rotate(-45deg) scale(1.1);
+}
+
+.slider:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+  border-radius: var(--radius-full);
+}
+
+/* 단계 추가: 연주황 알약 */
+.add {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: var(--space-1);
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.add:disabled {
+  opacity: 0.5;
+}

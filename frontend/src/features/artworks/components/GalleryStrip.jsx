@@ -23,6 +23,7 @@ export default function GalleryStrip({ artworks }) {
                 photoId={a.cover_photo_id}
                 alt={a.title}
                 className={styles.photo}
+                loading="eager" // 가로 스크롤 칸 안이라 lazy면 사파리에서 안 뜸 (최대 4장)
               />
             ) : (
               <span className={styles.photo} aria-hidden />

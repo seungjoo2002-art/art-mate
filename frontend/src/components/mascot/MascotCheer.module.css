@@ -6,8 +6,12 @@
 
 .cat {
   flex-shrink: 0;
-  width: 64px;
-  height: auto;
+  /* 자세마다 가로세로 비율이 달라서(책상 고양이는 넓적) 높이로 맞춤 */
+  width: auto;
+  height: 92px;
+  max-width: 112px;
+  object-fit: contain;
+  object-position: bottom;
   user-select: none;
   -webkit-user-drag: none;
 }
@@ -31,8 +35,12 @@
 }
 
 .cheer {
+  font-family: var(--font-soft); /* 말풍선은 Gowun Dodum (홈처럼 h1이어도) */
   font-size: var(--text-md);
   font-weight: var(--weight-bold);
+  font-synthesis: none;
+  /* Gowun Dodum은 굵기가 하나뿐 → 같은 색 얇은 테두리로 굵게 */
+  -webkit-text-stroke: 0.5px currentColor;
 }
 
 .sub {
@@ -42,7 +50,8 @@
 
 /* 크게 (홈) */
 .lg .cat {
-  width: 100px;
+  height: 130px;
+  max-width: 150px;
 }
 
 .lg .bubble {
