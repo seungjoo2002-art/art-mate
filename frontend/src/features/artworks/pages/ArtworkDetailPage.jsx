@@ -3,6 +3,8 @@ import { PencilLine, Share2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
+import Highlight from '../../../components/decor/Highlight'
+import PaintSplash from '../../../components/decor/PaintSplash'
 import MascotCheer from '../../../components/mascot/MascotCheer'
 import { Button, Card } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
@@ -186,13 +188,24 @@ export default function ArtworkDetailPage({ renderTimeline }) {
       <main className={styles.body}>
         {/* 서 있는 고양이: 진행 상황에 맞춘 한마디 */}
         <MascotCheer>
-          {completed
-            ? '작품 완성! 정말 수고했어요 🎉'
-            : finalPhoto
-              ? '마지막 사진까지 올렸어요! 완료해 볼까요? ✅'
-              : hasAnyPhoto
-                ? '오늘도 한 단계씩 기록해 봐요 ✏️'
-                : '첫 단계 사진부터 올려 볼까요? 📷'}
+          {completed ? (
+            <>
+              <Highlight>작품 완성!</Highlight> 정말 수고했어요
+            </>
+          ) : finalPhoto ? (
+            <>
+              마지막 사진까지 올렸어요! <Highlight>완료해 볼까요?</Highlight>
+            </>
+          ) : hasAnyPhoto ? (
+            <>
+              오늘도 <Highlight>한 단계씩</Highlight> 기록해 봐요
+            </>
+          ) : (
+            <>
+              <Highlight>첫 단계 사진</Highlight>부터 올려 볼까요?
+            </>
+          )}
+          <PaintSplash />
         </MascotCheer>
         {/* 실기시험 작품: 진행 중이면 이어서 하기, 끝났으면(STOP으로 actual_minutes 저장) 결과 보기 */}
         {artwork.work_category === 'MOCK_EXAM' &&

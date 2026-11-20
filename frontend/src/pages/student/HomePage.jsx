@@ -2,6 +2,8 @@ import { useCallback } from 'react'
 import { ChevronRight, PenLine, Timer } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../app/providers/AuthContext'
+import Highlight from '../../components/decor/Highlight'
+import PaintSplash from '../../components/decor/PaintSplash'
 import MascotCheer from '../../components/mascot/MascotCheer'
 import { listArtworks } from '../../features/artworks/api'
 import GalleryStrip from '../../features/artworks/components/GalleryStrip'
@@ -44,7 +46,8 @@ export default function HomePage() {
   return (
     <>
       <MascotCheer as="h1" size="lg" eyebrow={formatToday()}>
-        {profile.display_name}님, 오늘도 그려 볼까요? 🎨
+        {profile.display_name}님, 오늘도 <Highlight>그려 볼까요?</Highlight>
+        <PaintSplash />
       </MascotCheer>
       <QuickStart />
 

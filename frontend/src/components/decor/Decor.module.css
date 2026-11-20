@@ -1,0 +1,24 @@
+/* 붓 형광펜: 글자 아래 절반쯤을 주황으로, 모서리는 붓처럼 고르지 않게 */
+.highlight {
+  padding: 0 3px;
+  border-radius: 6px 2px 8px 3px;
+  background: linear-gradient(
+    transparent 56%,
+    color-mix(in srgb, var(--color-primary) 50%, transparent) 56%,
+    color-mix(in srgb, var(--color-primary) 50%, transparent) 94%,
+    transparent 94%
+  );
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone; /* 줄이 바뀌어도 줄마다 칠함 */
+}
+
+/* 물감 튄 자국: 글자 크기에 맞춰 (1em 근처), 살짝 기울임 */
+.splash {
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  margin-left: 0.15em;
+  vertical-align: -0.1em;
+  rotate: -10deg;
+  fill: var(--color-primary);
+}
