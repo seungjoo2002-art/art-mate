@@ -450,40 +450,103 @@
   color: var(--zine-ink);
 }
 
-/* 분류 칩: 먹색 테두리, 고른 칩은 먹색 바탕 */
+/* 카테고리 전체 영역 */
 .chips {
   display: flex;
-  gap: var(--space-2);
+  align-items: center;
+  gap: 0;
   margin-right: calc(var(--gutter) * -1);
   padding-right: var(--gutter);
   overflow-x: auto;
   scrollbar-width: none;
 }
 
+/* 스크롤바 숨기기 */
 .chips::-webkit-scrollbar {
   display: none;
 }
 
+/* 카테고리 버튼 */
 .chip {
+  position: relative;
+  isolation: isolate;
   flex-shrink: 0;
   height: 34px;
-  padding: 0 var(--space-4);
-  border: 1.5px solid var(--zine-ink);
-  border-radius: var(--radius-full);
+  padding: 0 14px;
+  border: none;
+  border-radius: 0;
   background: transparent;
   color: var(--zine-ink);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
+  cursor: pointer;
 }
 
+/* 첫 번째 버튼 왼쪽 여백 제거 */
+.chip:first-child {
+  padding-left: 0;
+}
+
+/* 카테고리 사이 | 구분선 */
+.chip + .chip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 14px;
+  background: #c9c4bd;
+}
+
+/* 선택된 카테고리 */
 .chip[aria-checked='true'] {
-  background: var(--zine-ink);
-  color: #fff;
+  background: transparent;
+  color: var(--zine-ink);
 }
 
+/* 선택된 글자 뒤 회갈색 하이라이트 */
+.chip[aria-checked='true']::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 12px;
+  right: 12px;
+  bottom: 7px;
+  height: 10px;
+  background: #d6d0c7;
+  border-radius: 2px;
+}
+
+/* 첫 번째 버튼 하이라이트 위치 */
+.chip:first-child[aria-checked='true']::before {
+  left: 0;
+}
+
+/* 잡지 스타일 검색창 */
 .zine .searchInput {
-  border: 1.5px solid var(--zine-ink);
-  background: #fff;
+  border: 1px solid #cfc9bf;
+  border-radius: 999px;
+  background: #faf9f6;
+  color: var(--zine-ink);
+  box-shadow: none;
+}
+
+/* 검색창을 클릭했을 때 */
+.zine .searchInput:focus {
+  border-color: #a9a196;
+  outline: none;
+}
+
+/* 검색 아이콘 */
+.zine .searchIcon {
+  color: #958d83;
+}
+
+/* 검색창 안내 문구 */
+.zine .searchInput::placeholder {
+  color: #958d83;
+  opacity: 1;
 }
 
 /* 게시판 = 잡지 지면 */
