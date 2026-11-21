@@ -6,6 +6,16 @@ export const CATEGORIES = [
   { code: 'FREE', label: '자유게시판' },
 ]
 
+/** 분류 물감 색 (칩 점 · 작성자 동그라미 · 말풍선 꼬리표) */
+export const CATEGORY_COLORS = {
+  PRACTICE_QUESTION: '#f2933a',
+  FEEDBACK_REQUEST: '#7c6ee6',
+  ARTWORK_SHARE: '#e0607e',
+  FREE: '#3fa7d6',
+}
+
+export const categoryColor = (code) => CATEGORY_COLORS[code] ?? 'var(--color-primary)'
+
 export const postCategory = (post) =>
   CATEGORIES.find((c) => c.code === post.category)?.label ?? '게시물'
 
