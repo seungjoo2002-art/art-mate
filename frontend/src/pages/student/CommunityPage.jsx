@@ -1,31 +1,19 @@
 import { useCallback, useState } from 'react'
-import { Heart, LayoutGrid, List, Plus, Search, X } from 'lucide-react'
+import { Flame, Heart, MessageCircle, PenLine, Search, X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Button, Card, Chip, PageIntro, SegmentedTabs } from '../../components/ui'
+import MascotCheer from '../../components/mascot/MascotCheer'
+import { Button, Card, PageIntro, SegmentedTabs } from '../../components/ui'
+import PaintChips from '../../features/artworks/components/PaintChips'
 import { listFeed } from '../../features/community/api'
-import { CATEGORY_FILTERS, postCategory } from '../../features/community/labels'
+import { CATEGORY_FILTERS, categoryColor, postCategory } from '../../features/community/labels'
 import { useAsync } from '../../hooks/useAsync'
 import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './CommunityPage.module.css'
 
 const PAGE = 30
 const VIEWS = [
-  {
-    key: 'board',
-    label: (
-      <>
-        <List size={18} aria-hidden /> 게시판 보기
-      </>
-    ),
-  },
-  {
-    key: 'gallery',
-    label: (
-      <>
-        <LayoutGrid size={18} aria-hidden /> 작품 갤러리
-      </>
-    ),
-  },
+  { key: 'board', label: '게시판' },
+  { key: 'gallery', label: '작품 갤러리' },
 ]
 
 export default function CommunityPage() {
@@ -56,8 +44,9 @@ export default function CommunityPage() {
 
   return (
     <>
-      <PageIntro title="커뮤니티" description="작품을 나누고, 서로에게 의견을 남겨보세요." />
+      <PageIntro title="커뮤니티" />
       <SegmentedTabs
+        variant="highlight"
         label="보기 방식"
         tabs={VIEWS}
         value={view}
@@ -66,22 +55,19 @@ export default function CommunityPage() {
 
       <SearchBox key={q} initial={q} onSearch={(text) => setParam('q', text, '')} />
 
-      <div className={styles.toolbar}>
-        <div className={styles.chips}>
-          {CATEGORY_FILTERS.map((c) => (
-            <Chip
-              key={c.code}
-              selected={category === c.code}
-              onClick={() => setParam('category', c.code, 'all')}
-            >
-              {c.label}
-            </Chip>
-          ))}
-        </div>
-        <Link to="/community/write" className={styles.write}>
-          <Plus size={18} aria-hidden /> 글쓰기
-        </Link>
-      </div>
+      <PaintChips
+        label="게시판 분류"
+        options={CATEGORY_FILTERS}
+        value={category}
+        onChange={(code) => setParam('category', code, 'all')}
+        colorOf={(code) => (code === 'all' ? null : categoryColor(code))}
+        wrap={false}
+      />
+
+      {/* 글쓰기: 화면 오른쪽 아래 물감 방울 버튼 */}
+      <Link to="/community/write" className={styles.write} aria-label="글쓰기" title="글쓰기">
+        <PenLine size={22} aria-hidden />
+      </Link>
 
       {error ? (
         <Card variant="soft" className={styles.message}>
@@ -92,68 +78,65 @@ export default function CommunityPage() {
         </Card>
       ) : !data ? null : visible.length === 0 ? (
         <div className={styles.empty}>
-          <p className={styles.emptyTitle}>
-            {q ? `'${q}' 검색 결과가 없어요.` : '아직 게시물이 없습니다.'}
-          </p>
-          <p className={styles.emptySub}>
-            {q
-              ? '다른 단어로 찾아보세요.'
-              : view === 'gallery'
-                ? '사진이 있는 게시물이 여기에 모여요.'
-                : '질문을 남기거나 작품을 공유해 보세요.'}
-          </p>
+          <MascotCheer
+            pose="curious"
+            sub={
+              q
+                ? '다른 단어로 찾아보세요.'
+                : view === 'gallery'
+                  ? '사진이 있는 게시물이 여기에 모여요.'
+                  : '질문을 남기거나 작품을 공유해 보세요.'
+            }
+          >
+            {q ? `'${q}' 검색 결과가 없어요` : '아직 게시물이 없어요'}
+          </MascotCheer>
         </div>
       ) : view === 'board' ? (
         <ul className={styles.board}>
-          {visible.map((post) => (
-            <li key={post.id}>
-              <Link to={`/community/posts/${post.id}`} className={styles.row}>
-                <span className={styles.rowText}>
-                  <span className={styles.category}>{postCategory(post)}</span>
-                  <span className={styles.title}>{post.title}</span>
-                  {(post.question || post.body) && (
-                    <span className={styles.excerpt}>{post.question || post.body}</span>
-                  )}
-                  <span className={styles.meta}>
-                    {post.author.display_name}
-                    <span className={styles.count}>
-                      <Heart size={13} fill="currentColor" aria-hidden /> {post.like_count}
-                    </span>
-                    <span>댓글 {post.comment_count}</span>
+          {visible.map((post) => {
+            const tone = categoryColor(post.category)
+            return (
+              <li key={post.id}>
+                {/* 말풍선 대화: 왼쪽 작성자 동그라미, 오른쪽 말풍선 */}
+                <Link
+                  to={`/community/posts/${post.id}`}
+                  className={styles.row}
+                  style={{ '--tone': tone }}
+                >
+                  <span className={styles.avatar} aria-hidden>
+                    {post.author.display_name.slice(0, 1)}
                   </span>
-                </span>
-                {/* 사진 없는 글(has_artwork=false)은 썸네일 없음 */}
-                {post.image?.url && (
-                  <img src={post.image.url} alt="" className={styles.thumb} loading="lazy" />
-                )}
-              </Link>
-            </li>
-          ))}
+                  <span className={styles.bubble}>
+                    <span className={styles.head}>
+                      <span className={styles.author}>{post.author.display_name}</span>
+                      <span className={styles.category}>{postCategory(post)}</span>
+                    </span>
+                    <span className={styles.title}>{post.title}</span>
+                    {(post.question || post.body) && (
+                      <span className={styles.excerpt}>{post.question || post.body}</span>
+                    )}
+                    {/* 사진 없는 글(has_artwork=false)은 사진 없음 */}
+                    {post.image?.url && (
+                      <img src={post.image.url} alt="" className={styles.photo} loading="lazy" />
+                    )}
+                    <span className={styles.meta}>
+                      <span className={styles.likes}>
+                        <Heart size={13} fill="currentColor" aria-hidden />
+                        <span className={styles.srOnly}>좋아요</span> {post.like_count}
+                      </span>
+                      <span className={styles.count}>
+                        <MessageCircle size={13} aria-hidden />
+                        <span className={styles.srOnly}>댓글</span> {post.comment_count}
+                      </span>
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            )
+          })}
         </ul>
       ) : (
-        <div className={styles.gallery}>
-          {visible.map((post) => (
-            <Link key={post.id} to={`/community/posts/${post.id}`} className={styles.tile}>
-              {post.image?.url ? (
-                <img
-                  src={post.image.url}
-                  alt={post.title}
-                  className={styles.tileImage}
-                  loading="lazy"
-                />
-              ) : (
-                <span className={styles.tileImage} aria-hidden />
-              )}
-              <span className={styles.tileTitle}>{post.title}</span>
-              <span className={styles.meta}>
-                <span className={styles.count}>
-                  <Heart size={13} fill="currentColor" aria-hidden /> {post.like_count}
-                </span>
-                <span>댓글 {post.comment_count}</span>
-              </span>
-            </Link>
-          ))}
-        </div>
+        <Gallery posts={visible} />
       )}
 
       {data && data.total > data.items.length && (
@@ -210,5 +193,58 @@ function SearchBox({ initial, onSearch }) {
       )}
       {hint && <p className={styles.searchHint}>{hint}</p>}
     </form>
+  )
+}
+
+/**
+ * 작품 갤러리: 하트를 가장 많이 받은 작품 하나 크게 + 나머지는 원래 비율 그대로 두 줄 벽돌 쌓기
+ * (불러온 게시물 안에서 고름. 하트가 0이거나 작품이 3개 미만이면 크게 보이는 칸 없이)
+ */
+function Gallery({ posts }) {
+  const top = posts.reduce((best, p) => (p.like_count > (best?.like_count ?? 0) ? p : best), null)
+  const featured = posts.length >= 3 && top ? top : null
+  const rest = featured ? posts.filter((p) => p.id !== featured.id) : posts
+
+  return (
+    <>
+      {featured && (
+        <Link to={`/community/posts/${featured.id}`} className={styles.featured}>
+          <span className={styles.featuredBadge}>
+            <Flame size={14} fill="currentColor" aria-hidden /> 인기
+          </span>
+          <img src={featured.image.url} alt={featured.title} className={styles.featuredImage} />
+          <GalleryCaption post={featured} large />
+        </Link>
+      )}
+      <div className={styles.masonry}>
+        {rest.map((post) => (
+          <Link key={post.id} to={`/community/posts/${post.id}`} className={styles.brick}>
+            <img
+              src={post.image.url}
+              alt={post.title}
+              className={styles.brickImage}
+              loading="lazy"
+            />
+            <GalleryCaption post={post} />
+          </Link>
+        ))}
+      </div>
+    </>
+  )
+}
+
+/** 사진 아래쪽을 어둡게 깔고 그 위에 제목 · 하트 (크게 보이는 칸은 작성자도) */
+function GalleryCaption({ post, large = false }) {
+  return (
+    <span className={`${styles.caption} ${large ? styles.captionLarge : ''}`}>
+      <span className={styles.captionText}>
+        <span className={styles.captionTitle}>{post.title}</span>
+        {large && <span className={styles.captionAuthor}>{post.author.display_name}</span>}
+      </span>
+      <span className={styles.captionLikes}>
+        <Heart size={13} fill="currentColor" aria-hidden />
+        <span className={styles.srOnly}>좋아요</span> {post.like_count}
+      </span>
+    </span>
   )
 }
