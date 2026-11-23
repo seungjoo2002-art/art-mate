@@ -377,7 +377,7 @@ async def test_report_dedupe_stale_regenerate_and_ai_narrative(  # type: ignore[
     ).json()
     assert ready["ai_narrative"]["status"] == "READY"
     assert ready["ai_narrative"]["model_name"] == "gemini-3.1-flash-lite"
-    assert ready["ai_narrative"]["prompt_version"] == "growth-narrative-v1"
+    assert ready["ai_narrative"]["prompt_version"] == "growth-narrative-v2"
     goal = ready["ai_narrative"]["content"]["next_goals"][0]
     assert goal["evidence"][0]["kind"] in ("WEAKNESS", "FIX")
     # 외부 전송 최소화: 작품 제목·사용자 ID 미포함

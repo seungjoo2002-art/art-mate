@@ -107,6 +107,9 @@ async def app(migrated_database: str, tokens: TokenFactory):  # type: ignore[no-
             stt_enabled=True,
             ai_summary_enabled=True,
             growth_ai_enabled=True,
+            # v1.2 STT 문맥 보정은 기존 테스트의 호출 수·토큰 검증과 섞이지 않게 끄고,
+            # 보정 테스트(test_v12_feedback_archive.py)에서 Worker 설정으로 켠다
+            stt_context_correction_enabled=False,
         )
     )
     application.state.token_verifier = make_verifier(tokens)

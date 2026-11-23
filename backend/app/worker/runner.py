@@ -81,6 +81,7 @@ from app.models.profile import Profile
 from app.models.recording import FeedbackRecording, RecordingConsent
 from app.schemas.growth import Evidence
 from app.services import ai_consent_policy as consent_policy
+from app.services import stt_correction
 from app.services.ai_feedback import review_mode_for
 from app.services.ai_redaction import redact_segments
 from app.services.ai_summary import (
@@ -135,6 +136,15 @@ class _Usage:
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+
+
+@dataclass
+class _Correction:
+    """v1.2 STT 문맥 보정 결과 (원문 구간 사본 + 바뀐 구간 번호)."""
+
+    segments: list[dict[str, Any]]
+    changed: list[int]
+    model_name: str
 
 
 class JobRunner:
@@ -710,8 +720,24 @@ class JobRunner:
                 raise JobFailure("AI_NOT_CONFIGURED", "AI summary is not enabled", retryable=False)
             segment_count = transcript.segment_count
             transcript_pk = transcript.id
+            original_segments = [dict(s) for s in transcript.segments]
+            # v1.2 문맥 보정 대상: 기계 전사(서버·기기)만.
+            # 사람이 고친 전사·이미 보정한 전사는 그대로
+            correctable = (
+                settings.stt_context_correction_enabled
+                and transcript.edited_by is None
+                and transcript.engine != stt_correction.ENGINE
+            )
             # v0.9.6 개인정보 최소화: 보낼 사본에서 학생 이름·연락처 형식을 가림 (원문은 그대로)
             segments = await self._redacted(session, job.owner_id, list(transcript.segments))
+
+        correction = (
+            await self._correct_transcript(job_id, original_segments, segments)
+            if correctable
+            else None
+        )
+        if correction is not None:
+            segments = stt_correction.apply_texts(segments, correction.segments, correction.changed)
 
         # 외부 전송: 구간 번호·시각·문장만 (이름·학원·작품 정보·ID 미포함)
         usage = _Usage()
@@ -745,6 +771,11 @@ class JobRunner:
             _, artwork = await self._load_recording(session, job)
             # 호출 중 동의를 철회했으면 결과를 저장하지 않는다
             await self._check_ai_consent(session, job.owner_id)
+            if correction is not None:
+                # 보정 전사는 요약과 같은 트랜잭션에 저장 (요약이 실패·취소되면 함께 버려짐)
+                transcript_pk = await self._store_correction(
+                    session, job, transcript_pk, correction
+                )
             await self._store_summary(
                 session,
                 job,
@@ -758,6 +789,87 @@ class JobRunner:
                 prompt_version=PROMPT_VERSION,
             )
             await session.commit()
+
+    # ------------------------------------------------------------------ v1.2 STT 문맥 보정
+
+    async def _correct_transcript(
+        self,
+        job_id: uuid.UUID,
+        original: list[dict[str, Any]],
+        redacted: list[dict[str, Any]],
+    ) -> _Correction | None:
+        """LLM으로 오인식만 고친 구간. 바뀐 것이 없거나 실패하면 None (요약은 원문으로 계속).
+
+        보정은 부가 기능이라 오류를 작업 실패로 올리지 않는다. 호출 수·토큰은 작업에 누적한다.
+        """
+        if self.llm is None:
+            return None
+        usage = _Usage()
+        try:
+            response = await self.llm.generate(
+                system=stt_correction.SYSTEM_INSTRUCTION,
+                prompt=stt_correction.build_prompt(redacted),
+                schema=stt_correction.RESPONSE_SCHEMA,
+            )
+            usage.calls += 1
+            usage.input_tokens += response.input_tokens
+            usage.output_tokens += response.output_tokens
+        except LlmError as exc:
+            if exc.called:
+                usage.calls += 1
+                usage.input_tokens += exc.input_tokens
+                usage.output_tokens += exc.output_tokens
+            await self._record_usage(job_id, usage)
+            logger.warning("stt correction skipped", extra={"code": exc.code})
+            return None
+        await self._record_usage(job_id, usage)
+        # 가림 표시가 들어간 구간은 보정하지 않는다 (가린 사본을 원문 자리에 저장하지 않기 위해)
+        redacted_by_index = {s["index"]: s["text"] for s in redacted}
+        locked = {s["index"] for s in original if redacted_by_index.get(s["index"]) != s["text"]}
+        try:
+            result = stt_correction.parse_corrections(response.text, original, locked=locked)
+        except stt_correction.InvalidCorrectionOutput:
+            logger.warning("stt correction skipped", extra={"code": "LLM_INVALID_OUTPUT"})
+            return None
+        logger.info(
+            "stt correction checked",
+            extra={"changed": len(result.changed), "rejected": result.rejected},
+        )
+        if not result.changed:
+            return None
+        return _Correction(result.segments, result.changed, response.model_name)
+
+    async def _store_correction(
+        self,
+        session: AsyncSession,
+        job: AiProcessingJob,
+        base_id: uuid.UUID,
+        correction: _Correction,
+    ) -> uuid.UUID:
+        """보정 전사를 새 행으로 저장 (원본 행은 그대로, edited_from_id로 연결). 새 행 ID."""
+        base = await session.get(FeedbackTranscript, base_id)
+        if base is None:
+            raise JobFailure("TRANSCRIPT_NOT_FOUND", "Transcript is missing", retryable=False)
+        corrected = FeedbackTranscript(
+            id=uuid.uuid4(),
+            recording_id=base.recording_id,
+            artwork_id=base.artwork_id,
+            owner_id=base.owner_id,
+            job_id=job.id,
+            language=base.language,
+            duration_ms=base.duration_ms,
+            text=" ".join(s["text"] for s in correction.segments),
+            segments=correction.segments,
+            segment_count=len(correction.segments),
+            engine=stt_correction.ENGINE,
+            model_name=correction.model_name[:200],
+            processing_ms=None,
+            edited_from_id=base.id,
+            edited_by=None,
+        )
+        session.add(corrected)
+        await session.flush()
+        return corrected.id
 
     async def _store_summary(
         self,

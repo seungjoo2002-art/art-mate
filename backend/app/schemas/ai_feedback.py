@@ -164,10 +164,10 @@ class TranscriptMeta(BaseModel):
     segment_count: int
     engine: str
     model_name: str
-    origin: Literal["SERVER", "BROWSER", "EDITED"] = Field(
+    origin: Literal["SERVER", "BROWSER", "EDITED", "AI_CORRECTED"] = Field(
         default="SERVER",
         description="v0.9.2: SERVER(서버·GitHub Actions faster-whisper) / BROWSER(학생 기기에서 "
-        "전사) / EDITED(학생이 수정한 버전)",
+        "전사) / EDITED(학생이 수정한 버전) / AI_CORRECTED(v1.2 AI 문맥 보정본, 원본은 보존)",
     )
     created_at: dt.datetime
 
@@ -192,6 +192,38 @@ class TranscriptRead(TranscriptMeta):
     segments: list[Segment]
     edited: bool = Field(default=False, description="사람이 수정한 버전 (v0.9)")
     edited_from_id: uuid.UUID | None = Field(default=None, description="수정 전 전사 (보존됨)")
+    # v1.2 STT 원문·AI 문맥 보정 비교
+    stt_original: "SttOriginal | None" = Field(
+        default=None,
+        description="v1.2 최초 기계 전사(STT 원문). 현재 전사가 원문 그대로면 null",
+    )
+    ai_correction: "AiCorrectionInfo | None" = Field(
+        default=None, description="v1.2 AI 문맥 보정이 적용된 경우 그 정보 (없으면 null)"
+    )
+
+
+class SttOriginal(BaseModel):
+    transcript_id: uuid.UUID
+    engine: str
+    text: str
+    segments: list[Segment]
+    differs_from_current: list[int] = Field(
+        description="현재 전사와 문장이 다른 구간 번호 (AI 보정 + 학생 수정 모두)"
+    )
+
+
+class AiCorrectionInfo(BaseModel):
+    transcript_id: uuid.UUID = Field(description="AI 보정 전사 행")
+    model_name: str
+    changed_segments: list[int] = Field(description="AI가 바꾼 구간 번호")
+    created_at: dt.datetime
+    notice: str = Field(
+        default="AI가 문장 앞뒤 문맥과 미술 용어로 오인식만 고친 결과예요. 녹음을 다시 듣고 "
+        "확인한 것은 아니에요. 원문과 다르면 직접 고쳐 주세요."
+    )
+
+
+TranscriptRead.model_rebuild()
 
 
 SegmentText = Annotated[

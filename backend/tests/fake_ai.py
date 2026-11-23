@@ -14,6 +14,7 @@ from urllib.parse import unquote, urlsplit
 from app.integrations.ai.gemini import LlmError, LlmResponse
 from app.integrations.ai.stt import SttError, TranscriptionResult, TranscriptSegment
 from app.integrations.supabase.storage import StorageObjectNotFound
+from app.services import stt_correction
 from tests.fake_storage import FakeStorage
 
 SEGMENTS = [
@@ -92,10 +93,21 @@ class FakeLlm:
     # 순서대로: str(응답 JSON) 또는 LlmError. 비면 기본 응답
     outcomes: deque[Any] = field(default_factory=deque)
     prompts: list[str] = field(default_factory=list)
+    # v1.2 STT 문맥 보정 호출은 별도 큐 (요약 응답 순서를 흐트러뜨리지 않게). 비면 "고칠 것 없음"
+    correction_outcomes: deque[Any] = field(default_factory=deque)
+    correction_prompts: list[str] = field(default_factory=list)
 
     async def generate(self, *, system: str, prompt: str, schema: dict[str, Any]) -> LlmResponse:
-        self.prompts.append(prompt)
-        outcome = self.outcomes.popleft() if self.outcomes else ai_json()
+        if system == stt_correction.SYSTEM_INSTRUCTION:
+            self.correction_prompts.append(prompt)
+            outcome = (
+                self.correction_outcomes.popleft()
+                if self.correction_outcomes
+                else json.dumps({"corrections": []})
+            )
+        else:
+            self.prompts.append(prompt)
+            outcome = self.outcomes.popleft() if self.outcomes else ai_json()
         if isinstance(outcome, LlmError):
             raise outcome
         return LlmResponse(
