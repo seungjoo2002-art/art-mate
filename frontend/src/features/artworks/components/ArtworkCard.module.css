@@ -1,16 +1,43 @@
-/* 폴라로이드 작품 카드: 미색 종이 · 얇은 그림자 · 사진 중심. 둥근 큰 카드·두꺼운 테두리 없음 */
+/* 집게로 꽂은 폴라로이드: 미색 종이 + 아주 옅은 종이결 · 얇은 그림자 · 사진 중심.
+   예전 스케치북 카드보다 기울기·그림자를 줄였다. 굵은 테두리·큰 둥근 모서리 없음 */
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 8px 8px 10px;
-  border-radius: 3px;
-  background: #fffdf7; /* 따뜻한 미색 (아카이브 스케치북 종이와 같은 색) */
+  padding: 14px 8px 10px;
+  border-radius: 2px;
+  background-color: #fffdf7;
+  background-image:
+    radial-gradient(rgba(160, 130, 90, 0.06) 1px, transparent 1.2px),
+    radial-gradient(rgba(160, 130, 90, 0.05) 1px, transparent 1.2px);
+  background-size:
+    5px 5px,
+    7px 7px;
+  background-position:
+    0 0,
+    2px 3px;
   box-shadow:
     0 1px 2px rgba(60, 40, 20, 0.1),
-    0 4px 12px rgba(60, 40, 20, 0.06);
+    0 4px 10px rgba(60, 40, 20, 0.07);
   color: var(--color-text);
   transition: transform 0.1s;
+}
+
+/* 주황 집게: 종이 위쪽에 꽂힌 철사 */
+.clip {
+  position: absolute;
+  top: -12px;
+  left: 14px;
+  z-index: 2;
+  width: 14px;
+  height: 36px;
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  rotate: -8deg;
+  filter: drop-shadow(0 1px 1px rgba(60, 40, 20, 0.2));
 }
 
 .card:active {

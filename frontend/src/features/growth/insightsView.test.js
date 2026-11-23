@@ -124,14 +124,14 @@ describe('홈 브리핑 짧은 요약', () => {
     expect(short.text).toBe('최근 작품 3개의 첨삭에서 타원·원통형 형태 이야기가 이어졌어요.')
     expect(short.highlight).toBe('명암은 지난번보다 좋아졌다는 첨삭이 있었어요.')
     expect(short.practice.content).toBe(briefingReady.practice.content) // 원문 그대로
-    expect(short.notes).toEqual([])
+    expect(short).not.toHaveProperty('notes')
   })
 
   it('연습 항목이 없으면 연습을 만들지 않음', () => {
     expect(briefingSummary({ ...briefingReady, practice: null }).practice).toBeNull()
   })
 
-  it('데이터 부족·확인할 첨삭은 한 줄 보조 안내', () => {
+  it('데이터 부족·확인할 첨삭이 있어도 카드에 상태 안내 줄을 붙이지 않음', () => {
     const short = briefingSummary({
       ...briefingReady,
       status: 'INSUFFICIENT_DATA',
@@ -140,10 +140,8 @@ describe('홈 브리핑 짧은 요약', () => {
     })
     expect(short.title).toBe('오늘은 형태·비례를 조금 더 신경 써 볼까요? 🎨')
     expect(short.text).toBe('최근 첨삭에서 형태·비례 이야기가 있었어요.')
-    expect(short.notes).toEqual([
-      '작품이 조금 더 쌓이면 변화도 함께 살펴볼게요.',
-      '확인할 첨삭이 1개 있어요.',
-    ])
+    expect(short).not.toHaveProperty('notes')
+    expect(JSON.stringify(short)).not.toMatch(/변화도 함께|확인할 첨삭/)
   })
 
   it('지적 없이 칭찬만 있으면 칭찬 문장', () => {

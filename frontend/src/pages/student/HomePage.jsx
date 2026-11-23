@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { ChevronRight, PenLine, Timer } from 'lucide-react'
+import { ChevronRight, ClipboardPen, Clock, Palette, PenLine, Timer } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../app/providers/AuthContext'
 import Highlight from '../../components/decor/Highlight'
@@ -86,7 +86,6 @@ function QuickStart() {
 }
 
 /** 학습 현황: 물감 점 타일 세 개 */
-const STAT_PAINTS = ['var(--color-primary)', '#7c6ee6', '#3fa7d6']
 
 function Stats({ analysis }) {
   const minutes = analysis.time_stats?.total_minutes ?? 0
@@ -96,9 +95,9 @@ function Stats({ analysis }) {
     <section className={styles.section}>
       <SectionHeader title="학습 현황" to="/archive" action="아카이브 보기" />
       <div className={styles.stats}>
-        <Stat label="작품" value={analysis.totals.artwork_count} unit="점" paint={STAT_PAINTS[0]} />
-        <Stat label="시험 기록" value={mockExamCount(analysis)} unit="회" paint={STAT_PAINTS[1]} />
-        <Stat label="기록 시간" value={time[0]} unit={time[1]} paint={STAT_PAINTS[2]} />
+        <Stat label="작품" value={analysis.totals.artwork_count} unit="점" icon={Palette} />
+        <Stat label="시험 기록" value={mockExamCount(analysis)} unit="회" icon={ClipboardPen} />
+        <Stat label="기록 시간" value={time[0]} unit={time[1]} icon={Clock} />
       </div>
     </section>
   )
@@ -114,7 +113,7 @@ function TodayPractice({ analysis, recommendations }) {
     : '첫 작품 기록'
 
   return (
-    <section className={tabStyles.card} style={{ '--tab': tabColor(3) }}>
+    <section className={tabStyles.card} style={{ '--tab': tabColor(1) }}>
       <h2 className={tabStyles.tab}>오늘의 추천 연습</h2>
       {chip && <small className={tabStyles.cardMeta}>{chip}</small>}
       <span className={styles.practiceLabel}>{card.label}</span>
@@ -156,10 +155,11 @@ function SectionHeader({ title, to, action, paws = false }) {
   )
 }
 
-function Stat({ label, value, unit, paint }) {
+/** 학습 현황 타일: 항목 아이콘(주황) · 숫자 · 단위 · 이름 */
+function Stat({ label, value, unit, icon: Icon }) {
   return (
-    <div className={styles.stat} style={{ '--paint': paint }}>
-      <i className={styles.paint} aria-hidden />
+    <div className={styles.stat}>
+      <Icon className={styles.statIcon} size={18} strokeWidth={2} aria-hidden />
       <span>
         <strong className={styles.statValue}>{value}</strong>
         <span className={styles.unit}>{unit}</span>

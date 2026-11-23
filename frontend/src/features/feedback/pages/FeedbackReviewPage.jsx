@@ -223,14 +223,15 @@ export default function FeedbackReviewPage() {
               </div>
             </section>
 
-            <section className={styles.section}>
+            {/* 메모지: 잘한 점(아이보리) · 개선할 점(연한 주황) */}
+            <section className={`${styles.section} ${styles.memo} ${styles.memoGood}`}>
               <h2 className={styles.label}>
                 <Check size={16} strokeWidth={2.4} aria-hidden /> 잘한 점
               </h2>
               {renderItems(feedback.strengths)}
             </section>
 
-            <section className={styles.section}>
+            <section className={`${styles.section} ${styles.memo} ${styles.memoFix}`}>
               <h2 className={styles.label}>
                 <PencilLine size={16} strokeWidth={2.2} aria-hidden /> 개선할 점
               </h2>
@@ -239,16 +240,16 @@ export default function FeedbackReviewPage() {
               ) : (
                 <>
                   {feedback.weaknesses.length > 0 && (
-                    <>
+                    <div className={styles.subBlock}>
                       <h3 className={styles.subLabel}>{kindLabel('WEAKNESS', '부족한 점')}</h3>
                       {renderItems(feedback.weaknesses)}
-                    </>
+                    </div>
                   )}
                   {feedback.fixes.length > 0 && (
-                    <>
+                    <div className={`${styles.subBlock} ${styles.subBlockFix}`}>
                       <h3 className={styles.subLabel}>이렇게 수정해 보세요</h3>
                       {renderItems(feedback.fixes)}
-                    </>
+                    </div>
                   )}
                 </>
               )}

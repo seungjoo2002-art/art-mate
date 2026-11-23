@@ -17,8 +17,9 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5) var(--space-4);
-  padding-top: var(--space-1);
+  /* 집게가 종이 위로 나와서 위·행 사이 여백 */
+  gap: var(--space-6) var(--space-4);
+  padding-top: var(--space-3);
 }
 
 .empty {
