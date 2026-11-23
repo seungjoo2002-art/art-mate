@@ -89,12 +89,15 @@ export function reportIntro(report) {
   }
   if (status === 'INSUFFICIENT_DATA') {
     return {
-      title: '첨삭이 조금 더 쌓이면 분석할 수 있어요',
-      text: report.message,
+      title: '기록이 차곡차곡 쌓이는 중이에요',
+      text: '작품이 조금 더 쌓이면 변화도 함께 살펴볼게요.',
     }
   }
   if (status === 'NEEDS_CONFIRMATION') {
-    return { title: '확정을 기다리는 첨삭이 있어요', text: report.message }
+    return {
+      title: `확인할 첨삭이 ${counts.pending_review_count}개 있어요`,
+      text: '정리된 첨삭을 확인하고 확정하면 여기에 담겨요.',
+    }
   }
   return {
     title: counts.artwork_count ? '첨삭을 기록해 보세요' : '작품 하나부터 차근차근 시작해 보세요!',
@@ -129,3 +132,98 @@ export const trendSteps = (tag) =>
     polarity: e.polarity,
     label: POLARITY_LABELS[e.polarity] ?? e.polarity,
   }))
+
+// ------------------------------------------------------------------ 홈 브리핑 요약 (v1.2 UI)
+// 서버의 구조화 필드(focus·highlight·practice·counts)로 짧고 친근한 문장을 만든다.
+// - 영역 이름은 서버가 준 라벨(예: 형태·비례, 타원·원통형 형태)만 쓴다
+// - '오늘의 연습'은 실제 첨삭 항목 문장을 그대로 인용한다. 없으면 만들지 않는다
+// - 서버 headline·lines·AI 코멘트 원문은 '자세히 보기'에 그대로 둔다 (자르지 않음)
+
+/** 받침 유무로 조사 고르기 (한글이 아니면 받침 없음으로 봄) */
+export function josa(word, withBatchim, withoutBatchim) {
+  const last = word.trim().at(-1) ?? ''
+  const code = last.charCodeAt(0) - 0xac00
+  const hasBatchim = code >= 0 && code <= 11171 && code % 28 !== 0
+  return `${word}${hasBatchim ? withBatchim : withoutBatchim}`
+}
+
+const isGeneric = (focus) => focus?.tag === 'OTHER' && !focus.theme_label
+
+function focusLines(focus) {
+  const subject = focus.theme_label || focus.label
+  if (isGeneric(focus)) {
+    return {
+      title: '오늘은 최근 첨삭을 다시 살펴볼까요? 🎨',
+      text: '최근 첨삭에서 다듬어 보라는 이야기가 있었어요.',
+    }
+  }
+  return {
+    title: `오늘은 ${josa(subject, '을', '를')} 조금 더 신경 써 볼까요? 🎨`,
+    text:
+      focus.reason === 'REPEATED'
+        ? `최근 작품 ${focus.artwork_count}개의 첨삭에서 ${subject} 이야기가 이어졌어요.`
+        : `최근 첨삭에서 ${subject} 이야기가 있었어요.`,
+  }
+}
+
+function highlightText(highlight) {
+  const label = josa(highlight.label, '은', '는')
+  if (highlight.kind === 'IMPROVING') return `${label} 지난번보다 좋아졌다는 첨삭이 있었어요.`
+  if (highlight.kind === 'STRENGTH') {
+    return `${label} 작품 ${highlight.artwork_count}개에서 칭찬을 받았어요.`
+  }
+  return `최근 첨삭에서 ${highlight.label} 칭찬이 있었어요.`
+}
+
+const SHORT_BY_STATUS = {
+  NO_RECORDS: {
+    title: '첫 작품을 기록해 볼까요? 🎨',
+    text: '작품과 선생님 첨삭을 남기면 오늘 연습할 거리를 함께 골라 드릴게요.',
+  },
+  NO_FEEDBACK: {
+    title: '선생님 첨삭을 남겨 볼까요?',
+    text: '첨삭을 기록하고 확정하면 오늘의 브리핑이 시작돼요.',
+  },
+  PROCESSING: {
+    title: '첨삭을 정리하고 있어요',
+    text: '조금만 기다려 주세요. 정리가 끝나면 여기에 알려 드릴게요.',
+  },
+}
+
+/**
+ * 홈 브리핑 카드에 보여 줄 짧은 요약
+ * 반환: { title, text, practice(첨삭 항목 Evidence|null), notes: [보조 안내], highlight: 문장|null }
+ */
+export function briefingSummary(briefing) {
+  const { status, counts, focus, highlight, practice } = briefing
+  const pending = counts.pending_review_count
+  const notes = []
+  if (status === 'NEEDS_CONFIRMATION') {
+    return {
+      title: `확인할 첨삭이 ${pending}개 있어요`,
+      text: '내용을 확인하고 확정하면 오늘의 브리핑에 바로 반영돼요.',
+      practice: null,
+      highlight: null,
+      notes,
+    }
+  }
+  if (SHORT_BY_STATUS[status]) {
+    return { ...SHORT_BY_STATUS[status], practice: null, highlight: null, notes }
+  }
+
+  // READY · INSUFFICIENT_DATA
+  let title
+  let text = null
+  if (focus) {
+    ;({ title, text } = focusLines(focus))
+  } else if (highlight) {
+    title = '최근 첨삭에 반가운 이야기가 있었어요 🎨'
+    text = highlightText(highlight)
+  } else {
+    title = briefing.headline // 서버 문장 그대로 (드문 경우)
+  }
+  const praise = highlight && focus ? highlightText(highlight) : null
+  if (status === 'INSUFFICIENT_DATA') notes.push('작품이 조금 더 쌓이면 변화도 함께 살펴볼게요.')
+  if (pending) notes.push(`확인할 첨삭이 ${pending}개 있어요.`)
+  return { title, text, practice: practice ?? null, highlight: praise, notes }
+}

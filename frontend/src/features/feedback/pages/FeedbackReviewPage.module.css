@@ -202,3 +202,89 @@
   color: var(--color-primary-text);
   text-decoration: underline;
 }
+
+/* ---------------------------------------------------------------- v1.2 UI: 정보 구분 정리
+   카드 중첩 대신 제목 크기·굵기·여백·얇은 구분선으로 구분. 강한 초록·빨강 카드 없이 주황 포인트만 */
+.section + .section {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-md);
+  color: var(--color-text);
+}
+
+.label svg {
+  color: var(--color-primary);
+}
+
+.subLabel {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-primary-ink);
+}
+
+.summary {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: 1.55;
+}
+
+/* 항목: 테두리 상자 대신 얇은 줄로 나눈 목록 */
+.items {
+  gap: 0;
+}
+
+.item {
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.item + .item {
+  border-top: 1px dashed var(--color-border);
+}
+
+.item > p:first-child {
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+/* 근거 원문: 접어 두기 */
+.evidence {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-primary-soft);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.evidence summary {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-sub);
+}
+
+.evidence p {
+  margin-top: var(--space-1);
+  line-height: 1.6;
+}
+
+.statusDone {
+  color: var(--color-primary-ink);
+}
+
+.done {
+  border: 0;
+  background: var(--color-primary-soft);
+}
+
+.done strong {
+  color: var(--color-primary-ink);
+}

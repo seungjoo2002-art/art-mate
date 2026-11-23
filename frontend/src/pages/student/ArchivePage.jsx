@@ -3,12 +3,20 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import MascotCheer from '../../components/mascot/MascotCheer'
 import { Button, Card, PageIntro, SegmentedTabs } from '../../components/ui'
 import { listArtworks } from '../../features/artworks/api'
+import {
+  ARCHIVE_EMPTY,
+  ARCHIVE_KINDS,
+  archiveItems,
+  archiveKind,
+  archiveQuery,
+} from '../../features/artworks/archiveView'
+import ArtworkCard from '../../features/artworks/components/ArtworkCard'
 import PaintChips from '../../features/artworks/components/PaintChips'
-import SketchPageCard from '../../features/artworks/components/SketchPageCard'
 import MyPostsFeed from '../../features/community/components/MyPostsFeed'
 import AnalysisReport from '../../features/growth/components/AnalysisReport'
 import { useAsync } from '../../hooks/useAsync'
 import { useOptions } from '../../hooks/useOptions'
+import { labelOf } from '../../lib/options'
 import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './ArchivePage.module.css'
 
@@ -18,7 +26,7 @@ const TABS = [
   { key: 'report', label: '분석 리포트' },
 ]
 
-// 선택한 탭·실기 유형은 주소(?tab=&type=)에 남겨서 뒤로가기·새로고침해도 유지
+// 선택한 탭·작품 분류는 주소(?tab=&kind=)에 남겨서 뒤로가기·새로고침해도 유지
 export default function ArchivePage() {
   const [params, setParams] = useSearchParams()
   const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'artworks'
@@ -35,8 +43,8 @@ export default function ArchivePage() {
       />
       {tab === 'artworks' && (
         <ArtworkArchive
-          practicalType={params.get('type') ?? ''}
-          onTypeChange={(type) => setParams(type ? { type } : {}, { replace: true })}
+          kind={archiveKind(params.get('kind'))}
+          onKindChange={(kind) => setParams(kind ? { kind } : {}, { replace: true })}
         />
       )}
       {tab === 'feed' && <MyPostsFeed />}
@@ -45,48 +53,63 @@ export default function ArchivePage() {
   )
 }
 
-/** 내 작품: 실기 유형 칩으로 거르기 (디자인의 "실기 유형 관리"는 백엔드가 없어 제외) */
-function ArtworkArchive({ practicalType, onTypeChange }) {
+/**
+ * 내 작품: 실기시험 · 실기 모의고사 · 내 작품 기록으로 거르기 (서버의 work_category 기준).
+ * 실기 유형(기초디자인 등)은 분류가 아니라 카드의 작은 태그로 보여 준다.
+ */
+function ArtworkArchive({ kind, onKindChange }) {
   const navigate = useNavigate()
   const options = useOptions()
-  const load = useCallback(() => listArtworks({ practicalType }), [practicalType])
+  const load = useCallback(() => {
+    const query = archiveQuery(kind)
+    return query ? listArtworks(query) : Promise.resolve({ items: [] })
+  }, [kind])
   const { data, error, reload } = useAsync(load)
-  const types = [{ code: '', label: '전체' }, ...(options?.practical_types ?? [])]
+  const items = data ? archiveItems(kind, data.items) : []
+  const [emptyTitle, emptyText] = ARCHIVE_EMPTY[kind]
+  const typeLabel = (code) => (code && options ? labelOf(options.practical_types, code) : null)
 
   return (
     <section className={styles.section}>
       <h2 className={styles.srOnly}>내 작품</h2>
       <PaintChips
-        label="실기 유형"
-        options={types}
-        value={practicalType}
-        onChange={onTypeChange}
+        label="작품 분류"
+        options={ARCHIVE_KINDS}
+        value={kind}
+        onChange={onKindChange}
         wrap={false}
+        colorOf={() => null}
       />
 
       {error ? (
         <Card variant="soft" className={styles.message}>
-          {toErrorMessage(error)}
+          작품을 불러오지 못했어요. {toErrorMessage(error)}
           <Button variant="soft" size="md" onClick={reload}>
             다시 시도
           </Button>
         </Card>
-      ) : !data ? null : data.items.length === 0 ? (
+      ) : !data ? null : items.length === 0 ? (
         <div className={styles.empty}>
-          <MascotCheer
-            pose="curious"
-            sub="실기 메뉴에서 작품을 기록하면 이곳에 자동 정리돼요."
-          >
-            {practicalType ? '이 실기 유형으로 기록한 작품이 없어요' : '아직 기록한 작품이 없어요'}
+          <MascotCheer pose="curious" sub={emptyText}>
+            {emptyTitle}
           </MascotCheer>
-          <Button size="compact" onClick={() => navigate('/artworks/new')}>
-            새 작품 기록
-          </Button>
+          {kind !== 'mock' && (
+            <Button
+              size="compact"
+              onClick={() => navigate(kind === 'exam' ? '/artworks/new?mode=exam' : '/artworks/new')}
+            >
+              {kind === 'exam' ? '실기시험 시작하기' : '새 작품 기록'}
+            </Button>
+          )}
         </div>
       ) : (
         <div className={styles.grid}>
-          {data.items.map((artwork) => (
-            <SketchPageCard key={artwork.id} artwork={artwork} />
+          {items.map((artwork) => (
+            <ArtworkCard
+              key={artwork.id}
+              artwork={artwork}
+              typeLabel={typeLabel(artwork.practical_type)}
+            />
           ))}
         </div>
       )}
