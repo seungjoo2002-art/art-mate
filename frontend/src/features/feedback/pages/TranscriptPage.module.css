@@ -134,3 +134,9 @@
   margin-right: 4px;
   font-weight: var(--weight-bold);
 }
+
+.inlineLink {
+  font-weight: var(--weight-bold);
+  color: var(--color-primary-text);
+  text-decoration: underline;
+}
