@@ -145,12 +145,10 @@
   box-shadow: 0 0 0 1px var(--color-border);
 }
 
-.paint {
-  width: 14px;
-  height: 14px;
+/* 학습 현황 항목 아이콘 (모두 주황) */
+.statIcon {
   margin-bottom: var(--space-2);
-  border-radius: 50% 40% 55% 45%;
-  background: var(--paint);
+  color: var(--color-primary);
 }
 
 .statValue {

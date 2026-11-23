@@ -69,12 +69,6 @@ function BriefingBody({ briefing }) {
           </Link>
         </div>
       )}
-      {short.notes.map((note) => (
-        <p key={note} className={styles.note}>
-          {note}
-        </p>
-      ))}
-      {ai?.pending && <p className={styles.aiNote}>AI 코멘트를 새 첨삭으로 정리하고 있어요.</p>}
       {hasDetails && (
         <details className={styles.details}>
           <summary>자세히 보기</summary>

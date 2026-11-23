@@ -288,3 +288,71 @@
 .done strong {
   color: var(--color-primary-ink);
 }
+
+/* ---------------------------------------------------------------- 메모지 섹션 (잘한 점 · 개선할 점)
+   종이 한 장 느낌: 옅은 그림자 한 겹 + 위쪽 반투명 마스킹 테이프. 굵은 테두리·큰 둥근 모서리 없음 */
+.memo {
+  position: relative;
+  margin-top: var(--space-2);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  border-radius: 3px;
+  box-shadow:
+    0 1px 2px rgba(60, 40, 20, 0.08),
+    0 3px 10px rgba(60, 40, 20, 0.04);
+}
+
+/* 메모지끼리는 구분선 대신 간격 */
+.section + .memo,
+.memo + .section {
+  border-top: 0;
+}
+
+.memo + .memo,
+.section + .memo {
+  margin-top: var(--space-2);
+}
+
+.memo::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 64px;
+  height: 18px;
+  border-radius: 2px;
+  background: rgba(242, 147, 58, 0.28);
+  translate: -50% 0;
+  rotate: -2deg;
+}
+
+.memoGood {
+  background: #fffdf7; /* 따뜻한 아이보리 */
+}
+
+.memoFix {
+  background: #fff4e6; /* 아주 연한 주황 */
+}
+
+.memoFix::before {
+  rotate: 2deg;
+}
+
+.subBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.subBlock + .subBlock {
+  margin-top: var(--space-3);
+}
+
+/* 수정 방법: 왼쪽 주황 선으로 '문제 → 고치는 법' 흐름 */
+.subBlockFix {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-primary);
+}
+
+.memo .item + .item {
+  border-top-color: rgba(173, 82, 9, 0.15);
+}

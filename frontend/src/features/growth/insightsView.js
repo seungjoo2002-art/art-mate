@@ -192,23 +192,22 @@ const SHORT_BY_STATUS = {
 
 /**
  * 홈 브리핑 카드에 보여 줄 짧은 요약
- * 반환: { title, text, practice(첨삭 항목 Evidence|null), notes: [보조 안내], highlight: 문장|null }
+ * 반환: { title, text, practice(첨삭 항목 Evidence|null), highlight: 문장|null }
+ * 카드에는 상태 안내 줄을 따로 붙이지 않는다 (데이터 부족·확인 대기는 '자세히 보기'의 서버 문장에 있음).
+ * 학생이 행동해야 하는 상태(기록 없음·확정 대기 등)는 제목·설명 자체로 안내한다.
  */
 export function briefingSummary(briefing) {
   const { status, counts, focus, highlight, practice } = briefing
-  const pending = counts.pending_review_count
-  const notes = []
   if (status === 'NEEDS_CONFIRMATION') {
     return {
-      title: `확인할 첨삭이 ${pending}개 있어요`,
+      title: `확인할 첨삭이 ${counts.pending_review_count}개 있어요`,
       text: '내용을 확인하고 확정하면 오늘의 브리핑에 바로 반영돼요.',
       practice: null,
       highlight: null,
-      notes,
     }
   }
   if (SHORT_BY_STATUS[status]) {
-    return { ...SHORT_BY_STATUS[status], practice: null, highlight: null, notes }
+    return { ...SHORT_BY_STATUS[status], practice: null, highlight: null }
   }
 
   // READY · INSUFFICIENT_DATA
@@ -223,7 +222,5 @@ export function briefingSummary(briefing) {
     title = briefing.headline // 서버 문장 그대로 (드문 경우)
   }
   const praise = highlight && focus ? highlightText(highlight) : null
-  if (status === 'INSUFFICIENT_DATA') notes.push('작품이 조금 더 쌓이면 변화도 함께 살펴볼게요.')
-  if (pending) notes.push(`확인할 첨삭이 ${pending}개 있어요.`)
-  return { title, text, practice: practice ?? null, highlight: praise, notes }
+  return { title, text, practice: practice ?? null, highlight: praise }
 }
