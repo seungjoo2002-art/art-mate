@@ -170,3 +170,35 @@
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
+
+/* v1.2 확정 전에는 확정 버튼이 항상 보이게 (긴 정리 결과에서도) */
+.actionsSticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: var(--space-3) var(--gutter) calc(var(--space-3) + env(safe-area-inset-bottom));
+  background: var(--color-bg);
+  box-shadow: 0 -6px 16px rgb(0 0 0 / 6%);
+}
+
+.done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  border: 1px solid var(--color-success);
+}
+
+.done strong {
+  color: var(--color-success);
+}
+
+.doneLinks {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary-text);
+  text-decoration: underline;
+}

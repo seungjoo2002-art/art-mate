@@ -1,0 +1,27 @@
+{
+  "id": "88888888-8888-4888-8888-888888888882", "language": "ko", "duration_ms": 16000, "segment_count": 3,
+  "engine": "ai-context-correction", "model_name": "gpt-5-mini", "origin": "AI_CORRECTED",
+  "created_at": "2026-11-23T09:00:00Z", "recording_id": "99999999-9999-4999-8999-999999999999",
+  "text": "전체적으로 구도는 안정적이야. 오른쪽 사과의 명암이 너무 약해. 반사광은 조금만 남겨.",
+  "segments": [
+    {"index": 0, "start_ms": 0, "end_ms": 3500, "text": "전체적으로 구도는 안정적이야."},
+    {"index": 1, "start_ms": 4000, "end_ms": 7500, "text": "오른쪽 사과의 명암이 너무 약해."},
+    {"index": 2, "start_ms": 8000, "end_ms": 11500, "text": "반사광은 조금만 남겨."}
+  ],
+  "edited": true, "edited_from_id": "88888888-8888-4888-8888-888888888881",
+  "stt_original": {
+    "transcript_id": "88888888-8888-4888-8888-888888888881", "engine": "browser-wasm",
+    "text": "전체적으로 구도는 안정적이야. 오른쪽 사과의 명함이 너무 약해. 반사과는 조금만 남겨.",
+    "segments": [
+      {"index": 0, "start_ms": 0, "end_ms": 3500, "text": "전체적으로 구도는 안정적이야."},
+      {"index": 1, "start_ms": 4000, "end_ms": 7500, "text": "오른쪽 사과의 명함이 너무 약해."},
+      {"index": 2, "start_ms": 8000, "end_ms": 11500, "text": "반사과는 조금만 남겨."}
+    ],
+    "differs_from_current": [1, 2]
+  },
+  "ai_correction": {
+    "transcript_id": "88888888-8888-4888-8888-888888888882", "model_name": "gpt-5-mini",
+    "changed_segments": [1, 2], "created_at": "2026-11-23T09:00:00Z",
+    "notice": "AI가 문장 앞뒤 문맥과 미술 용어로 오인식만 고친 결과예요. 녹음을 다시 듣고 확인한 것은 아니에요. 원문과 다르면 직접 고쳐 주세요."
+  }
+}
