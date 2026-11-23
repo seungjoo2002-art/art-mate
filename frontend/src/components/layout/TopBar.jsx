@@ -7,6 +7,7 @@ import styles from './TopBar.module.css'
  * belowHeader: AppHeader 아래에 붙는 경우 (SubLayout)
  * plain: 제목 왼쪽 정렬 + 테두리·배경 없음 (로그인·학습 정보 설정)
  * hideBack: 뒤로가기 숨김
+ * className: 화면별 추가 스타일 (예: 커뮤니티 종이 배경)
  */
 export default function TopBar({
   title,
@@ -15,9 +16,10 @@ export default function TopBar({
   belowHeader = false,
   plain = false,
   hideBack = false,
+  className,
 }) {
   const navigate = useNavigate()
-  const classes = [styles.bar, belowHeader && styles.belowHeader, plain && styles.plain]
+  const classes = [styles.bar, belowHeader && styles.belowHeader, plain && styles.plain, className]
     .filter(Boolean)
     .join(' ')
 

@@ -74,8 +74,9 @@ export default function PostDetailPage() {
   }
 
   return (
-    <>
-      <TopBar title="공개 작품" belowHeader />
+    // 커뮤니티 목록과 같은 리소 인쇄 잡지 지면 (종이색 + 종이결, 먹색 선)
+    <div className={styles.zine}>
+      <TopBar title="커뮤니티" belowHeader className={styles.bar} />
       <main className={styles.body}>
         <div className={styles.head}>
           <span className={styles.category}>{postCategory(post)}</span>
@@ -143,7 +144,7 @@ export default function PostDetailPage() {
 
         <Comments post={post} onChanged={reload} />
       </main>
-    </>
+    </div>
   )
 }
 

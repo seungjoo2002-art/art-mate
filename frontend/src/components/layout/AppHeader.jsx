@@ -14,9 +14,11 @@ export default function AppHeader() {
   const load = useCallback(() => listNotifications({ limit: 1 }), [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
   const { data } = useAsync(load)
   const unread = data?.unread_count ?? 0
+  // 커뮤니티(목록·게시물 상세)는 종이 잡지 화면이라 헤더도 같은 종이로 이어지게
+  const zine = pathname === '/community' || /^\/community\/posts\/[^/]+$/.test(pathname)
 
   return (
-    <header className={styles.header}>
+    <header className={`${styles.header} ${zine ? styles.zine : ''}`}>
       <Link to="/home" className={styles.logo}>
         <span className={styles.mark}>A</span>
         <span className={styles.wordmark}>ART MATE</span>
