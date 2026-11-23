@@ -655,3 +655,90 @@
 .zine .footnote {
   color: var(--zine-sub);
 }
+
+/* 글 본문 링크 (좋아요는 링크 밖이라 눌러도 게시물로 안 넘어감) */
+.postLink {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* 갤러리 사진 링크: 칸 전체 */
+.cover {
+  display: block;
+}
+
+/* 갤러리 글씨 띠는 눌러도 아래 사진 링크로, 하트만 눌림 */
+.caption {
+  pointer-events: none;
+}
+
+/* 목록 좋아요 버튼: 하트·숫자 크게 + 손가락으로 누르기 쉽게 터치 영역 넓힘 */
+.likeButton {
+  gap: 4px;
+  margin: -8px;
+  padding: 8px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: inherit;
+  font: inherit;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.likedOn {
+  color: #e5304d;
+}
+
+/* 어두운 사진 띠 위에서는 조금 밝은 빨강 */
+.caption .likedOn {
+  color: #ff5a6e;
+}
+
+/* 두 번 누르기 영역: 가운데 하트를 띄우는 기준, 두 번 눌러도 글자 선택·확대 안 되게 */
+.tapArea {
+  position: relative;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 두 번 누르면 가운데에 하트가 톡 커졌다 사라짐 */
+.heartPop {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  color: #e5304d;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.25));
+  pointer-events: none;
+  animation: heart-pop 0.8s ease-out forwards;
+}
+
+@keyframes heart-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  35% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heartPop {
+    animation-duration: 0.01s;
+  }
+}

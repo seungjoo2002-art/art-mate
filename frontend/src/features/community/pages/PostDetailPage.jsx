@@ -303,6 +303,7 @@ function Comments({ post, onChanged }) {
             role="radio"
             aria-checked={type === 'GENERAL'}
             selected={type === 'GENERAL'}
+            className={styles.typeChip}
             onClick={() => setType('GENERAL')}
           >
             의견
@@ -311,6 +312,7 @@ function Comments({ post, onChanged }) {
             role="radio"
             aria-checked={type === 'FEEDBACK'}
             selected={type === 'FEEDBACK'}
+            className={styles.typeChip}
             onClick={() => setType('FEEDBACK')}
           >
             작품 피드백
@@ -322,6 +324,7 @@ function Comments({ post, onChanged }) {
               <Chip
                 key={o.code}
                 selected={categories.includes(o.code)}
+                className={styles.tagChip}
                 onClick={() => toggleCategory(o.code)}
               >
                 {o.label}
@@ -341,7 +344,13 @@ function Comments({ post, onChanged }) {
             onChange={(e) => setBody(e.target.value)}
             className={styles.input}
           />
-          <Button type="submit" size="md" fullWidth={false} disabled={busy || !body.trim()}>
+          <Button
+            type="submit"
+            size="md"
+            fullWidth={false}
+            disabled={busy || !body.trim()}
+            className={styles.submit}
+          >
             등록
           </Button>
         </div>

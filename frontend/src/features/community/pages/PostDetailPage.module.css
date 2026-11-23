@@ -289,7 +289,7 @@
 }
 
 .zine .liked {
-  color: var(--color-primary-text);
+  color: #e5304d;
 }
 
 /* 그림: 각진 모서리 + 아래 먹색 선 */
@@ -304,11 +304,12 @@
   background: transparent;
 }
 
-/* 작성자의 질문: 목록의 글 상자처럼 먹색 테두리 흰 상자 */
+/* 작성자의 질문: 테두리 없이 옅은 종이 상자 + 왼쪽 먹색 줄 */
 .zine .question {
-  border: 1.5px solid var(--zine-ink);
+  border: none;
+  border-left: 3px solid var(--zine-ink);
   border-radius: 0;
-  background: #fff;
+  background: rgba(0, 0, 0, 0.035);
   box-shadow: none;
 }
 
@@ -329,8 +330,101 @@
 
 .zine .feedbackTag,
 .zine .tag {
-  border: 1px solid var(--zine-ink);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--zine-sub);
+}
+
+/* 댓글 종류(의견 / 작품 피드백): 목록 카테고리처럼 글자 + | 구분선, 고르면 회갈색 형광펜 */
+.zine .chips {
+  gap: 0;
+}
+
+.zine .typeChip {
+  position: relative;
+  isolation: isolate;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: none;
   border-radius: 0;
   background: transparent;
+  color: var(--zine-sub);
+  font-weight: var(--weight-bold);
+}
+
+.zine .typeChip:first-child {
+  padding-left: 0;
+}
+
+.zine .typeChip + .typeChip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 14px;
+  background: #c9c4bd;
+  transform: translateY(-50%);
+}
+
+.zine .typeChip[aria-pressed='true'] {
   color: var(--zine-ink);
+}
+
+.zine .typeChip[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: 7px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--zine-rule);
+}
+
+.zine .typeChip:first-child[aria-pressed='true']::before {
+  left: 0;
+}
+
+/* 피드백 약점 분류: 테두리 없는 작은 알약, 고르면 회갈색 */
+.zine .tagChip {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--zine-sub);
+  font-size: var(--text-xs);
+}
+
+.zine .tagChip[aria-pressed='true'] {
+  background: var(--zine-rule);
+  color: var(--zine-ink);
+  font-weight: var(--weight-bold);
+}
+
+/* 댓글 입력창: 목록 검색창과 같은 옅은 테두리 */
+.zine .input textarea {
+  border: 1px solid #cfc9bf;
+  border-radius: var(--radius-md);
+  background: #faf9f6;
+  box-shadow: none;
+}
+
+.zine .input textarea:focus {
+  border-color: #a9a196;
+  outline: none;
+}
+
+/* 등록: 먹색 둥근 버튼 */
+.zine .submit {
+  border-radius: var(--radius-md);
+  background: var(--zine-ink);
+  color: #fff;
+}
+
+.zine .submit:disabled {
+  background: var(--zine-rule);
+  color: var(--zine-sub);
 }
