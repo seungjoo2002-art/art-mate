@@ -37,10 +37,9 @@ export default function NotificationSettings() {
 
   return (
     <Card className={styles.card}>
-      <p className={styles.title}>알림 설정</p>
       {ITEMS.map((item) => (
         <div key={item.key} className={styles.row}>
-          <span>{item.label}</span>
+          <span className={styles.label}>{item.label}</span>
           <Toggle
             checked={current[item.key]}
             onChange={(checked) => save({ [item.key]: checked })}
@@ -50,7 +49,7 @@ export default function NotificationSettings() {
       ))}
       {current.task_reminder && (
         <div className={styles.row}>
-          <span>미완료 안내 시점</span>
+          <span className={styles.label}>미완료 안내 시점</span>
           <Select
             aria-label="미완료 안내 시점"
             options={

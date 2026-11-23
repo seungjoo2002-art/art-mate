@@ -46,9 +46,10 @@ export default function DatasetConsentCard() {
   return (
     <Card className={styles.card}>
       <p className={styles.text}>
-        선생님 피드백과 그 피드백의 기준 작품 사진을 이름 없이(가명 처리) AI 미대입시 첨삭
-        연구·학습에 쓰는 데 동의합니다. 선택 사항이며, 동의하지 않아도 모든 기능을 쓸 수 있어요.
-        기준 사진이 확인되지 않은 피드백과 내 메모는 쓰지 않아요.
+        선생님 피드백과 작품 사진을 이름을 가린 채 AI 첨삭 연구·학습에 써요.
+        <span className={styles.fine}>
+          선택 사항이에요. 사진이 확인된 피드백만 쓰고, 내 메모는 쓰지 않아요.
+        </span>
       </p>
       {consent.is_valid ? (
         <div className={styles.row}>
@@ -62,6 +63,7 @@ export default function DatasetConsentCard() {
       ) : (
         <div className={styles.form}>
           <Input
+            className={styles.birth}
             label="태어난 연월 (나이 확인용, 저장하지 않아요)"
             type="month"
             max={thisMonth()}
@@ -71,7 +73,12 @@ export default function DatasetConsentCard() {
           <Checkbox checked={agreed} onChange={setAgreed}>
             위 내용에 동의합니다 (선택)
           </Checkbox>
-          <Button onClick={grant} disabled={!agreed || !birth || busy}>
+          <Button
+            size="md"
+            className={styles.grant}
+            onClick={grant}
+            disabled={!agreed || !birth || busy}
+          >
             {busy ? '저장하는 중…' : '학습 활용 동의하기'}
           </Button>
         </div>

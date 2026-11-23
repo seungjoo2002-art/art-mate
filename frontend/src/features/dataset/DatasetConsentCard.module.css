@@ -1,13 +1,22 @@
 .card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  padding: var(--space-4);
 }
 
 .text {
   font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--color-text-sub);
+}
+
+/* 덧붙임: 한 줄 아래 더 작고 옅게 */
+.fine {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .row {
@@ -37,4 +46,26 @@
 .error {
   font-size: var(--text-sm);
   color: var(--color-danger);
+}
+
+/* 설정 화면용으로 작게: 입력칸 52px → 40px, 버튼 56px → 40px */
+.birth > div {
+  height: 40px;
+  border-radius: var(--radius-md);
+}
+
+.birth input {
+  font-size: var(--text-sm);
+}
+
+.card .grant {
+  height: 40px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+/* 동의 체크 네모: 28px → 22px */
+.form label > span:first-of-type {
+  width: 22px;
+  height: 22px;
 }
