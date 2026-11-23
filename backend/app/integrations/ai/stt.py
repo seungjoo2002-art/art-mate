@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import inspect
 import io
 import logging
 import threading
@@ -18,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from app.core.config import Settings
+from app.services.art_glossary import STT_INITIAL_PROMPT, stt_hotwords
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +114,7 @@ class FasterWhisperSTT:
                 beam_size=self._settings.stt_beam_size,
                 vad_filter=True,  # 무음 구간 제거 → 처리 시간·환각 감소
                 condition_on_previous_text=False,  # 반복 환각 완화
+                **vocabulary_kwargs(model.transcribe, self._settings),
             )
         except Exception as exc:  # 디코딩 실패 (손상 파일 등)
             raise SttError(
@@ -146,6 +149,27 @@ class FasterWhisperSTT:
             engine=self.engine,
             model_name=self.model_name,
         )
+
+
+def vocabulary_kwargs(transcribe: Any, settings: Settings) -> dict[str, Any]:
+    """v1.2 미술 용어 힌트. 설치된 faster-whisper가 받는 인자만 넘긴다 (모르는 옵션은 보내지 않음).
+
+    - hotwords: 매 구간(30초 창) 디코딩에 용어를 힌트로 준다 (faster-whisper ≥ 1.0.2).
+    - initial_prompt: 첫 창의 앞 문맥. 상황 설명 한 문장만 (용어 나열은 무음 구간 환각 위험).
+    단어별 신뢰도는 쓰지 않는다 (요청하지 않으며, 없는 값을 만들지 않는다).
+    """
+    if not settings.stt_vocabulary_hints:
+        return {}
+    try:
+        params = inspect.signature(transcribe).parameters
+    except (TypeError, ValueError):
+        return {}
+    kwargs: dict[str, Any] = {}
+    if "hotwords" in params:
+        kwargs["hotwords"] = stt_hotwords()
+    if "initial_prompt" in params:
+        kwargs["initial_prompt"] = STT_INITIAL_PROMPT
+    return kwargs
 
 
 def build_stt(settings: Settings) -> SpeechToText | None:

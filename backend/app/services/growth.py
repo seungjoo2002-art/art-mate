@@ -150,6 +150,7 @@ from app.services.growth_analytics import (
     analyze,
     fingerprint,
 )
+from app.services.growth_insights import build_insights, summarize_insights
 from app.services.notifications import NotificationService
 from app.services.practice_links import link_artwork, personal_recommendation, unlink_artwork
 from app.services.tasks import TaskService
@@ -333,13 +334,14 @@ class GrowthService:
                 )
             ).all():
                 categories[summary_id].add(category)
-            for item_id, summary_id, kind, category in (
+            for item_id, summary_id, kind, category, content in (
                 await self.session.execute(
                     select(
                         FeedbackItem.id,
                         FeedbackItem.summary_id,
                         FeedbackItem.kind,
                         FeedbackItem.category,
+                        FeedbackItem.content,
                     ).where(FeedbackItem.summary_id.in_(approved_at))
                 )
             ).all():
@@ -353,6 +355,7 @@ class GrowthService:
                         category=category,
                         work_date=work_dates[artwork_id],
                         approved_at=approved,
+                        content=content,
                     )
                 )
         return Dataset(facts, feedbacks, dict(categories), items)
@@ -999,11 +1002,21 @@ class GrowthService:
         return stmt
 
     async def create_report(
-        self, scope: Scope, data: ReportCreate, requester: Profile, *, regenerate: bool = False
+        self,
+        scope: Scope,
+        data: ReportCreate,
+        requester: Profile,
+        *,
+        regenerate: bool = False,
+        notify: bool = True,
     ) -> tuple[ReportRead, bool]:
         start, end = period_range(data.period, data.date_from, data.date_to)
         dataset = await self.load(scope, start, end)
         metrics = self._analyze(dataset)
+        # v1.2 개선 추세·세부 주제 요약 (AI 설명문이 근거 있는 추세만 말하도록 프롬프트에 넣는다)
+        metrics["insights_summary"] = summarize_insights(
+            build_insights(dataset, min_artworks=self.settings.growth_min_artworks)
+        )
         fp = fingerprint(dataset)
         dedupe = _sha(scope.key, data.period.value, start, end, fp, ANALYSIS_VERSION)
         existing = (
@@ -1046,8 +1059,10 @@ class GrowthService:
         await self.session.flush()
         if data.include_ai_narrative:
             await self._request_narrative(report, requester)
-        # v0.9 F-9: 학생에게 새 리포트 알림 (강사가 만들어도 학생에게)
-        await NotificationService(self.session).report_ready(scope.owner_id, report.id)
+        # v0.9 F-9: 학생에게 새 리포트 알림 (강사가 만들어도 학생에게).
+        # v1.2 홈 브리핑의 자동 갱신(notify=False)은 알림을 보내지 않는다
+        if notify:
+            await NotificationService(self.session).report_ready(scope.owner_id, report.id)
         try:
             await self.session.commit()
         except IntegrityError:

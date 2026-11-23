@@ -109,6 +109,8 @@ class ItemFact:
     category: WeaknessCategory | None
     work_date: date
     approved_at: datetime
+    # v1.2 항목 문장 (세부 주제 묶기용, 외부로 보내지 않음)
+    content: str = ""
 
 
 @dataclass

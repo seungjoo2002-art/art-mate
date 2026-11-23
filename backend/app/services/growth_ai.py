@@ -23,7 +23,8 @@ from app.models.enums import (
     WeaknessCategory,
 )
 
-NARRATIVE_PROMPT_VERSION = "growth-narrative-v1"
+# v2 (v1.2): 규칙 기반 개선 추세·세부 주제 블록, 근거 없는 개선 표현 금지
+NARRATIVE_PROMPT_VERSION = "growth-narrative-v2"
 RECOMMEND_PROMPT_VERSION = "practice-recommend-v1"
 RULE_TEMPLATE_VERSION = "practice-template-v1"
 
@@ -278,11 +279,29 @@ def stats_block(metrics: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def insights_block(metrics: dict[str, Any]) -> str:
+    """v1.2 규칙 기반 추세 판정 (growth_insights). 이 목록에 있는 영역만 '좋아지고 있다'고 말할 수 있다."""
+    summary = metrics.get("insights_summary")
+    if not summary or not summary.get("sufficient"):
+        return ""
+    lines = []
+    for t in summary["repeated_mistakes"][:3]:
+        themes = f" (세부 주제: {', '.join(t['themes'])})" if t["themes"] else ""
+        lines.append(f"- 반복 지적 영역: {t['label']}{themes}")
+    improving = ", ".join(t["label"] for t in summary["improving"][:3]) or "없음"
+    lines.append(f"[개선 근거 있음] 지적 뒤 긍정 첨삭이 이어진 영역: {improving}")
+    steady = ", ".join(t["label"] for t in summary["strengths"][:3]) or "없음"
+    lines.append(f"긍정 첨삭이 2개 작품 이상인 영역: {steady}")
+    return "\n".join(lines)
+
+
 # ----------------------------------------------------------------------------- 리포트 설명문
 
 NARRATIVE_SYSTEM = (
     "당신은 미술 입시생의 승인된 첨삭 기록 통계를 학생이 이해하기 쉽게 설명하는 도우미입니다.\n"
     + _COMMON_RULES
+    + "\n7. '좋아지고 있다·개선됐다'는 [개선 근거 있음]에 나온 영역에만 쓸 수 있습니다. "
+    "목록이 '없음'이면 개선을 말하지 마세요."
 )
 
 NARRATIVE_SCHEMA: dict[str, Any] = {
@@ -325,7 +344,8 @@ class NarrativeOutput(BaseModel):
 def build_narrative_prompt(metrics: dict[str, Any], evidence: list[dict[str, Any]]) -> str:
     return (
         "다음은 한 학생의 기간별 첨삭 통계와 근거 문장입니다. 규칙에 따라 JSON으로 설명하세요.\n\n"
-        f"[통계]\n{stats_block(metrics)}\n\n[근거 첨삭 문장]\n{evidence_block(evidence)}"
+        f"[통계]\n{stats_block(metrics)}\n{insights_block(metrics)}\n\n"
+        f"[근거 첨삭 문장]\n{evidence_block(evidence)}"
     )
 
 

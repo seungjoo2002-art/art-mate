@@ -85,6 +85,7 @@ from app.schemas.ai_feedback import (
     AiConsentCreate,
     AiConsentRead,
     AiConsentStatus,
+    AiCorrectionInfo,
     BrowserTranscriptCreate,
     BrowserTranscriptResult,
     Evidence,
@@ -100,6 +101,7 @@ from app.schemas.ai_feedback import (
     ReviewHistoryRead,
     ReviewQueueItem,
     Segment,
+    SttOriginal,
     SummaryStatusRead,
     TranscriptEdit,
     TranscriptionStatusRead,
@@ -110,6 +112,7 @@ from app.schemas.common import PaginationParams
 from app.schemas.image_refs import ImageRefsRead
 from app.schemas.students import student_ref
 from app.services import ai_consent_policy as consent_policy
+from app.services import stt_correction
 from app.services.access import managed_student_ids
 from app.services.ai_cleanup import (
     PURPOSE_JOB_TYPES,
@@ -154,9 +157,13 @@ def job_read(job: AiProcessingJob) -> JobRead:
 BROWSER_ENGINE_PREFIX = "browser-"
 # 기기 시계·디코딩 차이로 녹음 길이보다 조금 긴 타임스탬프 허용
 BROWSER_DURATION_SLACK_MS = 5_000
+# v1.2 전사 수정 이력을 거슬러 올라가는 최대 단계 (원문 비교용)
+MAX_TRANSCRIPT_LINEAGE = 20
 
 
 def transcript_origin(t: FeedbackTranscript) -> str:
+    if t.engine == stt_correction.ENGINE:
+        return "AI_CORRECTED"
     if t.edited_from_id is not None:
         return "EDITED"
     return "BROWSER" if t.engine.startswith(BROWSER_ENGINE_PREFIX) else "SERVER"
@@ -616,6 +623,7 @@ class AiFeedbackService:
             raise ConflictError(
                 "The transcript is not ready yet", code=ErrorCode.TRANSCRIPT_NOT_READY
             )
+        original, correction = await self._transcript_lineage(transcript)
         return TranscriptRead(
             **transcript_meta(transcript),
             recording_id=recording.id,
@@ -623,7 +631,56 @@ class AiFeedbackService:
             segments=[Segment(**s) for s in transcript.segments],
             edited=transcript.edited_from_id is not None,
             edited_from_id=transcript.edited_from_id,
+            stt_original=original,
+            ai_correction=correction,
         )
+
+    async def _transcript_lineage(
+        self, current: FeedbackTranscript
+    ) -> tuple[SttOriginal | None, AiCorrectionInfo | None]:
+        """v1.2 현재 전사의 수정 이력을 거슬러 STT 원문과 AI 보정 정보를 찾는다 (원본 행은 불변)."""
+        if current.edited_from_id is None:
+            return None, None
+        chain = [current]
+        node = current
+        for _ in range(MAX_TRANSCRIPT_LINEAGE):
+            if node.edited_from_id is None:
+                break
+            parent = await self.session.get(FeedbackTranscript, node.edited_from_id)
+            if parent is None:  # 원본이 지워진 경우 (SET NULL 이전 상태) — 비교 생략
+                break
+            chain.append(parent)
+            node = parent
+        root = chain[-1]
+        current_text = {s["index"]: s["text"] for s in current.segments}
+        original = (
+            SttOriginal(
+                transcript_id=root.id,
+                engine=root.engine,
+                text=root.text,
+                segments=[Segment(**s) for s in root.segments],
+                differs_from_current=[
+                    s["index"] for s in root.segments if current_text.get(s["index"]) != s["text"]
+                ],
+            )
+            if root.edited_from_id is None and root.id != current.id
+            else None
+        )
+        correction = None
+        for i, node in enumerate(chain[:-1]):
+            if node.engine != stt_correction.ENGINE:
+                continue
+            parent_text = {s["index"]: s["text"] for s in chain[i + 1].segments}
+            correction = AiCorrectionInfo(
+                transcript_id=node.id,
+                model_name=node.model_name,
+                changed_segments=[
+                    s["index"] for s in node.segments if parent_text.get(s["index"]) != s["text"]
+                ],
+                created_at=node.created_at,
+            )
+            break
+        return original, correction
 
     async def save_browser_transcript(
         self, owner: Profile, recording: FeedbackRecording, data: BrowserTranscriptCreate

@@ -145,6 +145,12 @@ class Settings(BaseSettings):
     stt_source_url_seconds: int = Field(default=86400, ge=600, le=86400)
     # 기기 전사 중 만들어 두는 "백업" 서버 전사 작업의 최대 지연 (요청값 상한)
     stt_max_defer_seconds: int = Field(default=3600, ge=0, le=21600)
+    # v1.2 미술 용어 힌트 (faster-whisper hotwords·initial_prompt, 서버 내부 처리라 추가 비용 없음)
+    stt_vocabulary_hints: bool = True
+    # v1.2 STT 문맥 보정: 녹음 첨삭을 요약하기 전에 같은 LLM으로 오인식만 고친 전사를
+    # 별도 행으로 저장 (원본 보존). 요약과 같은 동의·같은 제공자.
+    # 실패하면 원본 전사로 요약을 계속한다
+    stt_context_correction_enabled: bool = True
 
     # --- Worker 즉시 실행 (GitHub Actions workflow_dispatch) ------------------
     # 작업을 큐에 넣으면 stt-worker 워크플로를 바로 실행 요청한다 (예약 실행 15분 주기는 실제로
@@ -234,6 +240,11 @@ class Settings(BaseSettings):
     growth_recent_window: int = Field(default=5, ge=2, le=50)
     # 한 번에 만드는 추천 과제 수 (약점 카테고리당 1개)
     growth_max_recommendations: int = Field(default=3, ge=1, le=10)
+    # v1.2 홈 브리핑: 데이터가 바뀌어 AI 설명문이 오래됐으면 브리핑 조회 때
+    # 리포트 설명문을 다시 요청
+    # (성장 AI 켜짐 + 동의 있을 때만, 같은 데이터는 dedupe로 1번). 너무 잦은 갱신을 막는 최소 간격
+    growth_briefing_auto_refresh: bool = True
+    growth_briefing_refresh_minutes: int = Field(default=360, ge=10, le=10080)
 
     # --- 참고작·커뮤니티 (v0.8) ---------------------------------------------
     # 공유용 파생 이미지 비공개 버킷 (원본 버킷과 분리). storage-setup.sql 과 같아야 한다

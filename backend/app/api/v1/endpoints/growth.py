@@ -62,7 +62,9 @@ from app.schemas.growth import (
     WeaknessAnalysis,
     WeaknessHistoryItem,
 )
+from app.schemas.insights import AnalysisReport, Briefing
 from app.services.growth import GrowthService, Scope
+from app.services.growth_briefing import GrowthInsightService
 
 me = APIRouter(prefix="/growth/me", tags=["growth"])
 staff = APIRouter(prefix="/academies/{academy_id}/growth", tags=["growth"])
@@ -112,6 +114,36 @@ async def my_summary(
 ) -> GrowthSummary:
     svc = _svc(session, settings)
     return await svc.summary(await _student_scope(svc, owner, scope, academy_id))
+
+
+@me.get(
+    "/briefing",
+    summary="홈 오늘의 브리핑 (v1.2)",
+    description="확정된 강사 첨삭을 근거로 오늘의 연습 방향을 짧게 알려 준다. 조회 때 LLM을 부르지 "
+    "않는다: 문장은 규칙으로 만들고 첨삭 내용은 실제 확정 항목을 인용한다. ai_comment는 저장된 "
+    "성장 리포트 설명문(현재 데이터 기준이면 READY, 아니면 STALE/PENDING). 데이터가 바뀌었고 "
+    "성장 AI·동의가 있으면 설명문 갱신을 한 번 요청한다 "
+    "(최소 간격 GROWTH_BRIEFING_REFRESH_MINUTES).",
+    responses=AUTH_ERRORS,
+)
+async def my_briefing(owner: Student, session: DbSession, settings: AppSettings) -> Briefing:
+    return await GrowthInsightService(_svc(session, settings)).briefing(owner)
+
+
+@me.get(
+    "/analysis-report",
+    summary="아카이브 분석 리포트 (v1.2)",
+    description="기록 수(counts)와 첨삭 근거 분석을 함께 준다: 최근 첨삭 요약, 반복 실수(세부 주제 "
+    "포함), 강점(실제 긍정 첨삭 2개 작품 이상), 개선 추세(지적 뒤 긍정), 여전히 개선 필요, "
+    "다음 연습. "
+    "각 항목에 근거 첨삭(evidence)과 관련 작품. 확정 강사 첨삭 작품이 GROWTH_MIN_ARTWORKS 미만이면 "
+    "INSUFFICIENT_DATA로 추세·강점·반복 실수를 비워 둔다. 조회 때 LLM을 부르지 않는다.",
+    responses=AUTH_ERRORS,
+)
+async def my_analysis_report(
+    owner: Student, session: DbSession, settings: AppSettings
+) -> AnalysisReport:
+    return await GrowthInsightService(_svc(session, settings)).analysis_report(owner)
 
 
 @me.get(
