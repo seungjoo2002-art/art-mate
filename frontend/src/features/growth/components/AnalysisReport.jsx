@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
-import { ChevronRight } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { ChevronRight, Sparkles } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../../../app/providers/AuthContext'
 import MascotCheer from '../../../components/mascot/MascotCheer'
 import { Button, Card } from '../../../components/ui'
 import tabStyles from '../../artworks/SectionTabs.module.css'
@@ -8,38 +9,46 @@ import { tabColor } from '../../artworks/sectionTabs'
 import { useAsync } from '../../../hooks/useAsync'
 import { formatMonthDay } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
-import { getGrowthTimeline, getWeaknesses, listRecommendations } from '../api'
-import { compareRows, lastActivity, mistakeRows, percent } from '../growthView'
-import { TREND_LABELS } from '../labels'
-import { mockExamCount, pickNextPractice, summaryLine } from '../nextPractice'
+import { getAnalysisReport, getWeaknesses } from '../api'
+import { TAG_LABELS } from '../growthView'
+import {
+  aiCommentView,
+  improvingLine,
+  repeatedLine,
+  reportIntro,
+  strengthLine,
+  trendSteps,
+} from '../insightsView'
 import EvidenceList from './EvidenceList'
-import { PeriodFeedbackBars, TagMentionBars } from './GrowthCharts'
-import MentionTrendChart from './MentionTrendChart'
 import Notes from './Notes'
 import PracticeTips from './PracticeTips'
 import styles from './AnalysisReport.module.css'
 
 async function loadReport() {
-  const [analysis, timeline, recommendations] = await Promise.all([
-    getWeaknesses(),
-    getGrowthTimeline(),
-    listRecommendations().catch(() => ({ items: [] })),
+  const [report, analysis] = await Promise.all([
+    getAnalysisReport(),
+    // '연습 과제로 담기'·완료 체크 상태는 기존 분석 API에만 있음 (없어도 리포트는 보여 준다)
+    getWeaknesses().catch(() => null),
   ])
-  return { analysis, timeline: timeline.items, recommendations: recommendations.items }
+  return { report, practiceTips: analysis?.practice_tips ?? null }
 }
 
 /**
- * 아카이브 "분석 리포트" 탭 (VER.2). 확정된 첨삭만 근거로, 규칙 기반 문구 (AI 채점 아님)
- * 성장 리포트(기간별)·맞춤 연습 과제 화면은 아래 링크로
+ * 아카이브 "분석 리포트" 탭 (v1.2, GET /growth/me/analysis-report).
+ * 확정된 강사 첨삭만 근거로 서버가 판정한 결과를 그대로 보여 준다 (조회 때 AI 호출 없음).
+ * 점수·백분율·성장률을 화면에서 만들지 않는다. 숫자는 서버가 준 작품 수·날짜뿐.
  */
 export default function AnalysisReport() {
-  const load = useCallback(() => loadReport(), [])
+  const { profile } = useAuth()
+  // 계정이 바뀌면 다시 불러온다 (이전 사용자 리포트를 보여 주지 않음)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const load = useCallback(() => loadReport(), [profile?.id])
   const { data, error, reload } = useAsync(load)
 
   if (error) {
     return (
       <Card variant="soft" className={styles.message}>
-        {toErrorMessage(error)}
+        분석 리포트를 불러오지 못했어요. {toErrorMessage(error)}
         <Button variant="soft" size="md" onClick={reload}>
           다시 시도
         </Button>
@@ -48,223 +57,111 @@ export default function AnalysisReport() {
   }
   if (!data) return null
 
-  const { analysis, timeline, recommendations } = data
-  const { totals } = analysis
-  const ready = analysis.status === 'READY'
-  const mockExams = mockExamCount(analysis)
-  // v1.0 9개 태그 기준 (이전 응답이면 기존 카테고리)
-  const mistakes = mistakeRows(analysis)
-  const repeated = mistakes.filter((w) => w.repeated)
-  const compared = compareRows(analysis)
-  const cautions = analysis.comparison_context?.cautions ?? []
-  const latest = lastActivity(timeline)
-  const recentImprovements = analysis.weaknesses
-    .flatMap((w) => w.evidence)
-    .sort((a, b) => (b.work_date ?? '').localeCompare(a.work_date ?? ''))
-    .slice(0, 3)
-  const withFeedback = timeline.filter((t) => t.feedbacks?.length)
-  const trend = withFeedback
-    .slice(0, 8)
-    .reverse()
-    .map((t) => ({
-      label: formatMonthDay(t.work_date).replace('월 ', '/').replace('일', ''),
-      title: t.title,
-      positive: t.feedbacks.reduce((n, f) => n + (f.strengths?.length ?? 0), 0),
-      improve: t.feedbacks.reduce((n, f) => n + (f.weaknesses?.length ?? 0), 0),
-    }))
+  const { report, practiceTips } = data
+  const intro = reportIntro(report)
+  const ready = report.status === 'READY'
 
   return (
     <div className={styles.report}>
-      <Cheer totals={totals} ready={ready} required={analysis.required_artwork_count} />
+      <MascotCheer pose="check" size="lg" eyebrow="ART MATE의 응원" sub={intro.text}>
+        {intro.title}
+      </MascotCheer>
 
-      <Section title="학습 기록 요약" color={1}>
-        <div className={styles.stats}>
-          <Stat label="기록된 작품" value={totals.artwork_count} unit="점" paint="var(--color-primary)" />
-          <Stat label="누적 첨삭" value={totals.approved_feedback_count} unit="건" paint="#7c6ee6" />
-          <Stat label="첨삭 연결" value={totals.analyzed_artwork_count} unit="점" paint="#e0607e" />
-          <Stat label="실기시험" value={mockExams} unit="회" paint="#3fa7d6" />
-        </div>
-        {latest && (
-          <Link to={`/artworks/${latest.artworkId}`} className={styles.link}>
-            최근 활동 · {formatMonthDay(latest.workDate)} {latest.title}
-            {latest.feedbackCount ? ` (첨삭 ${latest.feedbackCount}건)` : ''}
-            <ChevronRight size={16} aria-hidden />
-          </Link>
-        )}
+      <Section title="전체 학습 기록" color={1}>
+        <RecordSummary report={report} />
       </Section>
 
-      <Section title="작품별 피드백 변화" color={2}>
-        <div className={styles.body}>
-          {trend.length >= 2 ? (
-            <MentionTrendChart points={trend} />
-          ) : (
-            <div className={styles.empty}>
-              <p className={styles.emptyTitle}>추이 분석을 위한 기록이 부족해요.</p>
-              <p className={styles.muted}>
-                서로 다른 작품에 첨삭을 2건 이상 확정하면 선 그래프로 확인할 수 있습니다.
-              </p>
-            </div>
-          )}
-          <p className={styles.small}>
-            최근 작품의 긍정 언급과 개선 요청 횟수입니다. 강사마다 평가 초점이 다를 수 있으므로 실제
-            실력 점수·향상률이 아닙니다.
-          </p>
-        </div>
+      <Section title="최근 첨삭 요약" color={2}>
+        <RecentFeedbacks items={report.recent_feedbacks} />
       </Section>
 
-      <Section title="핵심 한 줄 요약" color={3}>
-        <div className={styles.body}>
-          <p className={styles.headline}>{summaryLine(analysis)}</p>
-          <p className={styles.muted}>
-            작품과 첨삭의 실제 문장을 근거로 분석하며, 사진만으로 작품 수준을 평가하지 않습니다.
-          </p>
-        </div>
-      </Section>
+      {ready ? (
+        <>
+          <Section title="반복적으로 지적받은 부분" color={3}>
+            <TagList
+              tags={report.repeated_mistakes}
+              empty="아직 2개 이상의 작품에서 반복된 지적은 없어요."
+              render={(t) => (
+                <>
+                  <span className={styles.small}>{repeatedLine(t, formatMonthDay)}</span>
+                  <Themes themes={t.themes} />
+                  <RelatedArtworks artworks={t.related_artworks} />
+                  <EvidenceList evidence={t.issue_evidence} limit={2} withSource />
+                </>
+              )}
+            />
+          </Section>
 
-      <Section title="반복 실수 (9개 항목)" color={4}>
-        <div className={styles.body}>
-          {repeated.length ? (
-            repeated.map((w) => (
-              <div key={w.key} className={styles.row}>
-                <div className={styles.rowHead}>
-                  <span className={styles.rowTitle}>{w.label}</span>
-                  <strong className={styles.ratio}>{percent(w.ratio)}</strong>
-                </div>
-                <span className={styles.meter} aria-hidden>
-                  <span style={{ width: percent(w.ratio) }} />
-                </span>
-                <span className={styles.small}>
-                  작품 {totals.analyzed_artwork_count}개 중 {w.count}개에서 지적
-                </span>
-              </div>
-            ))
-          ) : (
+          <Section title="긍정적인 평가를 받은 부분" color={4}>
+            <TagList
+              tags={report.strengths}
+              empty="2개 이상의 작품에서 긍정 평가를 받은 부분이 아직 없어요. 지적이 없다는 이유로 강점이라고 하지 않아요."
+              render={(t) => (
+                <>
+                  <span className={styles.small}>{strengthLine(t, formatMonthDay)}</span>
+                  <EvidenceList evidence={t.positive_evidence} limit={2} withSource />
+                </>
+              )}
+            />
+          </Section>
+
+          <Section title="개선되고 있는 부분" color={5}>
+            <TagList
+              tags={report.improving}
+              empty="지적을 받은 뒤 긍정 평가로 이어진 부분이 아직 없어요."
+              render={(t) => (
+                <>
+                  <span className={styles.small}>{improvingLine(t, formatMonthDay)}</span>
+                  <TrendSteps tag={t} />
+                  <EvidenceList evidence={t.positive_evidence} limit={2} withSource />
+                </>
+              )}
+            />
+          </Section>
+
+          <Section title="여전히 개선이 필요한 부분" color={6}>
+            <TagList
+              tags={report.needs_work}
+              empty="가장 최근 첨삭에서 다시 지적된 부분은 없어요."
+              render={(t) => (
+                <>
+                  <span className={styles.small}>{repeatedLine(t, formatMonthDay)}</span>
+                  <Themes themes={t.themes} />
+                  <EvidenceList evidence={t.issue_evidence} limit={1} withSource />
+                  {t.practice_evidence.length > 0 && (
+                    <>
+                      <span className={styles.subLabel}>선생님의 수정 지시</span>
+                      <EvidenceList evidence={t.practice_evidence} limit={1} />
+                    </>
+                  )}
+                </>
+              )}
+            />
+          </Section>
+        </>
+      ) : (
+        <Section title="성장 분석" color={3}>
+          <div className={styles.empty}>
+            <p className={styles.emptyTitle}>{report.message ?? '분석할 기록이 아직 없어요.'}</p>
             <p className={styles.muted}>
-              {mistakes.length
-                ? '아직 2개 이상의 작품에서 반복된 개선할 점은 없어요.'
-                : '분류 가능한 세부 첨삭 항목이 아직 없습니다.'}
-            </p>
-          )}
-          {mistakes.length > repeated.length && (
-            <p className={styles.small}>
-              한 작품에서만 지적:{' '}
-              {mistakes
-                .filter((w) => !w.repeated)
-                .map((w) => w.label)
-                .join(', ')}
-            </p>
-          )}
-        </div>
-      </Section>
-
-      <Section title="최근 연습 과제" color={5}>
-        <PracticeTips tips={analysis.practice_tips ?? []} onChanged={reload} />
-      </Section>
-
-      <Section title="과거와 최근 피드백 비교" color={6}>
-        <div className={styles.body}>
-          {compared.length ? (
-            compared.map((w) => (
-              <div key={w.key} className={styles.row}>
-                <span className={styles.rowTitle}>{w.label}</span>
-                <span className={styles.muted}>
-                  이전 {w.previous.analyzed_artwork_count}개 중 {w.previous.artwork_count}개 → 최근{' '}
-                  {w.recent.analyzed_artwork_count}개 중 {w.recent.artwork_count}개 ·{' '}
-                  {TREND_LABELS[w.trend]}
-                </span>
-              </div>
-            ))
-          ) : (
-            <>
-              <p className={styles.cardTitle}>더 많은 작품 기록이 필요합니다</p>
-              <p className={styles.muted}>
-                새로운 작품과 첨삭을 추가하면 과거 기록과 최근 기록을 나누어 비교할 수 있습니다.
-              </p>
-            </>
-          )}
-          {cautions.map((text) => (
-            <p key={text} className={styles.small}>
-              ⚠ {text}
-            </p>
-          ))}
-          {compared.length > 0 && (
-            <p className={styles.small}>
-              덜 언급된 항목이 실력이 늘었다는 뜻은 아니에요. 작품 난이도와 첨삭 분량에 따라 달라질 수
-              있어요.
-            </p>
-          )}
-        </div>
-      </Section>
-
-      {analysis.tags?.length > 0 && (
-        <Section title="항목별 잘한 점·개선할 점" color={7}>
-          <div className={styles.body}>
-            <TagMentionBars analysis={analysis} />
-            <p className={styles.small}>
-              확정한 첨삭에서 각 항목이 언급된 작품 수예요 (작품당 한 번).
+              확정한 강사 첨삭이 있는 작품 {report.counts.analyzed_artwork_count}개 /{' '}
+              {report.criteria.required_artwork_count}개
             </p>
           </div>
         </Section>
       )}
 
-      {analysis.timeline?.length > 0 && (
-        <Section title="기간별 첨삭 횟수" color={8}>
+      <Section title="다음 연습 추천" color={7}>
+        {practiceTips?.length ? (
+          <PracticeTips tips={practiceTips} onChanged={reload} />
+        ) : report.next_practice.length ? (
           <div className={styles.body}>
-            <PeriodFeedbackBars analysis={analysis} />
-            <p className={styles.small}>작업한 날짜 기준, 확정한 강사 첨삭 수예요.</p>
-          </div>
-        </Section>
-      )}
-
-      <Section title="긍정적으로 언급된 부분" color={9}>
-        <div className={styles.body}>
-          {analysis.strengths?.length ? (
-            analysis.strengths.map((s) => (
-              <div key={s.category} className={styles.block}>
-                <span className={styles.rowTitle}>
-                  {s.label} · 작품 {s.artwork_count}개
-                </span>
-                <EvidenceList evidence={s.evidence} limit={2} />
-              </div>
-            ))
-          ) : (
-            <p className={styles.muted}>현재 긍정적 표현으로 분류된 첨삭이 없습니다.</p>
-          )}
-        </div>
-      </Section>
-
-      <Section title="최근 개선 요청과 근거" color={10}>
-        <div className={styles.body}>
-          {recentImprovements.length ? (
-            <EvidenceList evidence={recentImprovements} />
-          ) : (
-            <p className={styles.muted}>현재 개선 요청으로 분류된 첨삭이 없습니다.</p>
-          )}
-        </div>
-      </Section>
-
-      <Section title="다음 학습 우선순위" color={11}>
-        <NextPriority analysis={analysis} recommendations={recommendations} />
-      </Section>
-
-      <Section title="분석에 사용된 작품·첨삭 원문" color={12}>
-        {withFeedback.length ? (
-          <div className={styles.sources}>
-            {withFeedback.map((t) => (
-              <div key={t.artwork_id} className={styles.sourceItem}>
-                <Link to={`/artworks/${t.artwork_id}`} className={styles.rowTitle}>
-                  {t.title} · {formatMonthDay(t.work_date)}
-                </Link>
-                {t.feedbacks.map((f) => (
-                  <Link key={f.id} to={`/feedbacks/${f.id}`} className={styles.source}>
-                    {f.summary}
-                  </Link>
-                ))}
-              </div>
-            ))}
+            <EvidenceList evidence={report.next_practice} limit={5} />
           </div>
         ) : (
-          <p className={styles.muted}>아직 분석할 첨삭이 없습니다.</p>
+          <p className={styles.muted}>
+            확정한 첨삭에 '다음 작품 연습 과제'가 생기면 여기에 모아 보여 드려요.
+          </p>
         )}
       </Section>
 
@@ -276,58 +173,130 @@ export default function AnalysisReport() {
           맞춤 연습 과제 <ChevronRight size={16} aria-hidden />
         </Link>
       </div>
-      <Notes notes={analysis.notes} />
+      <p className={styles.small}>
+        판정 기준: 반복·강점은 작품 {report.criteria.repeated_min_artworks}개 이상, 전체 분석은 확정 강사 첨삭이
+        있는 작품 {report.criteria.required_artwork_count}개 이상. {report.criteria.improvement_rule}
+      </p>
+      <Notes notes={report.notes} />
     </div>
   )
 }
 
-/** 기록 상태에 따른 응원 문구 */
-function Cheer({ totals, ready, required }) {
-  const [title, text] =
-    totals.artwork_count === 0
-      ? [
-          '작품 하나부터 차근차근 시작해 보세요!',
-          '피드백 기록이 쌓이면 반복되는 항목과 변화 흐름을 확인할 수 있습니다.',
-        ]
-      : !ready
-        ? [
-            '첨삭을 확정하면 분석이 시작돼요!',
-            `확정한 첨삭이 있는 작품 ${totals.analyzed_artwork_count}개 / ${required}개. 녹음이나 글 첨삭을 AI로 정리하고 확정해 보세요.`,
-          ]
-        : [
-            '기록이 차곡차곡 쌓이고 있어요!',
-            `확정 첨삭 ${totals.approved_feedback_count}개를 바탕으로 정리했어요.`,
-          ]
-  return (
-    <MascotCheer pose="check" size="lg" eyebrow="ART MATE의 응원" sub={text}>
-      {title}
-    </MascotCheer>
-  )
-}
-
-/** 진행 중인 맞춤 연습 과제 → 다음 연습 목표 → 첫 기록 안내 */
-function NextPriority({ analysis, recommendations }) {
-  const navigate = useNavigate()
-  const card = pickNextPractice(analysis, recommendations)
-
+/** 단순 기록 수 (AI 분석 아님) + 저장된 AI 코멘트 */
+function RecordSummary({ report }) {
+  const { counts } = report
+  const ai = aiCommentView(report.ai_narrative)
   return (
     <div className={styles.body}>
-      <span className={styles.cheerLabel}>{card.label}</span>
-      <p className={styles.cardTitle}>{card.title}</p>
-      {card.goal && (
+      <div className={styles.stats}>
+        <Stat label="기록된 작품" value={counts.artwork_count} unit="점" paint="var(--color-primary)" />
+        <Stat label="확정 첨삭" value={counts.confirmed_feedback_count} unit="건" paint="#7c6ee6" />
+        <Stat label="첨삭 연결" value={counts.analyzed_artwork_count} unit="점" paint="#e0607e" />
+        <Stat label="실기시험" value={counts.mock_exam_count} unit="회" paint="#3fa7d6" />
+      </div>
+      {counts.pending_review_count > 0 && (
         <p className={styles.muted}>
-          <strong>목표</strong> · {card.goal}
+          <strong>확정을 기다리는 첨삭 {counts.pending_review_count}건</strong> · AI 정리 결과를
+          확인하고 확정하면 분석에 반영돼요.
         </p>
       )}
-      {card.method && (
-        <p className={styles.muted}>
-          <strong>연습 방법</strong> · {card.method}
-        </p>
+      {counts.processing_count > 0 && (
+        <p className={styles.small}>음성 변환·AI 정리 중인 첨삭 {counts.processing_count}건</p>
       )}
-      <Button size="compact" withArrow onClick={() => navigate(card.to)}>
-        {card.action}
-      </Button>
+      {ai && (
+        <div className={styles.ai}>
+          <span className={styles.subLabel}>
+            <Sparkles size={14} aria-hidden /> {ai.label}
+          </span>
+          {ai.text && <p className={styles.muted}>{ai.text}</p>}
+          {ai.note && <p className={styles.small}>{ai.note}</p>}
+        </div>
+      )}
     </div>
+  )
+}
+
+function RecentFeedbacks({ items }) {
+  if (!items.length) return <p className={styles.muted}>아직 확정한 첨삭이 없어요.</p>
+  return (
+    <div className={styles.sources}>
+      {items.map((f) => (
+        <div key={f.feedback_id} className={styles.sourceItem}>
+          <Link to={`/artworks/${f.artwork_id}`} className={styles.rowTitle}>
+            {f.artwork_title} · {formatMonthDay(f.work_date)}
+          </Link>
+          <Link to={`/feedbacks/${f.feedback_id}`} className={styles.source}>
+            {f.summary}
+          </Link>
+          {f.tags.length > 0 && (
+            <div className={styles.chips}>
+              {f.tags.map((tag) => (
+                <span key={tag} className={styles.chip}>
+                  {TAG_LABELS[tag] ?? tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function TagList({ tags, empty, render }) {
+  if (!tags.length) return <p className={styles.muted}>{empty}</p>
+  return (
+    <div className={styles.body}>
+      {tags.map((t) => (
+        <div key={t.tag} className={styles.block}>
+          <span className={styles.rowTitle}>{t.label}</span>
+          {render(t)}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Themes({ themes }) {
+  if (!themes?.length) return null
+  return (
+    <div className={styles.chips}>
+      {themes.map((theme) => (
+        <span key={theme.code} className={styles.chip}>
+          {theme.label} · 작품 {theme.artwork_count}개
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function RelatedArtworks({ artworks }) {
+  if (!artworks?.length) return null
+  return (
+    <div className={styles.chips}>
+      {artworks.slice(0, 4).map((a) => (
+        <Link key={a.id} to={`/artworks/${a.id}`} className={styles.artworkLink}>
+          {a.title} · {formatMonthDay(a.work_date)}
+        </Link>
+      ))}
+    </div>
+  )
+}
+
+/** 작업일 순 지적·칭찬 (서버가 준 사건 그대로) */
+function TrendSteps({ tag }) {
+  const steps = trendSteps(tag)
+  if (steps.length < 2) return null
+  return (
+    <ol className={styles.steps} aria-label={`${tag.label} 첨삭 흐름 (오래된 순)`}>
+      {steps.map((s) => (
+        <li key={s.key} className={styles.step} data-polarity={s.polarity}>
+          <i aria-hidden />
+          <span>{formatMonthDay(s.date)}</span>
+          <strong>{s.label}</strong>
+        </li>
+      ))}
+    </ol>
   )
 }
 

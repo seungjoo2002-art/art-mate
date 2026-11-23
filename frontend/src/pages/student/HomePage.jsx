@@ -10,14 +10,9 @@ import { listArtworks } from '../../features/artworks/api'
 import GalleryStrip from '../../features/artworks/components/GalleryStrip'
 import { tabColor } from '../../features/artworks/sectionTabs'
 import tabStyles from '../../features/artworks/SectionTabs.module.css'
-import {
-  getGrowthSummary,
-  getReport,
-  getWeaknesses,
-  listRecommendations,
-} from '../../features/growth/api'
-import { PERIOD_LABELS } from '../../features/growth/labels'
-import { mockExamCount, pickNextPractice, summaryLine } from '../../features/growth/nextPractice'
+import { getWeaknesses, listRecommendations } from '../../features/growth/api'
+import BriefingCard from '../../features/growth/components/BriefingCard'
+import { mockExamCount, pickNextPractice } from '../../features/growth/nextPractice'
 import { useAsync } from '../../hooks/useAsync'
 import { useOptions } from '../../hooks/useOptions'
 import { labelOf } from '../../lib/options'
@@ -25,17 +20,12 @@ import { formatToday } from '../../utils/date'
 import styles from './HomePage.module.css'
 
 async function loadHome() {
-  const [summary, analysis, recommendations, recent] = await Promise.all([
-    getGrowthSummary(),
+  const [analysis, recommendations, recent] = await Promise.all([
     getWeaknesses(),
     listRecommendations().catch(() => ({ items: [] })),
     listArtworks({ limit: 4 }),
   ])
-  // 최근 성장 리포트에 AI 설명이 있으면 브리핑에 사용
-  const latest = summary.latest_report
-  const report =
-    latest?.narrative_status === 'READY' ? await getReport(latest.id).catch(() => null) : null
-  return { summary, analysis, recommendations: recommendations.items, recent: recent.items, report }
+  return { analysis, recommendations: recommendations.items, recent: recent.items }
 }
 
 /** 홈 (VER.2): 고양이 인사 · 바로 시작 · 브리핑 · 학습 현황 · 오늘의 추천 연습 · 최근 작품 */
@@ -51,10 +41,11 @@ export default function HomePage() {
         <PaintSplash />
       </MascotCheer>
       <QuickStart />
+      {/* v1.2 오늘의 브리핑: 자체 조회·오류 처리 (다른 카드가 실패해도 보이게) */}
+      <BriefingCard userId={profile.id} />
 
       {data && (
         <>
-          <Briefing {...data} />
           <Stats analysis={data.analysis} />
           <TodayPractice analysis={data.analysis} recommendations={data.recommendations} />
           <RecentArtworks artworks={data.recent} />
@@ -65,55 +56,6 @@ export default function HomePage() {
         </>
       )}
     </>
-  )
-}
-
-/** AI 설명이 있으면 "AI 브리핑", 없으면 기록 상태에 따른 "오늘의 브리핑" (AI 아님) */
-function Briefing({ analysis, report }) {
-  const { totals } = analysis
-  const narrative = report?.ai_narrative?.content
-  let brief
-  if (narrative) {
-    brief = {
-      label: 'AI 브리핑',
-      title: narrative.overview,
-      text: narrative.improvement_comment || narrative.strengths_comment,
-      meta: `${PERIOD_LABELS[report.period_type] ?? ''} 성장 리포트 기준`,
-    }
-  } else if (totals.artwork_count === 0 || totals.analyzed_artwork_count === 0) {
-    brief = {
-      label: '오늘의 브리핑',
-      title:
-        totals.artwork_count === 0 ? '첫 작품과 피드백을 등록해 주세요.' : '첨삭을 확정해 주세요.',
-      text: '작품·첨삭을 기록하면 학습 이력을 정리하고 다음에 집중할 내용을 함께 살펴볼 수 있습니다.',
-      meta: '분석할 기록 없음',
-    }
-  } else if (analysis.status !== 'READY') {
-    brief = {
-      label: '오늘의 브리핑',
-      title: '첨삭이 쌓이고 있어요.',
-      text: `확정한 첨삭이 있는 작품이 ${analysis.required_artwork_count}개가 되면 반복되는 항목을 분석해요.`,
-      meta: `분석까지 ${analysis.required_artwork_count - totals.analyzed_artwork_count}개 남음`,
-    }
-  } else {
-    brief = {
-      label: '오늘의 브리핑',
-      title: summaryLine(analysis),
-      text: '분석 리포트에서 반복 항목과 변화 흐름을 확인해 보세요.',
-      meta: `확정 첨삭 ${totals.approved_feedback_count}개 기준`,
-    }
-  }
-
-  return (
-    <section className={tabStyles.card} style={{ '--tab': tabColor(1) }}>
-      <h2 className={tabStyles.tab}>{brief.label}</h2>
-      <small className={tabStyles.cardMeta}>{brief.meta}</small>
-      <p className={styles.cardTitle}>{brief.title}</p>
-      {brief.text && <p className={styles.muted}>{brief.text}</p>}
-      <Link to="/archive?tab=report" className={styles.pill}>
-        분석 리포트 보기 <ChevronRight size={16} aria-hidden />
-      </Link>
-    </section>
   )
 }
 

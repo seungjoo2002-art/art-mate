@@ -88,3 +88,49 @@
 .summaryLink span {
   flex: 1;
 }
+
+/* v1.2 STT 원문·AI 보정 비교 */
+.toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.textBlock {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.aiMark {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  vertical-align: middle;
+}
+
+.original {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--color-primary-soft);
+}
+
+.original span {
+  margin-right: 4px;
+  font-weight: var(--weight-bold);
+}

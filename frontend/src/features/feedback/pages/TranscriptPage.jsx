@@ -18,6 +18,7 @@ import {
 } from '../aiApi'
 import { aiPhase } from '../aiStatus'
 import { formatDuration } from '../format'
+import { correctionView } from '../transcriptView'
 import { useEvidencePlayer } from '../useEvidencePlayer'
 import styles from './TranscriptPage.module.css'
 
@@ -181,6 +182,9 @@ function TranscriptEditor({ artworkId, recordingId, transcript, onSaved }) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
+  // v1.2 STT 원문·AI 문맥 보정 비교 (서버가 원문을 보존하고 보정본을 따로 저장)
+  const correction = correctionView(transcript)
+  const [showOriginal, setShowOriginal] = useState(false)
 
   const changed = transcript.segments
     .map((s, i) => ({ index: s.index, text: texts[i].trim() }))
@@ -228,8 +232,27 @@ function TranscriptEditor({ artworkId, recordingId, transcript, onSaved }) {
         <p className={styles.lead}>
           녹음을 글로 바꾼 내용이에요. 잘못 알아들은 부분은 고칠 수 있어요 (처음 대본은 따로
           보관돼요).
-          {transcript.edited && ' (수정한 대본)'}
+          {transcript.origin === 'EDITED' && ' (수정한 대본)'}
         </p>
+        {(correction.notice || correction.hasOriginal) && !editing && (
+          <Card variant="soft" className={styles.notice}>
+            {correction.notice && (
+              <p>
+                <strong>AI 문맥 보정</strong> · {correction.notice}
+              </p>
+            )}
+            {correction.hasOriginal && (
+              <button
+                type="button"
+                className={styles.toggle}
+                aria-pressed={showOriginal}
+                onClick={() => setShowOriginal((v) => !v)}
+              >
+                {showOriginal ? '원본 STT 숨기기' : `원본 STT 보기 (${correction.differs.size}문장 다름)`}
+              </button>
+            )}
+          </Card>
+        )}
         {notice && (
           <p className={styles.lead} role="status">
             {notice}
@@ -260,7 +283,19 @@ function TranscriptEditor({ artworkId, recordingId, transcript, onSaved }) {
                   className={styles.input}
                 />
               ) : (
-                <p className={styles.text}>{s.text}</p>
+                <div className={styles.textBlock}>
+                  <p className={styles.text}>
+                    {s.text}
+                    {correction.aiChanged.has(s.index) && (
+                      <span className={styles.aiMark}>AI 보정</span>
+                    )}
+                  </p>
+                  {showOriginal && correction.originalText(s.index) && (
+                    <p className={styles.original}>
+                      <span>원본</span> {correction.originalText(s.index)}
+                    </p>
+                  )}
+                </div>
               )}
             </li>
           ))}

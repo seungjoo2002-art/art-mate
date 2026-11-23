@@ -32,6 +32,8 @@ export default function FeedbackReviewPage() {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState('')
+  // v1.2 확정·확정 취소 직후 안내 (성장 분석·홈 브리핑 반영 여부)
+  const [decision, setDecision] = useState(null)
   const player = useEvidencePlayer(feedback?.artwork_id, feedback?.recording_id)
   const [growth, setGrowth] = useState(null) // 반복 약점 판단용 (확정 첨삭 기준 통계)
 
@@ -106,6 +108,7 @@ export default function FeedbackReviewPage() {
   async function run(action, { after } = {}) {
     setBusy(true)
     setActionError('')
+    setDecision(null)
     try {
       await action()
       after?.()
@@ -148,10 +151,26 @@ export default function FeedbackReviewPage() {
           />
         ) : (
           <>
-            {!approved && canReview && (
+            {decision === 'approved' && approved && (
+              <Card variant="soft" className={styles.done} role="status">
+                <strong>첨삭을 확정했어요.</strong>
+                <span>아카이브 분석 리포트와 홈 오늘의 브리핑에 반영돼요.</span>
+                <div className={styles.doneLinks}>
+                  <Link to="/archive?tab=report">분석 리포트 보기</Link>
+                  <Link to="/home">홈 브리핑 보기</Link>
+                </div>
+              </Card>
+            )}
+            {decision === 'reopened' && !approved && (
+              <Card variant="soft" className={styles.notice} role="status">
+                확정을 취소했어요. 다시 확정하기 전까지는 성장 분석과 홈 브리핑에서 빠져요.
+              </Card>
+            )}
+            {!approved && canReview && decision !== 'reopened' && (
               <Card variant="soft" className={styles.notice}>
-                AI가 녹음 내용을 정리한 초안이에요. 내용을 확인하고 틀린 부분은 고친 뒤 확정해
-                주세요.
+                AI가 첨삭을 정리한 초안이에요. 내용을 확인하고 틀린 부분은 고친 뒤 아래
+                <strong> 확정하기</strong>를 눌러 주세요. 확정한 첨삭만 성장 분석과 홈 브리핑에
+                반영돼요.
               </Card>
             )}
             {feedback.recording_id && (
@@ -263,12 +282,16 @@ export default function FeedbackReviewPage() {
             {actionError && <p className={styles.error}>{actionError}</p>}
 
             {canReview ? (
-              <div className={styles.actions}>
+              <div className={approved ? styles.actions : `${styles.actions} ${styles.actionsSticky}`}>
                 {approved ? (
                   <Button
                     variant="soft"
                     disabled={busy}
-                    onClick={() => run(() => reopenFeedback(feedback.id, feedback.version))}
+                    onClick={() =>
+                      run(() => reopenFeedback(feedback.id, feedback.version), {
+                        after: () => setDecision('reopened'),
+                      })
+                    }
                   >
                     확정 취소하고 수정하기
                   </Button>
@@ -276,7 +299,11 @@ export default function FeedbackReviewPage() {
                   <>
                     <Button
                       disabled={busy}
-                      onClick={() => run(() => approveFeedback(feedback.id, feedback.version))}
+                      onClick={() =>
+                        run(() => approveFeedback(feedback.id, feedback.version), {
+                          after: () => setDecision('approved'),
+                        })
+                      }
                     >
                       {busy ? '처리하는 중…' : '이대로 확정하기'}
                     </Button>

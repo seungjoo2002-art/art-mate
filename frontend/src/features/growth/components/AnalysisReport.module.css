@@ -227,3 +227,85 @@
   gap: var(--space-4);
   text-align: center;
 }
+
+/* ---------------------------------------------------------------- v1.2 분석 리포트 */
+.subLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary-text);
+}
+
+.ai {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chip,
+.artworkLink {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+}
+
+.artworkLink {
+  background: transparent;
+  border: 1px solid var(--color-primary-soft);
+  text-decoration: underline;
+}
+
+/* 개선 추세: 작업일 순 점 (지적=회색, 칭찬=주황) */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
+}
+
+.step + .step::before {
+  content: '→';
+  margin-right: 4px;
+  color: var(--color-text-muted);
+}
+
+.step i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+
+.step[data-polarity='POS'] i {
+  background: var(--color-primary);
+}
+
+.step[data-polarity='MIXED'] i {
+  background: linear-gradient(90deg, var(--color-primary) 50%, var(--color-text-muted) 50%);
+}

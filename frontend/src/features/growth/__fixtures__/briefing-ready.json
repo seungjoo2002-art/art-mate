@@ -1,0 +1,31 @@
+{
+  "status": "READY",
+  "headline": "최근 타원·원통형 형태에 대한 첨삭이 3개 작품에서 반복되고 있어요.",
+  "lines": [
+    "명암 부분은 이전 지적 이후 좋아졌다는 첨삭이 이어지고 있어요.",
+    "오늘은 이 첨삭을 떠올리며 연습해 보세요: “타원 형태를 다시 확인해라.”"
+  ],
+  "focus": {"tag": "FORM_PROPORTION", "label": "형태·비례", "theme_label": "타원·원통형 형태", "reason": "REPEATED", "artwork_count": 3},
+  "highlight": {"tag": "VALUE", "label": "명암", "kind": "IMPROVING", "artwork_count": 2},
+  "practice": {
+    "item_id": "11111111-1111-4111-8111-111111111111", "feedback_id": "22222222-2222-4222-8222-222222222222",
+    "recording_id": null, "note_id": "33333333-3333-4333-8333-333333333333", "source": "INSTRUCTOR",
+    "artwork_id": "44444444-4444-4444-8444-444444444444", "artwork_title": "컵 정물", "work_date": "2026-11-15",
+    "kind": "FIX", "category": "FORM", "content": "타원 형태를 다시 확인해라.", "start_ms": null,
+    "source_text": ["타원 형태 다시 확인해."]
+  },
+  "evidence": [],
+  "counts": {
+    "artwork_count": 6, "completed_artwork_count": 6, "mock_exam_count": 1, "practice_artwork_count": 5,
+    "confirmed_feedback_count": 6, "instructor_feedback_count": 6, "analyzed_artwork_count": 6,
+    "pending_review_count": 0, "processing_count": 0, "last_feedback_date": "2026-11-18"
+  },
+  "ai_comment": {
+    "status": "STALE", "report_id": "55555555-5555-4555-8555-555555555555",
+    "overview": "최근 첨삭에서 형태·비례가 반복적으로 언급되었다.", "strengths_comment": "명암은 긍정적으로 언급되었다.",
+    "improvement_comment": "타원을 먼저 잡으라는 지적이 이어졌다.", "based_on_current_data": false,
+    "generated_at": "2026-11-20T09:00:00Z", "reason": null
+  },
+  "data_fingerprint": "9f2c",
+  "generated_at": "2026-11-23T09:00:00Z"
+}

@@ -1,0 +1,52 @@
+{
+  "status": "READY",
+  "message": null,
+  "generated_at": "2026-11-23T09:00:00Z",
+  "data_fingerprint": "9f2c",
+  "insights_version": "growth-insights-v1",
+  "counts": {
+    "artwork_count": 6, "completed_artwork_count": 6, "mock_exam_count": 1, "practice_artwork_count": 5,
+    "confirmed_feedback_count": 6, "instructor_feedback_count": 6, "analyzed_artwork_count": 6,
+    "pending_review_count": 1, "processing_count": 0, "last_feedback_date": "2026-11-18"
+  },
+  "recent_feedbacks": [
+    {"feedback_id": "22222222-2222-4222-8222-222222222222", "artwork_id": "44444444-4444-4444-8444-444444444444",
+     "artwork_title": "컵 정물", "work_date": "2026-11-15", "approved_at": "2026-11-15T10:00:00Z",
+     "source": "INSTRUCTOR", "summary": "타원 형태가 납작하다.", "tags": ["FORM_PROPORTION"]}
+  ],
+  "repeated_mistakes": [
+    {"tag": "FORM_PROPORTION", "label": "형태·비례", "progress": "NEEDS_WORK",
+     "issue_artwork_count": 3, "positive_artwork_count": 0,
+     "first_issue_date": "2026-11-03", "last_issue_date": "2026-11-15", "last_positive_date": null,
+     "positive_since_last_issue": 0, "improvement_confirmed": false,
+     "themes": [{"code": "ELLIPSE", "label": "타원·원통형 형태", "artwork_count": 3, "evidence": []}],
+     "issue_evidence": [], "positive_evidence": [], "practice_evidence": [],
+     "related_artworks": [{"id": "44444444-4444-4444-8444-444444444444", "title": "컵 정물", "work_date": "2026-11-15"}],
+     "events": [
+       {"artwork_id": "66666666-6666-4666-8666-666666666661", "work_date": "2026-11-03", "polarity": "NEG"},
+       {"artwork_id": "66666666-6666-4666-8666-666666666662", "work_date": "2026-11-08", "polarity": "NEG"},
+       {"artwork_id": "44444444-4444-4444-8444-444444444444", "work_date": "2026-11-15", "polarity": "NEG"}
+     ]}
+  ],
+  "strengths": [],
+  "improving": [
+    {"tag": "VALUE", "label": "명암", "progress": "IMPROVING",
+     "issue_artwork_count": 1, "positive_artwork_count": 2,
+     "first_issue_date": "2026-11-01", "last_issue_date": "2026-11-01", "last_positive_date": "2026-11-18",
+     "positive_since_last_issue": 2, "improvement_confirmed": true,
+     "themes": [], "issue_evidence": [], "positive_evidence": [], "practice_evidence": [], "related_artworks": [],
+     "events": [
+       {"artwork_id": "77777777-7777-4777-8777-777777777771", "work_date": "2026-11-01", "polarity": "NEG"},
+       {"artwork_id": "77777777-7777-4777-8777-777777777772", "work_date": "2026-11-10", "polarity": "POS"},
+       {"artwork_id": "77777777-7777-4777-8777-777777777773", "work_date": "2026-11-18", "polarity": "POS"}
+     ]}
+  ],
+  "needs_work": [],
+  "next_practice": [],
+  "tags": [],
+  "ai_narrative": {"status": "NONE", "report_id": null, "overview": null, "strengths_comment": null,
+                   "improvement_comment": null, "based_on_current_data": false, "generated_at": null, "reason": null},
+  "criteria": {"required_artwork_count": 3, "repeated_min_artworks": 2, "strength_min_artworks": 2,
+               "theme_min_artworks": 2, "improvement_rule": "같은 영역에서 지적이 먼저 있고..."},
+  "notes": ["분석은 학생이 확정한 강사 첨삭만 근거로 하며, AI가 그림을 보고 평가한 결과가 아닙니다."]
+}

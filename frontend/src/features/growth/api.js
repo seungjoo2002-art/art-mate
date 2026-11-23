@@ -47,3 +47,9 @@ export const getGrowthJob = (jobId) => api(`/growth/me/jobs/${jobId}`)
 /** v1.0 첨삭의 '다음 작품 연습 과제'(NEXT_TIP)를 내 연습 과제로 담기 (AI 호출 없음, 이미 있으면 그 과제) */
 export const createTipTask = (itemId) =>
   api(`/growth/me/practice-tips/${itemId}/task`, { method: 'POST' })
+
+// v1.2 (docs/feedback-archive-v1.2.md §8). 조회만 — 서버가 LLM을 부르지 않고 저장된 분석을 돌려준다
+/** 홈 오늘의 브리핑 */
+export const getBriefing = () => api('/growth/me/briefing')
+/** 아카이브 분석 리포트 (기록 수 + 반복 실수·강점·개선 추세·근거) */
+export const getAnalysisReport = () => api('/growth/me/analysis-report')
