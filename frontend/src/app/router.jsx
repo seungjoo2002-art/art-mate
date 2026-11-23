@@ -15,6 +15,7 @@ import RecommendationPage from '../features/growth/pages/RecommendationPage'
 import RecommendationsPage from '../features/growth/pages/RecommendationsPage'
 import FeedbackRecordPage from '../features/feedback/pages/FeedbackRecordPage'
 import FeedbackReviewPage from '../features/feedback/pages/FeedbackReviewPage'
+import RecordingProcessingPage from '../features/feedback/pages/RecordingProcessingPage'
 import GuardianConsentPage from '../features/feedback/pages/GuardianConsentPage'
 import NoteFormPage from '../features/feedback/pages/NoteFormPage'
 import SttBenchPage from '../features/feedback/stt/SttBenchPage'
@@ -98,6 +99,11 @@ export const router = createBrowserRouter([
           {
             path: '/artworks/:artworkId/recordings/:recordingId/transcript',
             element: <TranscriptPage />,
+          },
+          {
+            // 글로 변환하기·AI로 정리하기 진행 (필요한 서버 요청을 자동으로, 끝나면 결과 화면으로)
+            path: '/artworks/:artworkId/recordings/:recordingId/processing',
+            element: <RecordingProcessingPage />,
           },
           { path: '/artworks/:artworkId/notes/new', element: <NoteFormPage /> },
           { path: '/feedback-notes/:noteId/edit', element: <NoteFormPage /> },

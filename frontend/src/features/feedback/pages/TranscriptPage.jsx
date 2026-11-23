@@ -1,23 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronRight, Pause, Play, Sparkles } from 'lucide-react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
 import { Button, Card, Textarea } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import {
-  getAiConsent,
   getAiFeatures,
   getSummaryStatus,
   getTranscript,
-  getTranscriptionStatus,
   regenerateSummary,
-  requestSummary,
   updateTranscript,
 } from '../aiApi'
 import { aiPhase } from '../aiStatus'
 import { formatDuration } from '../format'
+import { processingPath } from '../processingFlow'
 import { correctionView } from '../transcriptView'
 import { useEvidencePlayer } from '../useEvidencePlayer'
 import styles from './TranscriptPage.module.css'
@@ -30,9 +28,22 @@ export default function TranscriptPage() {
   const { artworkId, recordingId } = useParams()
   const load = useCallback(() => getTranscript(artworkId, recordingId), [artworkId, recordingId])
   const { data: transcript, error, reload } = useAsync(load)
+  const fromProcessing = Boolean(useLocation().state?.fromProcessing)
 
+  // 아직 대본이 없으면 진행 화면으로 (필요하면 글로 변환을 요청하고, 끝나면 이 화면으로 돌아옴).
+  // 진행 화면에서 막 왔는데도 대본이 없으면 다시 보내지 않는다 (두 화면이 서로 돌려보내는 고리 방지)
   if (error?.code === 'TRANSCRIPT_NOT_READY') {
-    return <TranscriptNotReady artworkId={artworkId} recordingId={recordingId} onReload={reload} />
+    if (!fromProcessing) {
+      return <Navigate to={processingPath(artworkId, recordingId, 'transcript')} replace />
+    }
+    return (
+      <FullScreenStatus
+        title="대본을 아직 불러오지 못했어요"
+        description="변환은 끝났는데 대본이 아직 보이지 않아요. 잠시 후 다시 불러와 주세요."
+      >
+        <Button onClick={reload}>다시 불러오기</Button>
+      </FullScreenStatus>
+    )
   }
   if (error) {
     return (
@@ -53,41 +64,12 @@ export default function TranscriptPage() {
   )
 }
 
-/** 아직 대본이 없을 때: 진행 상태(서버 대기·실패)를 알려 주고 작품 화면으로 돌아가게 함 */
-function TranscriptNotReady({ artworkId, recordingId, onReload }) {
-  const navigate = useNavigate()
-  const [status, setStatus] = useState(null)
-  useEffect(() => {
-    let alive = true
-    getTranscriptionStatus(artworkId, recordingId)
-      .then((value) => alive && setStatus(aiPhase(value, null)))
-      .catch(() => alive && setStatus({ phase: 'idle' }))
-    return () => {
-      alive = false
-    }
-  }, [artworkId, recordingId])
-  const description =
-    status?.phase === 'transcribing'
-      ? '녹음을 글로 바꾸는 중이에요. 끝나면 이 화면에서 대본을 볼 수 있어요.'
-      : status?.phase === 'failed'
-        ? `${status.message} 작품 화면의 녹음 카드에서 다시 시도할 수 있어요.`
-        : '아직 글로 바꾸지 않은 녹음이에요. 작품 화면의 녹음 카드에서 "녹음을 글로 바꾸기"를 눌러 주세요.'
-  return (
-    <FullScreenStatus title="아직 대본이 없어요" description={description}>
-      <Button onClick={() => navigate(`/artworks/${artworkId}`)}>작품으로 돌아가기</Button>
-      {status?.phase === 'transcribing' && (
-        <Button variant="soft" onClick={onReload}>
-          새로고침
-        </Button>
-      )}
-    </FullScreenStatus>
-  )
-}
-
-/** 대본 아래 AI 정리: 사용자가 누를 때만 요청 (동의 확인), 결과가 있으면 결과 보기 */
+/**
+ * 대본 아래 AI 정리: 누르면 진행 화면으로 (동의 확인·요청·완료 후 정리 결과로 이동은 진행 화면이 함).
+ * 결과가 있으면 결과 보기
+ */
 function SummaryPanel({ artworkId, recordingId, refreshKey }) {
   const navigate = useNavigate()
-  const location = useLocation()
   const [features, setFeatures] = useState(null)
   const [summary, setSummary] = useState(undefined)
   const [busy, setBusy] = useState(false)
@@ -107,35 +89,27 @@ function SummaryPanel({ artworkId, recordingId, refreshKey }) {
   if (summary === undefined) return null
   const phase = aiPhase({ transcription_status: 'COMPLETED' }, summary)
 
+  const summaryPath = processingPath(artworkId, recordingId, 'summary')
+
   async function handleSummarize() {
+    if (busy) return
+    if (phase.phase !== 'failed') {
+      navigate(summaryPath)
+      return
+    }
+    // 실패한 정리는 다시 요청한 뒤 진행 화면으로
     setBusy(true)
     setMessage('')
     try {
-      const consent = await getAiConsent()
-      if (!consent.is_valid) {
-        navigate('/ai-consent', { state: { from: location.pathname } })
-        return
-      }
-      await (phase.phase === 'failed'
-        ? regenerateSummary(artworkId, recordingId)
-        : requestSummary(artworkId, recordingId).catch((err) =>
-            err.code === 'FEEDBACK_INVALID_STATE'
-              ? regenerateSummary(artworkId, recordingId)
-              : Promise.reject(err),
-          ))
-      setSummary(await getSummaryStatus(artworkId, recordingId).catch(() => null))
-      setMessage('AI 정리를 요청했어요. 정리가 끝나면 작품 화면의 녹음 카드에서 결과를 볼 수 있어요.')
+      await regenerateSummary(artworkId, recordingId)
+      navigate(summaryPath)
     } catch (err) {
-      if (err.code === 'AI_CONSENT_REQUIRED') {
-        navigate('/ai-consent', { state: { from: location.pathname } })
-        return
-      }
+      console.warn('[transcript] summary retry failed', { code: err?.code ?? null })
       setMessage(
         err.code === 'RATE_LIMITED'
           ? '오늘 AI 정리 요청을 모두 사용했어요. 내일 다시 이용해 주세요.'
           : toErrorMessage(err),
       )
-    } finally {
       setBusy(false)
     }
   }
@@ -152,7 +126,12 @@ function SummaryPanel({ artworkId, recordingId, refreshKey }) {
   return (
     <Card variant="soft" className={styles.notice}>
       {phase.phase === 'summarizing' ? (
-        <p>AI가 이 대본으로 피드백을 정리하는 중이에요.</p>
+        <p>
+          첨삭을 정리하고 있어요…{' '}
+          <Link to={summaryPath} className={styles.inlineLink}>
+            진행 상황 보기
+          </Link>
+        </p>
       ) : features?.ai_summary === false ? (
         <p>AI 서비스 설정이 필요해요. 대본을 보며 직접 정리할 수 있어요.</p>
       ) : (
@@ -164,7 +143,7 @@ function SummaryPanel({ artworkId, recordingId, refreshKey }) {
           </p>
           {(phase.phase !== 'failed' || phase.retry) && (
             <Button size="md" onClick={handleSummarize} disabled={busy}>
-              {busy ? '요청하는 중…' : '이 대본으로 AI 정리하기'}
+              {busy ? '다시 요청하는 중…' : 'AI로 정리하기'}
             </Button>
           )}
         </>

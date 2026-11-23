@@ -153,3 +153,15 @@
   height: 1px;
   opacity: 0;
 }
+
+/* 직접 글로 적기 (녹음 대신 텍스트 첨삭) */
+.noteLink {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-primary-text);
+  text-decoration: underline;
+}
