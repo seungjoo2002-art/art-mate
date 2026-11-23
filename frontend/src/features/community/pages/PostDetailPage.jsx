@@ -74,8 +74,9 @@ export default function PostDetailPage() {
   }
 
   return (
-    <>
-      <TopBar title="공개 작품" belowHeader />
+    // 커뮤니티 목록과 같은 리소 인쇄 잡지 지면 (종이색 + 종이결, 먹색 선)
+    <div className={styles.zine}>
+      <TopBar title="커뮤니티" belowHeader className={styles.bar} />
       <main className={styles.body}>
         <div className={styles.head}>
           <span className={styles.category}>{postCategory(post)}</span>
@@ -143,7 +144,7 @@ export default function PostDetailPage() {
 
         <Comments post={post} onChanged={reload} />
       </main>
-    </>
+    </div>
   )
 }
 
@@ -302,6 +303,7 @@ function Comments({ post, onChanged }) {
             role="radio"
             aria-checked={type === 'GENERAL'}
             selected={type === 'GENERAL'}
+            className={styles.typeChip}
             onClick={() => setType('GENERAL')}
           >
             의견
@@ -310,6 +312,7 @@ function Comments({ post, onChanged }) {
             role="radio"
             aria-checked={type === 'FEEDBACK'}
             selected={type === 'FEEDBACK'}
+            className={styles.typeChip}
             onClick={() => setType('FEEDBACK')}
           >
             작품 피드백
@@ -321,6 +324,7 @@ function Comments({ post, onChanged }) {
               <Chip
                 key={o.code}
                 selected={categories.includes(o.code)}
+                className={styles.tagChip}
                 onClick={() => toggleCategory(o.code)}
               >
                 {o.label}
@@ -340,7 +344,13 @@ function Comments({ post, onChanged }) {
             onChange={(e) => setBody(e.target.value)}
             className={styles.input}
           />
-          <Button type="submit" size="md" fullWidth={false} disabled={busy || !body.trim()}>
+          <Button
+            type="submit"
+            size="md"
+            fullWidth={false}
+            disabled={busy || !body.trim()}
+            className={styles.submit}
+          >
             등록
           </Button>
         </div>

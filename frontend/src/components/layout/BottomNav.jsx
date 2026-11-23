@@ -19,7 +19,7 @@ export default function BottomNav() {
           to={to}
           className={({ isActive }) => `${styles.tab} ${isActive ? styles.active : ''}`}
         >
-          <Icon size={26} strokeWidth={2} aria-hidden />
+          <Icon size={20} strokeWidth={2} aria-hidden />
           <span>{label}</span>
         </NavLink>
       ))}
