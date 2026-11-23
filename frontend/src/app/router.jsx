@@ -36,6 +36,7 @@ import ArchivePage from '../pages/student/ArchivePage'
 import CommunityPage from '../pages/student/CommunityPage'
 import HomePage from '../pages/student/HomePage'
 import MyPage from '../pages/student/MyPage'
+import MySettingsPage from '../pages/student/MySettingsPage'
 import PracticePage from '../pages/student/PracticePage'
 import ProtectedRoute from './ProtectedRoute'
 import PublicOnlyRoute from './PublicOnlyRoute'
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
         element: <SubLayout />,
         children: [
           { path: '/my/edit', element: <ProfileEditPage /> },
+          { path: '/my/settings', element: <MySettingsPage /> },
           { path: '/notifications', element: <NotificationsPage /> },
           { path: '/community/write', element: <PostWritePage /> },
           { path: '/community/posts/:postId', element: <PostDetailPage /> },
