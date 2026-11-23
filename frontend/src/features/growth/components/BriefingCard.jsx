@@ -8,7 +8,7 @@ import { toErrorMessage } from '../../../utils/errorMessages'
 import tabStyles from '../../artworks/SectionTabs.module.css'
 import { tabColor } from '../../artworks/sectionTabs'
 import { getBriefing } from '../api'
-import { aiCommentView, briefingNeedsPolling, briefingView } from '../insightsView'
+import { aiCommentView, briefingNeedsPolling, briefingSummary, briefingView } from '../insightsView'
 import styles from './BriefingCard.module.css'
 
 const POLL_MS = 30_000
@@ -45,28 +45,57 @@ export default function BriefingCard({ userId }) {
   )
 }
 
+/**
+ * 짧은 요약(제목 · 한두 줄 · 오늘의 연습 · 보조 안내)을 먼저, 서버 원문 문장과 AI 코멘트는 '자세히 보기'에.
+ * 오늘의 연습은 실제 첨삭 항목 문장을 그대로 인용한다 (없으면 표시하지 않음).
+ */
 function BriefingBody({ briefing }) {
   const view = briefingView(briefing)
+  const short = briefingSummary(briefing)
   const ai = aiCommentView(briefing.ai_comment)
+  const hasDetails = view.lines.length > 0 || ai
   return (
     <>
       <small className={tabStyles.cardMeta}>{view.meta}</small>
-      <p className={styles.title}>{view.title}</p>
-      {view.lines.length > 0 && (
-        <ul className={styles.lines}>
-          {view.lines.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      )}
-      {ai && (
-        <div className={styles.ai} aria-live="polite">
-          <span className={styles.aiLabel}>
-            <Sparkles size={14} aria-hidden /> {ai.label}
-          </span>
-          {ai.text && <p className={styles.aiText}>{ai.text}</p>}
-          {ai.note && <p className={styles.aiNote}>{ai.note}</p>}
+      <p className={styles.title}>{short.title}</p>
+      {short.text && <p className={styles.text}>{short.text}</p>}
+      {short.highlight && <p className={styles.text}>{short.highlight}</p>}
+      {short.practice && (
+        <div className={styles.practice}>
+          <span className={styles.practiceLabel}>오늘의 연습</span>
+          <p className={styles.practiceText}>{short.practice.content}</p>
+          <Link to={`/feedbacks/${short.practice.feedback_id}`} className={styles.practiceSource}>
+            {short.practice.artwork_title} 첨삭에서
+          </Link>
         </div>
+      )}
+      {short.notes.map((note) => (
+        <p key={note} className={styles.note}>
+          {note}
+        </p>
+      ))}
+      {ai?.pending && <p className={styles.aiNote}>AI 코멘트를 새 첨삭으로 정리하고 있어요.</p>}
+      {hasDetails && (
+        <details className={styles.details}>
+          <summary>자세히 보기</summary>
+          <p className={styles.detailTitle}>{briefing.headline}</p>
+          {view.lines.length > 0 && (
+            <ul className={styles.lines}>
+              {view.lines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+          {ai && (
+            <div className={styles.ai} aria-live="polite">
+              <span className={styles.aiLabel}>
+                <Sparkles size={14} aria-hidden /> {ai.label}
+              </span>
+              {ai.text && <p className={styles.aiText}>{ai.text}</p>}
+              {ai.note && <p className={styles.aiNote}>{ai.note}</p>}
+            </div>
+          )}
+        </details>
       )}
       {view.cta && (
         <Link to={view.cta.to} className={styles.pill}>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pause, Play } from 'lucide-react'
+import { Check, Pause, PencilLine, Play } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
@@ -91,14 +91,17 @@ export default function FeedbackReviewPage() {
               )}
             </div>
             {item.evidence.some((e) => e.text) && (
-              <p className={styles.evidence}>
-                “
-                {item.evidence
-                  .map((e) => e.text)
-                  .filter(Boolean)
-                  .join(' ')}
-                ”
-              </p>
+              <details className={styles.evidence}>
+                <summary>첨삭 원문 보기</summary>
+                <p>
+                  “
+                  {item.evidence
+                    .map((e) => e.text)
+                    .filter(Boolean)
+                    .join(' ')}
+                  ”
+                </p>
+              </details>
             )}
           </li>
         ))}
@@ -168,9 +171,9 @@ export default function FeedbackReviewPage() {
             )}
             {!approved && canReview && decision !== 'reopened' && (
               <Card variant="soft" className={styles.notice}>
-                AI가 첨삭을 정리한 초안이에요. 내용을 확인하고 틀린 부분은 고친 뒤 아래
-                <strong> 확정하기</strong>를 눌러 주세요. 확정한 첨삭만 성장 분석과 홈 브리핑에
-                반영돼요.
+                AI가 첨삭을 정리해 두었어요. 맞게 정리됐는지 살펴보고, 다른 부분은 고친 뒤 아래
+                <strong> 확정하기</strong>를 눌러 주세요. 확정한 첨삭부터 성장 기록과 홈 브리핑에
+                담겨요.
               </Card>
             )}
             {feedback.recording_id && (
@@ -181,15 +184,6 @@ export default function FeedbackReviewPage() {
                 녹음 대본 보기 · 고치기 &gt;
               </Link>
             )}
-
-            {/* v0.9.7 어느 단계의 피드백인지 */}
-            <div className={styles.chips}>
-              <Badge>
-                {feedback.stage_name ? `${feedback.stage_name} 단계 피드백` : '작품 전체 피드백'}
-              </Badge>
-              {/* v0.9.8 원본 피드백의 기준 사진 (전사·요약도 같은 연결) */}
-              <Badge>{refsLabel(feedback.image_refs)}</Badge>
-            </div>
 
             <section className={styles.section}>
               <h2 className={styles.label}>전체 첨삭 요약</h2>
@@ -219,15 +213,27 @@ export default function FeedbackReviewPage() {
                   )}
                 </>
               )}
+              {/* v0.9.7 어느 단계의 피드백인지 */}
+              <div className={styles.chips}>
+                <Badge>
+                  {feedback.stage_name ? `${feedback.stage_name} 단계 피드백` : '작품 전체 피드백'}
+                </Badge>
+                {/* v0.9.8 원본 피드백의 기준 사진 (전사·요약도 같은 연결) */}
+                <Badge>{refsLabel(feedback.image_refs)}</Badge>
+              </div>
             </section>
 
             <section className={styles.section}>
-              <h2 className={styles.label}>잘한 점</h2>
+              <h2 className={styles.label}>
+                <Check size={16} strokeWidth={2.4} aria-hidden /> 잘한 점
+              </h2>
               {renderItems(feedback.strengths)}
             </section>
 
             <section className={styles.section}>
-              <h2 className={styles.label}>개선할 점</h2>
+              <h2 className={styles.label}>
+                <PencilLine size={16} strokeWidth={2.2} aria-hidden /> 개선할 점
+              </h2>
               {feedback.weaknesses.length === 0 && feedback.fixes.length === 0 ? (
                 <p className={styles.empty}>언급되지 않음</p>
               ) : (
@@ -240,7 +246,7 @@ export default function FeedbackReviewPage() {
                   )}
                   {feedback.fixes.length > 0 && (
                     <>
-                      <h3 className={styles.subLabel}>{kindLabel('FIX', '수정 방법')}</h3>
+                      <h3 className={styles.subLabel}>이렇게 수정해 보세요</h3>
                       {renderItems(feedback.fixes)}
                     </>
                   )}

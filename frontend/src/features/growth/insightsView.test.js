@@ -4,8 +4,10 @@ import reportReady from './__fixtures__/report-ready.json'
 import {
   aiCommentView,
   briefingNeedsPolling,
+  briefingSummary,
   briefingView,
   improvingLine,
+  josa,
   repeatedLine,
   reportIntro,
   trendSteps,
@@ -80,10 +82,12 @@ describe('AI 코멘트 상태', () => {
 })
 
 describe('분석 리포트', () => {
-  it('상태별 안내 (데이터 부족은 서버 안내 문구)', () => {
+  it('상태별 안내 (친근한 문구, 숫자는 서버 값)', () => {
     expect(reportIntro(reportReady).text).toMatch(/강사 첨삭 6건\(작품 6개\)/)
     const insufficient = { ...reportReady, status: 'INSUFFICIENT_DATA', message: '아직 성장 추세를…' }
-    expect(reportIntro(insufficient).text).toBe('아직 성장 추세를…')
+    expect(reportIntro(insufficient).text).toBe('작품이 조금 더 쌓이면 변화도 함께 살펴볼게요.')
+    const waiting = { ...reportReady, status: 'NEEDS_CONFIRMATION' }
+    expect(reportIntro(waiting).title).toBe('확인할 첨삭이 1개 있어요')
     const empty = { ...reportReady, status: 'NO_FEEDBACK', counts: { ...reportReady.counts, artwork_count: 0 } }
     expect(reportIntro(empty).title).toMatch(/작품 하나부터/)
   })
@@ -103,5 +107,72 @@ describe('분석 리포트', () => {
       ['2026-11-10', '칭찬'],
       ['2026-11-18', '칭찬'],
     ])
+  })
+})
+
+describe('홈 브리핑 짧은 요약', () => {
+  it('조사는 받침에 맞게', () => {
+    expect(josa('명암', '을', '를')).toBe('명암을')
+    expect(josa('형태·비례', '을', '를')).toBe('형태·비례를')
+    expect(josa('타원·원통형 형태', '을', '를')).toBe('타원·원통형 형태를')
+    expect(josa('구도', '은', '는')).toBe('구도는')
+  })
+
+  it('정상: 세부 주제로 친근한 제목, 실제 첨삭 문장을 그대로 오늘의 연습으로', () => {
+    const short = briefingSummary(briefingReady)
+    expect(short.title).toBe('오늘은 타원·원통형 형태를 조금 더 신경 써 볼까요? 🎨')
+    expect(short.text).toBe('최근 작품 3개의 첨삭에서 타원·원통형 형태 이야기가 이어졌어요.')
+    expect(short.highlight).toBe('명암은 지난번보다 좋아졌다는 첨삭이 있었어요.')
+    expect(short.practice.content).toBe(briefingReady.practice.content) // 원문 그대로
+    expect(short.notes).toEqual([])
+  })
+
+  it('연습 항목이 없으면 연습을 만들지 않음', () => {
+    expect(briefingSummary({ ...briefingReady, practice: null }).practice).toBeNull()
+  })
+
+  it('데이터 부족·확인할 첨삭은 한 줄 보조 안내', () => {
+    const short = briefingSummary({
+      ...briefingReady,
+      status: 'INSUFFICIENT_DATA',
+      focus: { ...briefingReady.focus, reason: 'RECENT', theme_label: null },
+      counts: { ...briefingReady.counts, pending_review_count: 1 },
+    })
+    expect(short.title).toBe('오늘은 형태·비례를 조금 더 신경 써 볼까요? 🎨')
+    expect(short.text).toBe('최근 첨삭에서 형태·비례 이야기가 있었어요.')
+    expect(short.notes).toEqual([
+      '작품이 조금 더 쌓이면 변화도 함께 살펴볼게요.',
+      '확인할 첨삭이 1개 있어요.',
+    ])
+  })
+
+  it('지적 없이 칭찬만 있으면 칭찬 문장', () => {
+    const short = briefingSummary({
+      ...briefingReady,
+      focus: null,
+      practice: null,
+      highlight: { tag: 'COMPOSITION', label: '구도', kind: 'STRENGTH', artwork_count: 3 },
+    })
+    expect(short.title).toBe('최근 첨삭에 반가운 이야기가 있었어요 🎨')
+    expect(short.text).toBe('구도는 작품 3개에서 칭찬을 받았어요.')
+  })
+
+  it.each([
+    ['NO_RECORDS', '첫 작품을 기록해 볼까요? 🎨'],
+    ['NO_FEEDBACK', '선생님 첨삭을 남겨 볼까요?'],
+    ['PROCESSING', '첨삭을 정리하고 있어요'],
+  ])('%s 상태 제목', (status, title) => {
+    const short = briefingSummary({ ...briefingReady, status, focus: null, highlight: null, practice: null })
+    expect(short.title).toBe(title)
+    expect(short.practice).toBeNull()
+  })
+
+  it('확정 대기', () => {
+    const short = briefingSummary({
+      ...briefingReady,
+      status: 'NEEDS_CONFIRMATION',
+      counts: { ...briefingReady.counts, pending_review_count: 2 },
+    })
+    expect(short.title).toBe('확인할 첨삭이 2개 있어요')
   })
 })
