@@ -44,6 +44,10 @@ describe('PWA manifest', () => {
     expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" />')
     expect(html).toContain('<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />')
     expect(pngSize('public/icons/apple-touch-icon.png')).toBe('180x180')
+    for (const size of [32, 48]) {
+      expect(html).toContain(`href="/icons/favicon-${size}.png"`)
+      expect(pngSize(`public/icons/favicon-${size}.png`)).toBe(`${size}x${size}`)
+    }
     expect(html).toContain('viewport-fit=cover') // 노치·홈 바 safe-area
   })
 
