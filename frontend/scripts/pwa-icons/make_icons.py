@@ -1,8 +1,10 @@
 """ART MATE PWA 아이콘 생성기.
 
-구성: 흰 바탕(#FFFFFF) + 커다란 주황 'A'(--color-primary) + 기존 마스코트(mascot-cheer, 손 든 포즈)를
-크게, A 오른쪽 다리 앞에 겹쳐 둔다. 가슴 앞 앞발이 A 다리에 닿아 'A를 붙잡고 인사하는' 느낌.
+구성: 흰 바탕(#FFFFFF) + 커다란 주황 'A'(--color-primary) + 홈 탭과 같은 미술 고양이
+(mascot-artist: 베레모·붓·팔레트·물감 앞치마)를 A 오른쪽 아래에 겹쳐 둔다.
 마스코트는 기존 에셋을 비율 그대로 확대·축소만 한다 (새로 그리거나 변형하지 않음).
+베레모·붓·팔레트가 잘리지 않도록 고양이 이미지 전체가 아이콘 안쪽 여백 안에 들어가게 둔다.
+아이콘을 바꾸면 index.html·manifest.webmanifest의 ?v= 값을 올려 브라우저·홈 화면 캐시를 갱신한다.
 
 실행 (Pillow 필요, 백엔드 가상환경에 있음):
     backend/.venv/Scripts/python frontend/scripts/pwa-icons/make_icons.py
@@ -18,7 +20,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]  # frontend/
-MASCOT = ROOT / "src/assets/mascot/mascot-cheer.webp"
+MASCOT = ROOT / "src/assets/mascot/mascot-artist.webp"  # 홈 탭 MascotCheer pose="artist"와 같은 에셋
 OUT = ROOT / "public/icons"
 
 N = 1024  # 원본 크기 (여기서 그려 줄인다)
@@ -33,8 +35,8 @@ A_RIGHT = (760, 915)  # 오른쪽 다리 끝
 A_STROKE = 140  # 획 굵기
 A_BAR_Y = 650  # 가로획 높이
 A_BAR = (215, 650)  # 가로획 x 범위 (오른쪽 끝은 고양이 뒤로 숨음)
-CAT_HEIGHT = 700  # 고양이 높이 (원본 비율 유지)
-CAT_CENTER = (705, 655)  # 고양이 이미지 중심
+CAT_HEIGHT = 640  # 고양이 높이 (원본 비율 유지, 355x420 -> 약 541x640)
+CAT_CENTER = (690, 660)  # 고양이 이미지 중심 (x 420~960, y 340~980: 붓·팔레트 끝까지 여백 안)
 
 
 def draw_a(scale: float) -> Image.Image:
@@ -80,7 +82,7 @@ def main() -> None:
     parser.add_argument("--preview", type=Path, help="작은 크기 확인용 미리보기 폴더")
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    full, mask = compose(1.0), compose(0.8)
+    full, mask = compose(1.0), compose(0.75)  # maskable: 지름 80% 원형 안전 영역 안
     outputs = {
         "icon-192.png": (full, 192),
         "icon-512.png": (full, 512),
