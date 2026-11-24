@@ -174,35 +174,76 @@ export default function AnalysisReport() {
         </Link>
       </div>
       <p className={styles.small}>
-        판정 기준: 반복·강점은 작품 {report.criteria.repeated_min_artworks}개 이상, 전체 분석은 확정 강사 첨삭이
-        있는 작품 {report.criteria.required_artwork_count}개 이상. {report.criteria.improvement_rule}
+        판정 기준: 반복·강점은 작품 {report.criteria.repeated_min_artworks}개 이상, 전체 분석은 확정
+        강사 첨삭이 있는 작품 {report.criteria.required_artwork_count}개 이상.{' '}
+        {report.criteria.improvement_rule}
       </p>
       <Notes notes={report.notes} />
     </div>
   )
 }
 
-/** 단순 기록 수 (AI 분석 아님) + 저장된 AI 코멘트 */
+/**
+ * 전체 학습 기록: 한눈에 보이는 상태 (AI 분석 아님, 서버가 준 숫자만)
+ * - 작품 몇 점 중 몇 점이 선생님 첨삭을 받았는지 + 막대
+ * - 지금 할 일(확인할 첨삭) · 정리 중 · 분석까지 남은 작품 수
+ * - 저장된 AI 코멘트
+ */
 function RecordSummary({ report }) {
-  const { counts } = report
+  const { counts, status } = report
   const ai = aiCommentView(report.ai_narrative)
+  const total = counts.artwork_count
+  const withFeedback = counts.analyzed_artwork_count
+  const needed = Math.max(report.criteria.required_artwork_count - withFeedback, 0)
+  const percent = total ? Math.round((withFeedback / total) * 100) : 0
+
   return (
     <div className={styles.body}>
-      <div className={styles.stats}>
-        <Stat label="기록된 작품" value={counts.artwork_count} unit="점" paint="var(--color-primary)" />
-        <Stat label="확정 첨삭" value={counts.confirmed_feedback_count} unit="건" paint="#7c6ee6" />
-        <Stat label="첨삭 연결" value={counts.analyzed_artwork_count} unit="점" paint="#e0607e" />
-        <Stat label="실기시험" value={counts.mock_exam_count} unit="회" paint="#3fa7d6" />
-      </div>
-      {counts.pending_review_count > 0 && (
-        <p className={styles.muted}>
-          <strong>확정을 기다리는 첨삭 {counts.pending_review_count}건</strong> · AI 정리 결과를
-          확인하고 확정하면 분석에 반영돼요.
+      <div className={styles.record}>
+        <p className={styles.recordHead}>
+          작품 <strong>{total}점</strong> 중 <strong>{withFeedback}점</strong>이 선생님 첨삭을
+          받았어요
         </p>
+        <div
+          className={styles.bar}
+          role="progressbar"
+          aria-label="첨삭 받은 작품"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={withFeedback}
+        >
+          <span className={styles.barFill} style={{ width: `${percent}%` }} />
+        </div>
+        <p className={styles.small}>
+          실기시험 {counts.mock_exam_count}회 · 연습 {counts.practice_artwork_count}점
+        </p>
+      </div>
+
+      {(counts.pending_review_count > 0 ||
+        counts.processing_count > 0 ||
+        (status !== 'READY' && needed > 0)) && (
+        <ul className={styles.todo}>
+          {counts.pending_review_count > 0 && (
+            <li className={styles.todoAction}>
+              <strong>확인할 첨삭 {counts.pending_review_count}개</strong>
+              <span>확인하면 리포트에 반영돼요</span>
+            </li>
+          )}
+          {counts.processing_count > 0 && (
+            <li>
+              <strong>정리 중 {counts.processing_count}개</strong>
+              <span>녹음을 글로 바꾸고 정리하고 있어요</span>
+            </li>
+          )}
+          {status !== 'READY' && needed > 0 && (
+            <li>
+              <strong>첨삭 받은 작품 {needed}점 더</strong>
+              <span>쌓이면 반복 실수·강점 분석을 시작해요</span>
+            </li>
+          )}
+        </ul>
       )}
-      {counts.processing_count > 0 && (
-        <p className={styles.small}>음성 변환·AI 정리 중인 첨삭 {counts.processing_count}건</p>
-      )}
+
       {ai && (
         <div className={styles.ai}>
           <span className={styles.subLabel}>
@@ -311,15 +352,3 @@ function Section({ title, color, children }) {
 }
 
 /** 물감 점 숫자 타일 (홈 학습 현황과 같은 모양) */
-function Stat({ label, value, unit, paint }) {
-  return (
-    <div className={styles.stat} style={{ '--paint': paint }}>
-      <i className={styles.paint} aria-hidden />
-      <span>
-        <strong className={styles.statValue}>{value}</strong>
-        <span className={styles.unit}>{unit}</span>
-      </span>
-      <span className={styles.small}>{label}</span>
-    </div>
-  )
-}
