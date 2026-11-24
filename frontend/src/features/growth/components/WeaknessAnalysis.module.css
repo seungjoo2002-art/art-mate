@@ -1,109 +1,125 @@
+/* 기간 성장 리포트 본문: 분석 리포트와 같은 흰 카드 · 연한 색 항목 · 고양이 */
 .wrap {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.heading {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-medium);
-}
-
-.caption {
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
-}
-
-.empty {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-}
-
-.emptyTitle {
-  font-size: var(--text-md);
-  font-weight: var(--weight-bold);
-  color: var(--color-text);
-}
-
-.guidance {
-  color: var(--color-text-sub);
-}
-
-.totals {
+/* 이 기간 기록: 세 칸 */
+.stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  padding: var(--space-6) 0;
+  gap: var(--space-2);
 }
 
 .stat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-1);
+  gap: 2px;
+  padding: var(--space-3) var(--space-1);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 2px 14px rgb(31 31 31 / 6%);
 }
 
-.stat + .stat {
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
+.statIcon {
+  color: var(--color-primary);
 }
 
 .statValue {
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-bold);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: 1.3;
 }
 
 .statLabel {
-  font-size: var(--text-xs);
-  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  color: var(--color-text-sub);
 }
 
-.weakness {
+.note {
+  margin-top: calc(var(--space-2) * -1);
+  padding: 0 var(--space-1);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+/* 섹션 카드 */
+.section {
+  --tone: #f2933a;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-4);
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: 0 2px 14px rgb(31 31 31 / 6%);
 }
 
-.weaknessHeader {
+.good {
+  --tone: #9fb34a;
+}
+
+.issue {
+  --tone: #f29bb0;
+}
+
+.sectionHead {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  text-align: left;
+  gap: var(--space-2);
 }
 
-.rank {
+/* 고양이는 카드 위 오른쪽 모서리에 걸터앉음 (카드 밖으로 반쯤) */
+/* 고양이는 카드 밖, 오른쪽 위 모서리 위에 '서 있게' (발끝만 카드에 살짝 걸침) */
+.withCat {
+  position: relative;
+  margin-top: 76px;
+}
+
+/* 붓·응원 고양이는 그림 아래 여백이 없어서 발이 카드 모서리에 바로 닿게 -86px */
+.sectionCat {
+  position: absolute;
+  top: -86px;
+  right: var(--space-4);
+  width: auto;
+  height: 88px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 3px 4px rgb(31 31 31 / 12%));
+}
+
+/* '잘하고 있어 ㅎㅎ' 말풍선 고양이: 말풍선 글씨가 보이게 크게, 같은 방식으로 서 있게 */
+.sectionCat.catBig {
+  top: -98px;
+  height: 112px;
+}
+
+.withCat:has(.catBig) {
+  margin-top: 88px;
+}
+
+.sectionIcon {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background: var(--color-primary);
-  color: var(--color-text-on-primary);
-  font-weight: var(--weight-bold);
+  background: color-mix(in srgb, var(--tone) 18%, var(--color-surface));
+  color: color-mix(in srgb, var(--tone) 60%, #000);
 }
 
-.weaknessText {
-  display: flex;
+.sectionTitle {
   flex: 1;
-  flex-direction: column;
-}
-
-.weaknessTitle {
-  font-weight: var(--weight-bold);
-}
-
-.weaknessSub {
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 400;
+  line-height: 1.3;
 }
 
 .chips {
@@ -112,33 +128,432 @@
   gap: var(--space-2);
 }
 
-.strength,
-.unverified {
-  padding: var(--space-1) var(--space-3);
+.goodChip {
+  height: 32px;
+  padding: 0 var(--space-3);
+  transition: background-color 0.15s, color 0.15s;
   border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--tone) 18%, var(--color-surface));
+  color: color-mix(in srgb, var(--tone) 50%, #000);
   font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
 }
 
-.strength {
-  background: var(--color-success-soft);
-  color: var(--color-success);
+/* 고양이 채팅 섹션 (카드 없음): 고양이 + 큰 말풍선 → 안내 → 칩 → 채팅 */
+.talkSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-1) 0;
 }
 
-.unverified {
-  background: var(--color-surface-muted);
+.talkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.talkCat {
+  flex-shrink: 0;
+  width: auto;
+  height: 120px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* 큰 말풍선 (꼬리는 고양이 쪽) */
+.bigBubble {
+  position: relative;
+  padding: var(--space-3) var(--space-5);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--tone) 22%, var(--color-surface));
+  color: color-mix(in srgb, var(--tone) 40%, #000);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: 1.25;
+}
+
+.bigBubble::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -12px;
+  border-top: 9px solid transparent;
+  border-right: 14px solid color-mix(in srgb, var(--tone) 22%, var(--color-surface));
+  border-bottom: 9px solid transparent;
+  transform: translateY(-50%);
+}
+
+.goodHint {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
   color: var(--color-text-sub);
 }
 
+/* 오른쪽 고양이: 줄 순서·말풍선 방향을 거울처럼 */
+.talkRight .talkRow,
+.talkRight .catSays {
+  flex-direction: row-reverse;
+}
+
+.talkRight .bigBubble::before {
+  right: -12px;
+  left: auto;
+  border-right: 0;
+  border-left: 14px solid color-mix(in srgb, var(--tone) 22%, var(--color-surface));
+}
+
+.talkRight .goodHint {
+  text-align: right;
+}
+
+.talkRight .chips {
+  justify-content: flex-end;
+}
+
+.talkRight .me {
+  align-self: flex-start;
+  border-radius: 16px 16px 16px 4px;
+}
+
+.talkRight .catBubbles {
+  align-items: flex-end;
+}
+
+.talkRight .catBubble {
+  border-radius: 16px 4px 16px 16px;
+}
+
+/* 누른 칩: 진한 초록, 아래에 칭찬 문장이 펼쳐짐 */
+.goodChip[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--tone) 75%, #000);
+  color: #fff;
+}
+
+/* 채팅: 내 말풍선(오른쪽, 주황) → 고양이 답(왼쪽, 작은 얼굴 + 흰 말풍선들) */
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.me {
+  align-self: flex-end;
+  max-width: 80%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 16px 16px 4px 16px;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  animation: pop 0.25s ease-out both;
+}
+
+.catSays {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  object-position: top;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.catBubbles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.catBubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 4px 16px 16px 16px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 10px rgb(31 31 31 / 8%);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--color-text);
+  animation: pop 0.3s ease-out both;
+  animation-delay: calc(var(--i, 0) * 220ms);
+}
+
+/* 출처: 말풍선 안 아래 작은 글씨 */
+.quoteSource {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .me,
+  .catBubble {
+    animation: none;
+  }
+}
+
+.plainChip {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-sub);
+  font-size: var(--text-xs);
+}
+
+/* 보완할 점: 연분홍 카드, 누르면 근거 */
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--tone) 10%, var(--color-surface));
+}
+
+.item > ul > li > a {
+  background: var(--color-surface);
+}
+
+.itemHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: left;
+}
+
+.itemText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.itemTitle {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+}
+
+.itemSub {
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
+}
+
+.down,
+.up {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform 0.2s;
+}
+
+.up {
+  transform: rotate(180deg);
+}
+
+/* 다음 목표: 판 든 고양이 그림이 위에, 그 발밑에 흰 카드 목록 */
+.goalSection {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-2);
+}
+
+.goalCat {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  width: auto;
+  height: 190px;
+  margin-bottom: -28px; /* 고양이가 카드 위에 서 있게 */
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.goalSection .goals {
+  padding: var(--space-8) var(--space-4) var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: 0 2px 14px rgb(31 31 31 / 6%);
+}
+
+/* 다음 목표 미션 카드: 빈 체크 동그라미 + 'OO 미션!' + 쉬운 문장 + 선생님 한마디 */
+.mission {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  column-gap: var(--space-2);
+  row-gap: 2px;
+}
+
+.mission::before {
+  grid-row: span 3;
+  margin-top: 3px;
+}
+
+.missionTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  color: var(--color-primary-ink);
+}
+
+.missionText {
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+/* 선생님 한마디: 작은 이름표 + 꼬리 달린 말풍선 (부드러운 글씨) */
+.missionTip {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+/* 안경 쓴 선생님 고양이 (이젤 앞) */
+.tipCat {
+  flex-shrink: 0;
+  width: auto;
+  height: 56px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.tipBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  padding-bottom: var(--space-1);
+}
+
+.tipWho {
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  color: var(--color-text-muted);
+}
+
+.tipText {
+  position: relative;
+  padding: 6px var(--space-3);
+  border-radius: 14px 14px 14px 4px;
+  background: var(--color-bg);
+  box-shadow: 0 0 0 1px var(--color-border);
+  font-family: var(--font-soft);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+/* 다음 목표: 주황 체크 동그라미 목록 */
 .goals {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   margin: 0;
-  padding-left: var(--space-5);
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
-.timeCard {
+.goals {
+  gap: var(--space-4);
+}
+
+.goals li::before {
+  content: '';
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+}
+
+/* 참고 의견: 작은 회색 알약으로 접어 둠 */
+.unverified {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
+}
+
+.unverified summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  height: 28px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-sub);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  list-style: none;
+  cursor: pointer;
+}
+
+.unverified summary::-webkit-details-marker {
+  display: none;
+}
+
+.unverified[open] summary {
+  margin-bottom: var(--space-2);
+}
+
+.unverified[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: 0 2px 14px rgb(31 31 31 / 6%);
+  text-align: center;
+}
+
+.emptyTitle {
+  font-weight: var(--weight-bold);
+}
+
+.muted {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--color-text-sub);
 }

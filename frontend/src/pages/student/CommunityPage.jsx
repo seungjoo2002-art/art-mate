@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Flame, Heart, MessageCircle, PenLine, Search, X } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import MascotCheer from '../../components/mascot/MascotCheer'
+import { MASCOT_POSES } from '../../components/mascot/poses'
 import { Button, Card } from '../../components/ui'
 import { listFeed, setLiked } from '../../features/community/api'
 import { authorName } from '../../features/community/anonName'
@@ -62,6 +63,7 @@ export default function CommunityPage() {
         <span className={styles.issue}>{issueLabel()}</span>
         <h1 className={styles.mastTitle}>커뮤니티</h1>
         <p className={styles.mastSub}>그림 그리는 우리끼리 만드는 잡지</p>
+        <img src={MASCOT_POSES.reading} alt="" className={styles.mastCat} />
       </header>
 
       <div className={styles.tabs} role="tablist" aria-label="보기 방식">
@@ -267,7 +269,11 @@ function BoardPost({ post }) {
       >
         <span className={styles.byline}>
           <span className={styles.avatar} aria-hidden>
-            {post.author?.is_anonymous ? '🐾' : name.slice(0, 1)}
+            {post.author?.is_anonymous ? (
+              <img src={MASCOT_POSES.standing} alt="" className={styles.anonCat} />
+            ) : (
+              name.slice(0, 1)
+            )}
           </span>
           <span className={styles.author}>{name}</span>
           <span className={styles.category}>{postCategory(post)}</span>

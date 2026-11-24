@@ -26,7 +26,7 @@ export function briefingView(briefing) {
     lines: briefing.lines ?? [],
     meta:
       BRIEFING_META[status] ??
-      `확정 첨삭 ${counts.instructor_feedback_count}건 · 작품 ${counts.analyzed_artwork_count}개 기준`,
+      `첨삭 받은 작품 ${counts.analyzed_artwork_count}점으로 정리`,
     cta: BRIEFING_CTA[status] ?? null,
   }
 }
@@ -84,7 +84,7 @@ export function reportIntro(report) {
   if (status === 'READY') {
     return {
       title: '기록이 차곡차곡 쌓이고 있어요!',
-      text: `확정한 강사 첨삭 ${counts.instructor_feedback_count}건(작품 ${counts.analyzed_artwork_count}개)을 근거로 정리했어요.`,
+      text: `선생님 첨삭을 받은 작품 ${counts.analyzed_artwork_count}점을 보고 정리했어요.`,
     }
   }
   if (status === 'INSUFFICIENT_DATA') {
@@ -96,7 +96,7 @@ export function reportIntro(report) {
   if (status === 'NEEDS_CONFIRMATION') {
     return {
       title: `확인할 첨삭이 ${counts.pending_review_count}개 있어요`,
-      text: '정리된 첨삭을 확인하고 확정하면 여기에 담겨요.',
+      text: '정리된 첨삭을 보고 \'확정하기\'를 누르면 여기에 담겨요.',
     }
   }
   return {
@@ -153,12 +153,12 @@ function focusLines(focus) {
   const subject = focus.theme_label || focus.label
   if (isGeneric(focus)) {
     return {
-      title: '오늘은 최근 첨삭을 다시 살펴볼까요? 🎨',
+      title: '오늘은 최근 첨삭을 다시 살펴볼까요?',
       text: '최근 첨삭에서 다듬어 보라는 이야기가 있었어요.',
     }
   }
   return {
-    title: `오늘은 ${josa(subject, '을', '를')} 조금 더 신경 써 볼까요? 🎨`,
+    title: `오늘은 ${josa(subject, '을', '를')} 조금 더 신경 써 볼까요?`,
     text:
       focus.reason === 'REPEATED'
         ? `최근 작품 ${focus.artwork_count}개의 첨삭에서 ${subject} 이야기가 이어졌어요.`
@@ -177,7 +177,7 @@ function highlightText(highlight) {
 
 const SHORT_BY_STATUS = {
   NO_RECORDS: {
-    title: '첫 작품을 기록해 볼까요? 🎨',
+    title: '첫 작품을 기록해 볼까요?',
     text: '작품과 선생님 첨삭을 남기면 오늘 연습할 거리를 함께 골라 드릴게요.',
   },
   NO_FEEDBACK: {
@@ -216,11 +216,24 @@ export function briefingSummary(briefing) {
   if (focus) {
     ;({ title, text } = focusLines(focus))
   } else if (highlight) {
-    title = '최근 첨삭에 반가운 이야기가 있었어요 🎨'
+    title = '최근 첨삭에 반가운 이야기가 있었어요'
     text = highlightText(highlight)
   } else {
     title = briefing.headline // 서버 문장 그대로 (드문 경우)
   }
   const praise = highlight && focus ? highlightText(highlight) : null
   return { title, text, practice: practice ?? null, highlight: praise }
+}
+
+/**
+ * 첨삭 요약을 보여 줄 때 문장 단위로 나눈다 (글자는 바꾸지 않음).
+ * 마침표·물음표·느낌표 뒤 공백, 줄바꿈 기준. 빈 조각은 버림
+ */
+export function splitSentences(text) {
+  // lookbehind 정규식은 iOS 16.3 이하 사파리에서 문법 오류라 쓰지 않음
+  return (text ?? '')
+    .replace(/([.!?])\s+/g, '$1\n')
+    .split(/\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
 }

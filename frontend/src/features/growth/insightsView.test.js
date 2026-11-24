@@ -10,6 +10,7 @@ import {
   josa,
   repeatedLine,
   reportIntro,
+  splitSentences,
   trendSteps,
 } from './insightsView'
 
@@ -22,7 +23,7 @@ describe('홈 브리핑 상태', () => {
     const view = briefingView(briefingReady)
     expect(view.title).toBe(briefingReady.headline)
     expect(view.lines).toEqual(briefingReady.lines)
-    expect(view.meta).toBe('확정 첨삭 6건 · 작품 6개 기준')
+    expect(view.meta).toBe('첨삭 받은 작품 6점으로 정리')
     expect(view.cta.to).toBe('/archive?tab=report')
   })
 
@@ -83,7 +84,7 @@ describe('AI 코멘트 상태', () => {
 
 describe('분석 리포트', () => {
   it('상태별 안내 (친근한 문구, 숫자는 서버 값)', () => {
-    expect(reportIntro(reportReady).text).toMatch(/강사 첨삭 6건\(작품 6개\)/)
+    expect(reportIntro(reportReady).text).toMatch(/선생님 첨삭을 받은 작품 [0-9]+점/)
     const insufficient = { ...reportReady, status: 'INSUFFICIENT_DATA', message: '아직 성장 추세를…' }
     expect(reportIntro(insufficient).text).toBe('작품이 조금 더 쌓이면 변화도 함께 살펴볼게요.')
     const waiting = { ...reportReady, status: 'NEEDS_CONFIRMATION' }
@@ -120,7 +121,7 @@ describe('홈 브리핑 짧은 요약', () => {
 
   it('정상: 세부 주제로 친근한 제목, 실제 첨삭 문장을 그대로 오늘의 연습으로', () => {
     const short = briefingSummary(briefingReady)
-    expect(short.title).toBe('오늘은 타원·원통형 형태를 조금 더 신경 써 볼까요? 🎨')
+    expect(short.title).toBe('오늘은 타원·원통형 형태를 조금 더 신경 써 볼까요?')
     expect(short.text).toBe('최근 작품 3개의 첨삭에서 타원·원통형 형태 이야기가 이어졌어요.')
     expect(short.highlight).toBe('명암은 지난번보다 좋아졌다는 첨삭이 있었어요.')
     expect(short.practice.content).toBe(briefingReady.practice.content) // 원문 그대로
@@ -138,7 +139,7 @@ describe('홈 브리핑 짧은 요약', () => {
       focus: { ...briefingReady.focus, reason: 'RECENT', theme_label: null },
       counts: { ...briefingReady.counts, pending_review_count: 1 },
     })
-    expect(short.title).toBe('오늘은 형태·비례를 조금 더 신경 써 볼까요? 🎨')
+    expect(short.title).toBe('오늘은 형태·비례를 조금 더 신경 써 볼까요?')
     expect(short.text).toBe('최근 첨삭에서 형태·비례 이야기가 있었어요.')
     expect(short).not.toHaveProperty('notes')
     expect(JSON.stringify(short)).not.toMatch(/변화도 함께|확인할 첨삭/)
@@ -151,12 +152,12 @@ describe('홈 브리핑 짧은 요약', () => {
       practice: null,
       highlight: { tag: 'COMPOSITION', label: '구도', kind: 'STRENGTH', artwork_count: 3 },
     })
-    expect(short.title).toBe('최근 첨삭에 반가운 이야기가 있었어요 🎨')
+    expect(short.title).toBe('최근 첨삭에 반가운 이야기가 있었어요')
     expect(short.text).toBe('구도는 작품 3개에서 칭찬을 받았어요.')
   })
 
   it.each([
-    ['NO_RECORDS', '첫 작품을 기록해 볼까요? 🎨'],
+    ['NO_RECORDS', '첫 작품을 기록해 볼까요?'],
     ['NO_FEEDBACK', '선생님 첨삭을 남겨 볼까요?'],
     ['PROCESSING', '첨삭을 정리하고 있어요'],
   ])('%s 상태 제목', (status, title) => {
@@ -172,5 +173,18 @@ describe('홈 브리핑 짧은 요약', () => {
       counts: { ...briefingReady.counts, pending_review_count: 2 },
     })
     expect(short.title).toBe('확인할 첨삭이 2개 있어요')
+  })
+})
+
+describe('splitSentences', () => {
+  it('문장 단위로 나누고 글자는 그대로 둔다', () => {
+    expect(splitSentences('구도는 안정적이다. 명암이 약하다!  배경은?\n다음엔 타원 연습')).toEqual([
+      '구도는 안정적이다.',
+      '명암이 약하다!',
+      '배경은?',
+      '다음엔 타원 연습',
+    ])
+    expect(splitSentences('')).toEqual([])
+    expect(splitSentences(null)).toEqual([])
   })
 })

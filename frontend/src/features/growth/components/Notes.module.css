@@ -1,22 +1,49 @@
+/* 안내: 한 줄 요약만 보이고, '자세히'를 누르면 원문 전체 */
 .notes {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.notes summary {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
+  align-items: center;
+  gap: 4px;
   list-style: none;
-  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.notes summary::-webkit-details-marker {
+  display: none;
+}
+
+.notes summary svg:first-child {
+  flex-shrink: 0;
+}
+
+.more {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  margin-left: auto;
+  font-weight: var(--weight-bold);
   color: var(--color-text-sub);
 }
 
-.notes li {
-  display: flex;
-  gap: var(--space-2);
+.more svg {
+  transition: transform 0.2s;
 }
 
-.notes svg {
-  flex-shrink: 0;
-  margin-top: 2px;
+.notes[open] .more svg {
+  transform: rotate(180deg);
+}
+
+.notes ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
