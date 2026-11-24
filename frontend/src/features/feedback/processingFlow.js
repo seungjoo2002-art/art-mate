@@ -20,9 +20,9 @@ const FAILURE_MESSAGES = {
   AUDIO_TOO_LONG: '녹음이 너무 길어서 글로 바꿀 수 없어요.',
   SOURCE_URL_EXPIRED: '처리 대기 시간이 길어졌어요. 다시 시도해 주세요.',
   STT_NOT_CONFIGURED: '서버 음성 변환이 아직 설정되지 않았어요.',
-  TRANSCRIPT_TOO_LONG: '대본이 너무 길어 AI가 정리할 수 없어요.',
-  LLM_OUTPUT_TRUNCATED: 'AI가 정리할 수 없는 녹음이에요.',
-  LLM_BLOCKED: 'AI가 정리할 수 없는 녹음이에요.',
+  TRANSCRIPT_TOO_LONG: '대본이 너무 길어 아트메이트가 정리할 수 없어요.',
+  LLM_OUTPUT_TRUNCATED: '아트메이트가 정리할 수 없는 녹음이에요.',
+  LLM_BLOCKED: '아트메이트가 정리할 수 없는 녹음이에요.',
   LLM_QUOTA_EXCEEDED: '지금은 AI 정리를 사용할 수 없어요.',
   AI_NOT_CONFIGURED: 'AI 정리 기능이 아직 설정되지 않았어요.',
   RECORDING_CONSENT_REVOKED: '녹음 동의가 철회되어 취소됐어요.',
@@ -98,7 +98,7 @@ export function processingState({ goal, transcription, summary, now = Date.now()
     return {
       step: 'failed',
       stage: 'summary',
-      message: failureMessage(sJob, 'AI가 첨삭을 정리하지 못했어요.'),
+      message: failureMessage(sJob, '아트메이트가 첨삭을 정리하지 못했어요.'),
       canRetry: Boolean(sJob.retryable),
       poll: null,
     }
@@ -117,7 +117,7 @@ export function processingText(state, goal) {
         title: state.retrying ? '다시 시도하고 있어요…' : '글로 바꾸고 있어요…',
         detail:
           goal === 'summary'
-            ? '글로 바꾼 뒤 이어서 AI가 첨삭을 정리해요. 보통 1~2분 걸려요.'
+            ? '글로 바꾼 뒤 이어서 아트메이트가 첨삭을 정리해요. 보통 1~2분 걸려요.'
             : '보통 1~2분 걸려요.',
       }
     case 'startSummary':

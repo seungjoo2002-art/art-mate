@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronRight, FileText, Sparkles, Type } from 'lucide-react'
+import { ChevronRight, FileText, NotebookPen, PencilLine, Type } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAsync } from '../../../hooks/useAsync'
 import { toErrorMessage } from '../../../utils/errorMessages'
@@ -126,8 +126,8 @@ export default function RecordingAiStatus({ artworkId, recording }) {
         <>
           {card.aiAvailable && (
             <button type="button" className={styles.action} onClick={() => go('summary')}>
-              <Sparkles size={18} aria-hidden />
-              AI로 정리하기
+              <NotebookPen size={18} aria-hidden />
+              아트메이트로 정리하기
             </button>
           )}
           <button type="button" className={styles.action} onClick={() => go('transcript')}>
@@ -138,10 +138,18 @@ export default function RecordingAiStatus({ artworkId, recording }) {
       )}
 
       {notStarted && serverOff && !card.hasTranscript && (
-        <div className={styles.notice}>
-          <p>지금은 서버 음성 변환을 쓸 수 없어요. 녹음은 그대로 저장되어 있어요.</p>
-          <Link to={notePath} className={styles.link}>
-            들은 내용을 글 첨삭으로 남기기
+        <div className={styles.writeCard}>
+          <p className={styles.writeTitle}>녹음은 잘 저장됐어요</p>
+          <p className={styles.writeText}>
+            지금은 녹음을 글로 바꿀 수 없어요. 들은 내용을 직접 적어 두면 분석에 반영돼요.
+          </p>
+          <Link
+            to={notePath}
+            state={{ from: location.pathname, fromRecording: true }}
+            className={styles.writeButton}
+          >
+            <PencilLine size={15} aria-hidden />
+            글로 적기
           </Link>
         </div>
       )}
@@ -217,8 +225,8 @@ export default function RecordingAiStatus({ artworkId, recording }) {
       )}
       {card.kind === 'transcribed' && card.aiAvailable && consent?.is_valid !== false && (
         <button type="button" className={styles.action} onClick={() => go('summary')}>
-          <Sparkles size={18} aria-hidden />
-          AI로 정리하기
+          <NotebookPen size={18} aria-hidden />
+          아트메이트로 정리하기
         </button>
       )}
       {card.hasTranscript && !card.aiAvailable && (
@@ -231,8 +239,8 @@ export default function RecordingAiStatus({ artworkId, recording }) {
 
       {card.kind === 'ready' && (
         <Link to={`/feedbacks/${card.feedbackId}`} className={styles.result}>
-          <Sparkles size={18} aria-hidden />
-          <span className={styles.resultText}>AI 첨삭 정리 보기</span>
+          <NotebookPen size={18} aria-hidden />
+          <span className={styles.resultText}>아트메이트 정리 보기</span>
           <span className={card.feedbackStatus === 'APPROVED' ? styles.done : styles.todo}>
             {card.feedbackStatus === 'APPROVED' ? '확정됨' : '확인 필요'}
           </span>

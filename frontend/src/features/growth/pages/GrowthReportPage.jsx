@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Bot } from 'lucide-react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
@@ -98,7 +98,7 @@ function Narrative({ narrative, busy, onRequest, onConsent }) {
     return (
       <Card variant="soft" className={styles.aiCard}>
         <span className={styles.aiLabel}>
-          <Sparkles size={14} aria-hidden /> AI가 정리한 설명
+          <Bot size={14} aria-hidden /> 아트메이트가 정리한 설명
         </span>
         <p>{content.overview}</p>
         {content.strengths_comment && <p>{content.strengths_comment}</p>}
@@ -117,7 +117,7 @@ function Narrative({ narrative, busy, onRequest, onConsent }) {
     return (
       <p className={styles.progress} role="status">
         <span className={styles.spinner} aria-hidden />
-        AI가 설명을 정리하는 중…
+        아트메이트가 설명을 정리하는 중…
       </p>
     )
   }
@@ -142,10 +142,10 @@ function Narrative({ narrative, busy, onRequest, onConsent }) {
         : null
   return (
     <Card variant="soft" className={styles.aiCard}>
-      {message ?? '통계 외에 AI가 정리한 설명도 받을 수 있어요.'}
+      {message ?? '통계 외에 아트메이트가 정리한 설명도 받을 수 있어요.'}
       <Button size="md" onClick={onRequest} disabled={busy}>
-        <Sparkles size={18} aria-hidden />
-        {busy ? '요청하는 중…' : message ? 'AI 설명 다시 받기' : 'AI 설명 받기'}
+        <Bot size={18} aria-hidden />
+        {busy ? '요청하는 중…' : message ? '아트메이트 설명 다시 받기' : '아트메이트 설명 받기'}
       </Button>
     </Card>
   )

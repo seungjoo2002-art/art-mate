@@ -95,7 +95,7 @@ export const updateArtwork = (artworkId, patch) =>
 export const completeArtwork = (artworkId) =>
   api(`/artworks/${artworkId}/complete`, { method: 'POST' })
 
-/** 작업 재개: 다시 사진을 올리거나 바꿀 수 있게 */
+/** 작업 다시 시작: 다시 사진을 올리거나 바꿀 수 있게 */
 export const reopenArtwork = (artworkId) => api(`/artworks/${artworkId}/reopen`, { method: 'POST' })
 
 /** 작품 타이머 (v0.9 F-2): 서버는 이벤트 기록·계산만, 화면이 초를 셈 */

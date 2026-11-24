@@ -53,7 +53,7 @@ export default function GrowthReportsPage() {
             ))}
           </div>
           <Checkbox checked={includeAi} onChange={setIncludeAi}>
-            AI 설명도 함께 받기 (AI 성장 코칭 동의 필요)
+            아트메이트 설명도 함께 받기 (AI 성장 코칭 동의 필요)
           </Checkbox>
           {error && <p className={styles.error}>{error}</p>}
           <Button onClick={handleCreate} disabled={creating}>

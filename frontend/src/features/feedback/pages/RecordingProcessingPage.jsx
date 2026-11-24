@@ -237,7 +237,7 @@ export default function RecordingProcessingPage() {
 
   return (
     <>
-      <TopBar title={goal === 'summary' ? 'AI로 정리하기' : '글로 변환하기'} belowHeader />
+      <TopBar title={goal === 'summary' ? '아트메이트로 정리하기' : '글로 변환하기'} belowHeader />
       <main className={styles.body}>
         {!server && netError ? (
           <section className={styles.panel}>

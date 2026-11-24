@@ -1,30 +1,29 @@
+/* 피드백 기준 사진: 작은 사진 + 한 줄 질문 + 작은 버튼 */
 .box {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-bg);
 }
 
-.suggested {
-  border-style: dashed;
-  border-color: var(--color-primary);
+/* 확인이 필요할 때만 연주황으로 눈에 띄게 */
+.SUGGESTED {
+  background: var(--color-primary-soft);
 }
 
-.head {
+.row {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  color: var(--color-text-sub);
+  gap: var(--space-3);
 }
 
 .thumbs {
   display: flex;
-  gap: var(--space-2);
+  flex-shrink: 0;
+  gap: var(--space-1);
+  max-width: 50%;
   margin: 0;
   padding: 0;
   overflow-x: auto;
@@ -33,11 +32,12 @@
 
 .thumb {
   position: relative;
-  flex: 0 0 72px;
-  height: 72px;
+  flex: 0 0 52px;
+  height: 52px;
   overflow: hidden;
   border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
+  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
 .image {
@@ -50,7 +50,7 @@
 .gone {
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--color-text-muted);
   text-align: center;
 }
@@ -61,29 +61,97 @@
   right: 0;
   bottom: 0;
   overflow: hidden;
-  padding: 1px var(--space-1);
+  padding: 1px 3px;
   background: rgb(0 0 0 / 50%);
   color: #fff;
-  font-size: 10px;
+  font-size: 9px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.links {
-  display: flex;
-  gap: var(--space-4);
+/* 사진이 없을 때 빈 네모 */
+.placeholder {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
 }
 
-.links button {
+.text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--color-primary-text);
 }
 
+.CONFIRMED .title {
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
+}
+
+.CONFIRMED .title svg {
+  color: var(--color-success);
+}
+
+.SUGGESTED .title {
+  color: var(--color-primary-ink);
+}
+
+.sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
+}
+
+/* 버튼 줄: 오른쪽 정렬, 작게 */
 .actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.textButton {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-sub);
+}
+
+.pill,
+.pillSoft {
+  height: 30px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+}
+
+.pill {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.pillSoft {
+  background: var(--color-surface);
+  color: var(--color-primary-text);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.pill:disabled,
+.pillSoft:disabled {
+  opacity: 0.6;
 }
 
 .error {

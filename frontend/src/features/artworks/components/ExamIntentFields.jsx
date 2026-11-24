@@ -131,7 +131,7 @@ export default function ExamIntentFields({
             onChange={set('expression_intent')}
           />
           <p className={styles.note}>
-            적은 의도는 나중에 AI 비교 첨삭에서 참고해요. 비워 두면 AI가 의도를 짐작하지 않아요.
+            적은 의도는 나중에 AI 비교 첨삭에서 참고해요. 비워 두면 아트메이트가 의도를 짐작하지 않아요.
           </p>
         </div>
       </details>

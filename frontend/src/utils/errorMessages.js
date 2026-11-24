@@ -50,7 +50,7 @@ const API_MESSAGES = {
   FEEDBACK_NOTE_LIMIT: '작품 하나에 글 첨삭은 50개까지 남길 수 있어요.',
   TRANSCRIPT_LOCKED:
     '확정된 AI 정리가 있어서 원문을 고칠 수 없어요. 정리 결과에서 확정을 취소한 뒤 수정해 주세요.',
-  RECORDING_TOO_LONG: '녹음이 너무 길어서 AI로 정리할 수 없어요.',
+  RECORDING_TOO_LONG: '녹음이 너무 길어서 아트메이트가 정리할 수 없어요.',
   RECORDING_AUDIO_EXPIRED: '보관 기간이 지나 음성 파일이 삭제된 녹음이에요.',
   // 서버 설정이 꺼진 경우: 녹음·대본은 그대로 남아 있고, 설정 후 다시 요청할 수 있음
   STT_NOT_CONFIGURED:
@@ -74,7 +74,7 @@ const API_MESSAGES = {
   TIMER_INVALID_TRANSITION: '타이머 상태가 바뀌었어요. 화면을 새로고침해 주세요.',
   TIMER_INVALID_TIME: '기기 시간이 맞지 않아요. 시간 설정을 확인해 주세요.',
   TIMER_TOO_LONG: '24시간을 넘긴 시험은 이어서 기록할 수 없어요.',
-  ARTWORK_COMPLETED: '완료한 작품은 사진을 바꿀 수 없어요. 작업 재개 후 다시 시도해 주세요.',
+  ARTWORK_COMPLETED: '완성한 작품은 사진을 바꿀 수 없어요. 작업 다시 시작!을 누른 뒤 해 보세요.',
   STORAGE_NOT_CONFIGURED: '서버 사진 저장소 설정이 필요해요. 백엔드 담당자에게 문의해 주세요.',
 }
 

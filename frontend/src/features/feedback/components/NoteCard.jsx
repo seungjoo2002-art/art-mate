@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Pencil, Sparkles, Trash2 } from 'lucide-react'
+import { ChevronRight, NotebookPen, Pencil, Trash2 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { usePolling } from '../../../hooks/usePolling'
 import { labelOf } from '../../../lib/options'
@@ -104,8 +104,8 @@ export default function NoteCard({ note, options, onChanged }) {
           <p className={aiStyles.muted}>{toErrorMessage(error)}</p>
         ) : note.feedback_id ? (
           <Link to={`/feedbacks/${note.feedback_id}`} className={aiStyles.result}>
-            <Sparkles size={18} aria-hidden />
-            <span className={aiStyles.resultText}>AI 첨삭 정리 보기</span>
+            <NotebookPen size={18} aria-hidden />
+            <span className={aiStyles.resultText}>아트메이트 정리 보기</span>
             <span className={note.feedback_status === 'APPROVED' ? aiStyles.done : aiStyles.todo}>
               {note.feedback_status === 'APPROVED' ? '확정됨' : '확인 필요'}
             </span>
@@ -114,7 +114,7 @@ export default function NoteCard({ note, options, onChanged }) {
         ) : ai.kind === 'working' ? (
           <p className={aiStyles.progress} role="status">
             <span className={aiStyles.spinner} aria-hidden />
-            AI가 정리하는 중…
+            아트메이트가 정리하는 중…
           </p>
         ) : ai.kind === 'retrying' ? (
           <p className={aiStyles.muted} role="status">
@@ -130,7 +130,7 @@ export default function NoteCard({ note, options, onChanged }) {
           </div>
         ) : ai.kind === 'failed' ? (
           <div className={aiStyles.failed}>
-            <span>AI가 정리하지 못했어요. {ai.message}</span>
+            <span>아트메이트가 정리하지 못했어요. {ai.message}</span>
             {ai.canRetry && (
               <button
                 type="button"
@@ -149,8 +149,8 @@ export default function NoteCard({ note, options, onChanged }) {
             onClick={() => run(summarize)}
             disabled={busy}
           >
-            <Sparkles size={18} aria-hidden />
-            {busy ? '요청하는 중…' : 'AI로 정리하기'}
+            <NotebookPen size={18} aria-hidden />
+            {busy ? '요청하는 중…' : '아트메이트로 정리하기'}
           </button>
         )}
         {error && !NOT_CONFIGURED.includes(error.code) && (

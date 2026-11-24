@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { ClipboardCheck } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
@@ -78,7 +78,7 @@ export default function RecommendationPage() {
               ? labelOf(options.weakness_categories, rec.weakness_category)
               : rec.weakness_category}{' '}
             연습
-            {rec.source === 'AI' && ' · AI 추천'}
+            {rec.source === 'AI' && ' · 아트메이트 추천'}
           </span>
           <h1 className={styles.heading}>{rec.title}</h1>
           <p className={styles.caption}>
@@ -210,7 +210,7 @@ function PracticeProgress({ rec, busy, onRun, onReload }) {
       {followUp && (
         <section className={styles.section}>
           <h2 className={styles.label}>
-            <Sparkles size={14} aria-hidden /> 후속 첨삭 확인
+            <ClipboardCheck size={14} aria-hidden /> 후속 첨삭 확인
           </h2>
           <Card variant="soft">{FOLLOW_UP_LABELS[followUp.status] ?? followUp.status}</Card>
           <EvidenceList evidence={followUp.evidence} />

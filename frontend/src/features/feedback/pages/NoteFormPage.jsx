@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
+import MascotCheer from '../../../components/mascot/MascotCheer'
 import { Button, Checkbox, Chip, Input, Textarea } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
@@ -104,12 +105,40 @@ function NoteForm({ artworkId, note }) {
     }
   }
 
+  const fromRecording = Boolean(location.state?.fromRecording)
+
   return (
     <>
       <TopBar title={note ? '첨삭 수정' : '글로 첨삭 남기기'} belowHeader />
       <form className={styles.body} onSubmit={handleSubmit} noValidate>
+        {!note && (
+          <div className={styles.hero}>
+            <MascotCheer
+              pose="note"
+              sub="들은 말을 그대로 적으면 돼요. 정리는 아트메이트가 도와줄게요."
+            >
+              {fromRecording ? '녹음에서 들은 말을 적어 볼까요?' : '받은 첨삭을 적어 볼까요?'}
+            </MascotCheer>
+          </div>
+        )}
+
         <div className={styles.field}>
-          <span className={styles.label}>누구의 첨삭인가요?</span>
+          <Textarea
+            label="첨삭 내용"
+            rows={7}
+            maxLength={5000}
+            placeholder={
+              '예) 구도는 안정적이다. 오른쪽 컵의 명암이 약하다.\n시간 안에 배경을 끝내지 못했다.'
+            }
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            className={styles.textarea}
+          />
+          <p className={styles.counter}>{body.length} / 5000</p>
+        </div>
+
+        <div className={styles.field}>
+          <span className={styles.label}>누가 해 준 말인가요?</span>
           <div className={styles.chips} role="radiogroup" aria-label="첨삭 출처">
             {sources.map((s) => (
               <Chip
@@ -118,6 +147,7 @@ function NoteForm({ artworkId, note }) {
                 aria-checked={source === s.code}
                 selected={source === s.code}
                 onClick={() => setSource(s.code)}
+                className={styles.chip}
               >
                 {s.label}
               </Chip>
@@ -125,30 +155,13 @@ function NoteForm({ artworkId, note }) {
           </div>
           {source !== 'INSTRUCTOR' && (
             <p className={styles.hint}>
-              자기 메모·다른 학생 의견은 참고용으로 보관하고, 반복 약점 분석에는 넣지 않아요.
+              자기 메모·다른 학생 의견은 보관만 하고, 약점 분석에는 넣지 않아요.
             </p>
           )}
         </div>
 
         <StagePicker artworkId={artworkId} value={stageId} onChange={setStageId} />
-        <ReferencePicker
-          artworkId={artworkId}
-          stageId={stageId}
-          value={refs}
-          onChange={setRefs}
-        />
-
-        <Textarea
-          label="첨삭 내용"
-          rows={8}
-          maxLength={5000}
-          placeholder={
-            '예) 구도는 안정적이다. 오른쪽 컵의 명암이 약하다.\n시간 안에 배경을 끝내지 못했다.'
-          }
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-        />
-        <p className={styles.counter}>{body.length} / 5000</p>
+        <ReferencePicker artworkId={artworkId} stageId={stageId} value={refs} onChange={setRefs} />
 
         <Input
           label="첨삭 받은 날"
@@ -156,11 +169,12 @@ function NoteForm({ artworkId, note }) {
           max={today()}
           value={feedbackDate}
           onChange={(e) => setFeedbackDate(e.target.value)}
+          className={styles.date}
         />
 
         {!note && (
           <Checkbox checked={withAi} onChange={setWithAi}>
-            저장하고 AI로 정리하기
+            저장한 뒤 AI로 강점·보완점 정리하기
           </Checkbox>
         )}
         {note?.feedback_status && note.feedback_status !== 'APPROVED' && (
@@ -170,16 +184,25 @@ function NoteForm({ artworkId, note }) {
         )}
 
         {formError && <p className={styles.error}>{formError}</p>}
-        <Button type="submit" disabled={saving}>
-          {saving ? '저장하는 중…' : '저장하기'}
-        </Button>
-        <Button
-          variant="soft"
-          onClick={() => navigate(location.state?.from ?? artworkPath)}
-          disabled={saving}
-        >
-          취소
-        </Button>
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.cancel}
+            onClick={() => navigate(location.state?.from ?? artworkPath)}
+            disabled={saving}
+          >
+            취소
+          </button>
+          <Button
+            type="submit"
+            size="md"
+            fullWidth={false}
+            disabled={saving}
+            className={styles.save}
+          >
+            {saving ? '저장하는 중…' : '저장하기'}
+          </Button>
+        </div>
       </form>
     </>
   )

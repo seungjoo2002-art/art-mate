@@ -117,7 +117,7 @@ describe('AI로 정리하기', () => {
 describe('진행 문구', () => {
   it('글로 바꾸는 중 / 정리하는 중', () => {
     expect(processingText({ step: 'transcribing' }, 'transcript').title).toBe('글로 바꾸고 있어요…')
-    expect(processingText({ step: 'transcribing' }, 'summary').detail).toMatch(/이어서 AI가/)
+    expect(processingText({ step: 'transcribing' }, 'summary').detail).toMatch(/이어서 아트메이트가/)
     expect(processingText({ step: 'summarizing' }, 'summary').title).toBe('첨삭을 정리하고 있어요…')
   })
 })
