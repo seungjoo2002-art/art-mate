@@ -35,17 +35,18 @@ describe('PWA manifest', () => {
       ]),
     )
     for (const icon of manifest.icons) {
-      expect(pngSize(`public${icon.src}`)).toBe(icon.sizes)
+      expect(icon.src).toMatch(/\?v=\d+$/) // 아이콘 교체 시 캐시 갱신용
+      expect(pngSize(`public${icon.src.split('?')[0]}`)).toBe(icon.sizes)
     }
   })
 
   it('index.html이 manifest·iOS 아이콘을 연결한다', () => {
     const html = read('index.html').toString('utf8')
     expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" />')
-    expect(html).toContain('<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />')
+    expect(html).toContain('<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=')
     expect(pngSize('public/icons/apple-touch-icon.png')).toBe('180x180')
     for (const size of [32, 48]) {
-      expect(html).toContain(`href="/icons/favicon-${size}.png"`)
+      expect(html).toContain(`href="/icons/favicon-${size}.png?v=`)
       expect(pngSize(`public/icons/favicon-${size}.png`)).toBe(`${size}x${size}`)
     }
     expect(html).toContain('viewport-fit=cover') // 노치·홈 바 safe-area
