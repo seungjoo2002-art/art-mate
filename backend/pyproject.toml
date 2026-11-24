@@ -73,6 +73,8 @@ ignore = [
 "app/services/growth_briefing.py" = ["E501"]
 "app/services/growth_insights.py" = ["E501"]
 "app/schemas/insights.py" = ["E501"]
+# ArtCLIP 합격권 판정 (연구 코드 원본 유지): 한국어 주석·docstring 길이, 짧은 변수명 등
+"app/integrations/ai/artclip_judge.py" = ["E501", "E741", "RUF017", "B905"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
