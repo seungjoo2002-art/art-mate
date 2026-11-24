@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react'
-import { ClipboardCheck } from 'lucide-react'
+import { ChevronRight, ClipboardCheck, Clock } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
-import { Badge, Button, Card } from '../../../components/ui'
+import { MASCOT_POSES } from '../../../components/mascot/poses'
+import { Button } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { labelOf } from '../../../lib/options'
@@ -19,10 +20,9 @@ import {
   startRecommendation,
   unlinkArtwork,
 } from '../api'
-import EvidenceList from '../components/EvidenceList'
 import Notes from '../components/Notes'
 import { DIFFICULTY_LABELS, FOLLOW_UP_LABELS, RECOMMENDATION_STATUS } from '../labels'
-import styles from './GrowthPage.module.css'
+import styles from './RecommendationPage.module.css'
 
 /** 맞춤 연습 과제 상세: 채택 → 시작 → 수행 작품 → 후속 분석 → 완료 (v0.9 F-8) */
 export default function RecommendationPage() {
@@ -64,94 +64,139 @@ export default function RecommendationPage() {
     run(() => rejectRecommendation(rec.id, rec.version, reason.trim()))
   }
 
+  const category = options
+    ? labelOf(options.weakness_categories, rec.weakness_category)
+    : rec.weakness_category
+  const level = { EASY: 1, NORMAL: 2, HARD: 3 }[rec.difficulty] ?? 2
+
   return (
     <>
-      <TopBar
-        title="연습 과제"
-        belowHeader
-        right={<Badge>{RECOMMENDATION_STATUS[rec.status] ?? rec.status}</Badge>}
-      />
+      <TopBar title="연습 과제" belowHeader />
       <main className={styles.body}>
-        <div className={styles.section}>
-          <span className={styles.label}>
-            {options
-              ? labelOf(options.weakness_categories, rec.weakness_category)
-              : rec.weakness_category}{' '}
-            연습
-            {rec.source === 'AI' && ' · 아트메이트 추천'}
-          </span>
-          <h1 className={styles.heading}>{rec.title}</h1>
-          <p className={styles.caption}>
-            약 {rec.estimated_minutes}분 · {DIFFICULTY_LABELS[rec.difficulty]}
-          </p>
-          <p>{rec.description}</p>
-        </div>
-
-        {rec.method_steps?.length > 0 && (
-          <section className={styles.section}>
-            <h2 className={styles.label}>연습 방법</h2>
-            <ol className={styles.steps}>
-              {rec.method_steps.map((step) => (
-                <li key={step}>{step}</li>
+        {/* 연습장 한 장: 분류·상태 → 제목 → 시간·난이도 → 설명 → 연습 방법(번호 줄) */}
+        <article className={styles.notebook}>
+          <div className={styles.tags}>
+            <span className={styles.category}>{category}</span>
+            {rec.source === 'AI' && <span className={styles.tagMuted}>아트메이트 추천</span>}
+            <span className={`${styles.state} ${styles[rec.status] ?? ''}`}>
+              {RECOMMENDATION_STATUS[rec.status] ?? rec.status}
+            </span>
+          </div>
+          <h1 className={styles.title}>{rec.title}</h1>
+          <p className={styles.meta}>
+            <Clock size={13} aria-hidden /> 약 {rec.estimated_minutes}분
+            <span
+              className={styles.level}
+              aria-label={`난이도 ${DIFFICULTY_LABELS[rec.difficulty]}`}
+            >
+              {[1, 2, 3].map((n) => (
+                <i key={n} className={n <= level ? styles.on : ''} />
               ))}
-            </ol>
-          </section>
-        )}
+            </span>
+            {DIFFICULTY_LABELS[rec.difficulty]}
+          </p>
+          {rec.description && <p className={styles.desc}>{rec.description}</p>}
 
-        <section className={styles.section}>
-          <h2 className={styles.label}>추천 이유</h2>
-          <p className={styles.caption}>{rec.reason}</p>
-          <EvidenceList evidence={rec.evidence} />
+          {rec.method_steps?.length > 0 && (
+            <>
+              <h2 className={styles.subhead}>이렇게 연습해요</h2>
+              <ol className={styles.steps}>
+                {rec.method_steps.map((step, i) => (
+                  <li key={step}>
+                    <span className={styles.stepNo}>{i + 1}</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </article>
+
+        {/* 왜 이 과제? 선생님 고양이가 이유와 첨삭 문장을 말해 줌 */}
+        <section className={styles.why} aria-label="추천 이유">
+          <img src={MASCOT_POSES.teacher} alt="" className={styles.whyCat} />
+          <div className={styles.whyBubbles}>
+            <p className={`${styles.bubble} ${styles.bubbleLead}`}>
+              {rec.reason || '이 부분을 자주 짚어 줬어요'}
+            </p>
+            {rec.evidence?.slice(0, 3).map((e) => (
+              <Link key={e.item_id} to={`/feedbacks/${e.feedback_id}`} className={styles.bubble}>
+                <span>“{e.content}”</span>
+                {e.artwork_title && (
+                  <span className={styles.source}>
+                    {e.artwork_title}
+                    {e.work_date && ` · ${formatMonthDay(e.work_date)}`} 첨삭에서
+                  </span>
+                )}
+              </Link>
+            ))}
+          </div>
         </section>
 
         {inProgress && <PracticeProgress rec={rec} busy={busy} onRun={run} onReload={reload} />}
 
         {actionError && <p className={styles.error}>{actionError}</p>}
 
+        {/* 버튼: 오른쪽 작은 주황 알약 + 왼쪽 글자 버튼 */}
         <div className={styles.actions}>
           {['DRAFT', 'IN_REVIEW'].includes(rec.status) && (
             <>
-              <Button
+              <button
+                type="button"
+                className={styles.textButton}
+                onClick={handleReject}
+                disabled={busy}
+              >
+                이번엔 넘어가기
+              </button>
+              <button
+                type="button"
+                className={styles.pill}
                 onClick={() => run(() => adoptRecommendation(rec.id, rec.version))}
                 disabled={busy}
               >
-                이 과제 해 보기
-              </Button>
-              <Button variant="soft" onClick={handleReject} disabled={busy}>
-                이번엔 넘어가기
-              </Button>
+                이 과제 해 볼래요!
+              </button>
             </>
           )}
           {rec.status === 'ADOPTED' && !rec.started_at && (
-            <Button
+            <button
+              type="button"
+              className={styles.pill}
               onClick={() => run(() => startRecommendation(rec.id, rec.version))}
               disabled={busy}
             >
-              연습 시작하기
-            </Button>
+              연습 시작!
+            </button>
           )}
           {rec.status === 'ADOPTED' && rec.started_at && (
             <>
-              <Button onClick={() => navigate(`/artworks/new?recommendation=${rec.id}`)}>
-                이 과제로 작품 기록하기
-              </Button>
-              <Button
-                variant="soft"
+              <button
+                type="button"
+                className={styles.textButton}
                 onClick={() => run(() => setRecommendationCompleted(rec.id, rec.version, true))}
                 disabled={busy}
               >
-                과제 완료하기
-              </Button>
+                과제 끝냈어요
+              </button>
+              <button
+                type="button"
+                className={styles.pill}
+                onClick={() => navigate(`/artworks/new?recommendation=${rec.id}`)}
+              >
+                이 과제로 그림 기록하기
+              </button>
             </>
           )}
           {rec.status === 'COMPLETED' && (
-            <Button
-              variant="soft"
+            <button
+              type="button"
+              className={styles.textButton}
               onClick={() => run(() => setRecommendationCompleted(rec.id, rec.version, false))}
               disabled={busy}
             >
-              완료 취소
-            </Button>
+              끝냄 취소
+            </button>
           )}
         </div>
       </main>
@@ -177,43 +222,53 @@ function PracticeProgress({ rec, busy, onRun, onReload }) {
 
   return (
     <>
-      <section className={styles.section}>
-        <h2 className={styles.label}>이 과제로 그린 작품</h2>
+      <section className={styles.block}>
+        <h2 className={styles.blockTitle}>이 과제로 그린 그림</h2>
         {artworks?.length ? (
-          <ul className={styles.list}>
+          <ul className={styles.works}>
             {artworks.map((a) => (
-              <li key={a.artwork_id}>
-                <Card className={styles.row}>
-                  <Link to={`/artworks/${a.artwork_id}`} className={styles.rowText}>
-                    <span className={styles.rowTitle}>{a.title}</span>
-                    <span className={styles.caption}>
-                      {formatMonthDay(a.work_date)} · 확정 첨삭 {a.feedback_count}개
-                    </span>
-                  </Link>
-                  <button
-                    type="button"
-                    className={styles.link}
-                    onClick={() => handleUnlink(a.artwork_id)}
-                    disabled={busy}
-                  >
-                    빼기
-                  </button>
-                </Card>
+              <li key={a.artwork_id} className={styles.work}>
+                <Link to={`/artworks/${a.artwork_id}`} className={styles.workText}>
+                  <span className={styles.workTitle}>{a.title}</span>
+                  <span className={styles.source}>
+                    {formatMonthDay(a.work_date)} · 첨삭 {a.feedback_count}개
+                  </span>
+                </Link>
+                <button
+                  type="button"
+                  className={styles.unlink}
+                  onClick={() => handleUnlink(a.artwork_id)}
+                  disabled={busy}
+                >
+                  빼기
+                </button>
+                <ChevronRight size={16} aria-hidden className={styles.workGo} />
               </li>
             ))}
           </ul>
         ) : (
-          <p className={styles.caption}>아직 없어요. 과제를 연습한 작품을 기록해 보세요.</p>
+          <p className={styles.empty}>아직 없어요. 이 과제로 그린 그림을 기록해 보세요.</p>
         )}
       </section>
 
       {followUp && (
-        <section className={styles.section}>
-          <h2 className={styles.label}>
-            <ClipboardCheck size={14} aria-hidden /> 후속 첨삭 확인
+        <section className={styles.block}>
+          <h2 className={styles.blockTitle}>
+            <ClipboardCheck size={15} aria-hidden /> 그다음 첨삭은 어땠을까?
           </h2>
-          <Card variant="soft">{FOLLOW_UP_LABELS[followUp.status] ?? followUp.status}</Card>
-          <EvidenceList evidence={followUp.evidence} />
+          <p className={styles.followUp}>{FOLLOW_UP_LABELS[followUp.status] ?? followUp.status}</p>
+          {followUp.evidence?.slice(0, 3).map((e) => (
+            <Link key={e.item_id} to={`/feedbacks/${e.feedback_id}`} className={styles.followQuote}>
+              “{e.content}”
+              {e.artwork_title && (
+                <span className={styles.source}>
+                  {' '}
+                  {e.artwork_title}
+                  {e.work_date && ` · ${formatMonthDay(e.work_date)}`}
+                </span>
+              )}
+            </Link>
+          ))}
           <Notes notes={followUp.notes} />
         </section>
       )}

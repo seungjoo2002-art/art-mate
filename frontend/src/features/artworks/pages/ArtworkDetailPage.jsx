@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { PencilLine, Share2 } from 'lucide-react'
+import { PencilLine, Share2, Trash2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
@@ -314,6 +314,7 @@ export default function ArtworkDetailPage({ renderTimeline }) {
           onClick={handleDeleteArtwork}
           disabled={deleting}
         >
+          <Trash2 size={14} aria-hidden />
           {deleting ? '삭제하는 중…' : '작품 삭제'}
         </button>
       </main>

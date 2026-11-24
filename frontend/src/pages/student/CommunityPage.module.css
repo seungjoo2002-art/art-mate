@@ -400,8 +400,21 @@
 
 /* 제호 */
 .mast {
+  position: relative;
   padding-bottom: var(--space-3);
   border-bottom: 3px solid var(--zine-ink);
+}
+
+/* 제호 오른쪽: 잡지 읽는 고양이가 아래 먹색 줄 위에 앉아 있음 */
+.mastCat {
+  position: absolute;
+  right: -4px;
+  bottom: 0;
+  height: 104px;
+  width: auto;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .issue {
@@ -587,6 +600,25 @@
   background: #fff;
   color: var(--zine-ink);
   font-size: var(--text-sm);
+}
+
+/* 익명 글쓴이: 동그라미 안에 고양이 얼굴만 보이게 */
+.zine .avatar {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 서 있는 고양이 그림을 위에 붙여 머리만 동그라미에 들어오게 */
+.anonCat {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  width: 115%;
+  max-width: none;
+  height: auto;
+  transform: translateX(-50%);
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .zine .author {

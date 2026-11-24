@@ -3,14 +3,15 @@ import { Bot } from 'lucide-react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
-import { Button, Card } from '../../../components/ui'
+import { MASCOT_POSES } from '../../../components/mascot/poses'
+import { Button } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { usePolling } from '../../../hooks/usePolling'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { getReport, regenerateReport } from '../api'
 import WeaknessAnalysis from '../components/WeaknessAnalysis'
 import { PERIOD_LABELS } from '../labels'
-import styles from './GrowthPage.module.css'
+import styles from './GrowthReportPage.module.css'
 
 export default function GrowthReportPage() {
   const { reportId } = useParams()
@@ -47,31 +48,39 @@ export default function GrowthReportPage() {
     }
   }
 
+  const range = report.period_start
+    ? `${formatDot(report.period_start)} ~ ${formatDot(report.period_end)}`
+    : '처음부터 지금까지'
+
   return (
     <>
       <TopBar title="성장 리포트" belowHeader />
       <main className={styles.body}>
-        <div>
-          <p className={styles.label}>{PERIOD_LABELS[report.period_type]}</p>
-          <p className={styles.caption}>
-            {report.period_start ? `${report.period_start} ~ ${report.period_end}` : '전체 기간'} ·
-            확정 첨삭 {report.source_feedback_count}개 기준
-          </p>
+        {/* 계단 오르는 고양이 + 기간 */}
+        <div className={styles.hero}>
+          <img src={MASCOT_POSES.growth} alt="" className={styles.heroCat} />
+          <div className={styles.heroText}>
+            <span className={styles.heroPeriod}>{PERIOD_LABELS[report.period_type]}</span>
+            <p className={styles.heroTitle}>한 계단씩 올라가는 중이에요!</p>
+            <span className={styles.heroRange}>{range}</span>
+          </div>
         </div>
 
         {report.is_stale && (
-          <Card variant="soft" className={styles.aiCard}>
-            리포트를 만든 뒤 기록이 바뀌었어요.
-            <Button
-              size="md"
-              variant="soft"
+          <div className={styles.stale}>
+            <span>리포트를 만든 뒤 기록이 바뀌었어요.</span>
+            <button
+              type="button"
+              className={styles.smallButton}
               onClick={() => regenerate(narrative?.status === 'READY')}
               disabled={busy}
             >
-              최신 기록으로 다시 만들기
-            </Button>
-          </Card>
+              다시 만들기
+            </button>
+          </div>
         )}
+
+        <WeaknessAnalysis analysis={report.statistics} />
 
         <Narrative
           narrative={narrative}
@@ -82,11 +91,15 @@ export default function GrowthReportPage() {
           }
         />
         {actionError && <p className={styles.error}>{actionError}</p>}
-
-        <WeaknessAnalysis analysis={report.statistics} />
       </main>
     </>
   )
+}
+
+/** "2026-11-01" → "11.1" */
+function formatDot(iso) {
+  const [, m, d] = iso.split('-').map(Number)
+  return `${m}.${d}`
 }
 
 /** AI 설명문 (통계와 분리해서 "AI가 정리한 설명"으로 표시) */
@@ -96,7 +109,7 @@ function Narrative({ narrative, busy, onRequest, onConsent }) {
 
   if (status === 'READY' && content) {
     return (
-      <Card variant="soft" className={styles.aiCard}>
+      <section className={styles.aiCard}>
         <span className={styles.aiLabel}>
           <Bot size={14} aria-hidden /> 아트메이트가 정리한 설명
         </span>
@@ -110,7 +123,7 @@ function Narrative({ narrative, busy, onRequest, onConsent }) {
             ))}
           </ul>
         )}
-      </Card>
+      </section>
     )
   }
   if (status === 'PENDING') {
@@ -125,28 +138,28 @@ function Narrative({ narrative, busy, onRequest, onConsent }) {
   if (status === 'SKIPPED' && code === 'INSUFFICIENT_DATA') return null
   if (status === 'SKIPPED' && ['AI_CONSENT_REQUIRED', 'AI_CONSENT_REVOKED'].includes(code)) {
     return (
-      <Card variant="soft" className={styles.aiCard}>
-        AI 설명을 받으려면 AI 성장 코칭 동의가 필요해요.
-        <Button size="md" onClick={onConsent}>
+      <div className={styles.aiAsk}>
+        <span>아트메이트 설명을 받으려면 AI 성장 코칭 동의가 필요해요.</span>
+        <button type="button" className={styles.smallButton} onClick={onConsent}>
           동의하러 가기
-        </Button>
-      </Card>
+        </button>
+      </div>
     )
   }
 
   const message =
     status === 'FAILED'
-      ? 'AI 설명을 만들지 못했어요.'
+      ? '설명을 만들지 못했어요.'
       : status === 'INVALIDATED'
-        ? '근거 첨삭이 삭제되어 AI 설명을 지웠어요.'
+        ? '근거 첨삭이 지워져서 설명도 지웠어요.'
         : null
   return (
-    <Card variant="soft" className={styles.aiCard}>
-      {message ?? '통계 외에 아트메이트가 정리한 설명도 받을 수 있어요.'}
-      <Button size="md" onClick={onRequest} disabled={busy}>
-        <Bot size={18} aria-hidden />
-        {busy ? '요청하는 중…' : message ? '아트메이트 설명 다시 받기' : '아트메이트 설명 받기'}
-      </Button>
-    </Card>
+    <div className={styles.aiAsk}>
+      <span>{message ?? '아트메이트가 이 기간을 글로 정리해 줄 수도 있어요.'}</span>
+      <button type="button" className={styles.smallButton} onClick={onRequest} disabled={busy}>
+        <Bot size={14} aria-hidden />
+        {busy ? '요청하는 중…' : message ? '다시 받기' : '설명 받기'}
+      </button>
+    </div>
   )
 }

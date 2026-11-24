@@ -1,0 +1,161 @@
+/* 기간 성장 리포트 화면 */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--gutter) var(--space-10);
+}
+
+/* 맨 위: 계단 오르는 고양이(흰 배경 그림 → multiply로 배경에 녹임) + 기간 */
+.hero {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.heroCat {
+  flex-shrink: 0;
+  width: auto;
+  height: 150px;
+  margin-left: calc(var(--gutter) * -1);
+  mix-blend-mode: multiply;
+  /* 계단이 그림 끝에서 딱 잘려 네모처럼 보이지 않게 가장자리를 배경으로 녹임 */
+  -webkit-mask-image: radial-gradient(ellipse 62% 70% at 45% 42%, #000 62%, transparent 100%);
+  mask-image: radial-gradient(ellipse 62% 70% at 45% 42%, #000 62%, transparent 100%);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.heroText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: var(--space-4);
+}
+
+.heroPeriod {
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-ink);
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+}
+
+.heroTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: 1.3;
+}
+
+.heroRange {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* 기록이 바뀌었을 때 한 줄 */
+.stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  font-size: var(--text-xs);
+  color: var(--color-text-sub);
+}
+
+/* 작은 주황 알약 버튼 */
+.smallButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+}
+
+.smallButton:disabled {
+  opacity: 0.6;
+}
+
+/* 아트메이트 설명 */
+.aiCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--color-primary-soft);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+
+.aiLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary-ink);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+/* 설명 받기·동의 안내: 한 줄 + 작은 버튼 */
+.aiAsk {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 2px 14px rgb(31 31 31 / 6%);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-primary-soft);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
