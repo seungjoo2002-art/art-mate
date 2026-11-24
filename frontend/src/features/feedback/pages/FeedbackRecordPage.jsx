@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FileAudio, Mic, PencilLine, Sparkles, Square, Type } from 'lucide-react'
+import { FileAudio, Mic, NotebookPen, PencilLine, Square, Type } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
@@ -179,8 +179,8 @@ function Recorder({ artworkId }) {
           {signal !== 'silent' && (
             <>
               <Button onClick={() => handleSave('summary')} disabled={uploading}>
-                <Sparkles size={20} aria-hidden />
-                {uploading ? '녹음 올리는 중…' : 'AI로 정리하기'}
+                <NotebookPen size={20} aria-hidden />
+                {uploading ? '녹음 올리는 중…' : '아트메이트로 정리하기'}
               </Button>
               <Button variant="soft" onClick={() => handleSave('transcript')} disabled={uploading}>
                 <Type size={20} aria-hidden />

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bot, LogOut, Mic, Sparkles } from 'lucide-react'
+import { Bot, LogOut, Mic, TrendingUp } from 'lucide-react'
 import { useAuth } from '../../app/providers/AuthContext'
 import TopBar from '../../components/layout/TopBar'
 import DatasetConsentCard from '../../features/dataset/DatasetConsentCard'
@@ -34,7 +34,7 @@ export default function MySettingsPage() {
             confirmMessage={AI_REVOKE_MESSAGE}
           />
           <ConsentRow
-            icon={Sparkles}
+            icon={TrendingUp}
             title="AI 성장 코칭"
             load={loadGrowthConsent}
             revoke={revokeGrowthConsent}

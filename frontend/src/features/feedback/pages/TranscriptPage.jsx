@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronRight, Pause, Play, Sparkles } from 'lucide-react'
+import { ChevronRight, NotebookPen, Pause, Play } from 'lucide-react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import FullScreenStatus from '../../../components/layout/FullScreenStatus'
 import TopBar from '../../../components/layout/TopBar'
@@ -117,8 +117,8 @@ function SummaryPanel({ artworkId, recordingId, refreshKey }) {
   if (phase.phase === 'ready') {
     return (
       <Link to={`/feedbacks/${phase.feedbackId}`} className={styles.summaryLink}>
-        <Sparkles size={18} aria-hidden />
-        <span>AI 첨삭 정리 보기</span>
+        <NotebookPen size={18} aria-hidden />
+        <span>아트메이트 정리 보기</span>
         <ChevronRight size={18} aria-hidden />
       </Link>
     )
@@ -139,11 +139,11 @@ function SummaryPanel({ artworkId, recordingId, refreshKey }) {
           <p>
             {phase.phase === 'failed'
               ? phase.message
-              : '이 대본을 AI가 잘한 점·개선할 점·다음 연습 과제로 정리해 줘요.'}
+              : '이 대본을 아트메이트가 잘한 점·개선할 점·다음 연습 과제로 정리해 줘요.'}
           </p>
           {(phase.phase !== 'failed' || phase.retry) && (
             <Button size="md" onClick={handleSummarize} disabled={busy}>
-              {busy ? '다시 요청하는 중…' : 'AI로 정리하기'}
+              {busy ? '다시 요청하는 중…' : '아트메이트로 정리하기'}
             </Button>
           )}
         </>

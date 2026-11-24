@@ -86,7 +86,7 @@ export const toStageSpecs = (stages, { withMinutes = false } = {}) =>
     ...(withMinutes ? { target_minutes: s.minutes } : {}),
   }))
 
-/** 학생이 직접 "작품 완료하기"를 누른 작품 (v0.5.1 work_status). 완성 사진이 있다고 완료는 아님 */
+/** 학생이 직접 "작품 완성!"을 누른 작품 (v0.5.1 work_status). 완성 사진이 있다고 완료는 아님 */
 export const isCompleted = (artwork) => artwork.work_status === 'COMPLETED'
 
 /** 마지막 단계 사진이 있음 → 작품 완료 가능 (커뮤니티 공유는 VER.2부터 사진 1장이면 가능) */

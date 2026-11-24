@@ -135,7 +135,7 @@ export default function FeedbackReviewPage() {
   return (
     <>
       <TopBar
-        title={feedback.artwork_title ?? 'AI 정리 결과'}
+        title={feedback.artwork_title ?? '아트메이트 정리 결과'}
         belowHeader
         right={
           <span className={approved ? styles.statusDone : styles.statusTodo}>
@@ -171,7 +171,8 @@ export default function FeedbackReviewPage() {
             )}
             {!approved && canReview && decision !== 'reopened' && (
               <Card variant="soft" className={styles.notice}>
-                AI가 첨삭을 정리해 두었어요. 맞게 정리됐는지 살펴보고, 다른 부분은 고친 뒤 아래
+                아트메이트가 첨삭을 정리해 두었어요. 맞게 정리됐는지 살펴보고, 다른 부분은 고친 뒤
+                아래
                 <strong> 확정하기</strong>를 눌러 주세요. 확정한 첨삭부터 성장 기록과 홈 브리핑에
                 담겨요.
               </Card>

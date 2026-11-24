@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { ChevronRight, Sparkles } from 'lucide-react'
+import { Bot, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../../app/providers/AuthContext'
 import MascotCheer from '../../../components/mascot/MascotCheer'
@@ -247,7 +247,7 @@ function RecordSummary({ report }) {
       {ai && (
         <div className={styles.ai}>
           <span className={styles.subLabel}>
-            <Sparkles size={14} aria-hidden /> {ai.label}
+            <Bot size={14} aria-hidden /> {ai.label}
           </span>
           {ai.text && <p className={styles.muted}>{ai.text}</p>}
           {ai.note && <p className={styles.small}>{ai.note}</p>}

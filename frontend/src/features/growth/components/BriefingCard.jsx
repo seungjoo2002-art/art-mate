@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ChevronRight, Sparkles } from 'lucide-react'
+import { Bot, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
@@ -83,7 +83,7 @@ function BriefingBody({ briefing }) {
           {ai && (
             <div className={styles.ai} aria-live="polite">
               <span className={styles.aiLabel}>
-                <Sparkles size={14} aria-hidden /> {ai.label}
+                <Bot size={14} aria-hidden /> {ai.label}
               </span>
               {ai.text && <p className={styles.aiText}>{ai.text}</p>}
               {ai.note && <p className={styles.aiNote}>{ai.note}</p>}

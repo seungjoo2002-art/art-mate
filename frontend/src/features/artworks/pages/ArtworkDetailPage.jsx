@@ -91,7 +91,7 @@ export default function ArtworkDetailPage({ renderTimeline }) {
   const handleRepresentative = (photo) =>
     run(photo.id, () => setRepresentativePhoto(artwork.id, photo.id))
 
-  /** 작품 완료 / 작업 재개 */
+  /** 작품 완성 / 작업 다시 시작 */
   async function setStatus(action) {
     setStatusBusy(true)
     setActionError('')
@@ -265,10 +265,10 @@ export default function ArtworkDetailPage({ renderTimeline }) {
               onClick={() => setStatus(reopenArtwork)}
               disabled={statusBusy}
             >
-              {statusBusy ? '처리하는 중…' : '작업 재개'}
+              {statusBusy ? '준비하는 중…' : '작업 다시 시작!'}
             </Button>
             <p className={styles.hint}>
-              완료한 작품은 사진을 추가하거나 지울 수 없어요. 녹음과 첨삭은 계속 추가할 수 있어요.
+              완성한 작품은 사진을 바꿀 수 없어요. 녹음과 첨삭은 계속 남길 수 있어요.
             </p>
           </>
         ) : (
@@ -278,11 +278,11 @@ export default function ArtworkDetailPage({ renderTimeline }) {
               onClick={() => setStatus(completeArtwork)}
               disabled={!finalPhoto || statusBusy}
             >
-              {statusBusy ? '처리하는 중…' : '작품 완료하기'}
+              {statusBusy ? '저장하는 중…' : '작품 완성!'}
             </Button>
             {!finalPhoto && (
               <p className={styles.hint}>
-                마지막 단계({stages.at(-1)?.label}) 사진을 올리면 작품을 완료할 수 있어요.
+                마지막 단계({stages.at(-1)?.label}) 사진을 올리면 작품을 완성할 수 있어요.
               </p>
             )}
           </>
