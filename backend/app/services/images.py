@@ -19,6 +19,22 @@ MIME_EXTENSIONS: dict[str, tuple[str, ...]] = {
 }
 
 
+# 일부 휴대폰·앱이 보내는 비표준 JPEG MIME (같은 형식으로 취급)
+MIME_ALIASES = {"image/jpg": "image/jpeg", "image/pjpeg": "image/jpeg"}
+# HEIC·HEIF(ISO BMFF 'ftyp' 상자): 앱이 JPEG로 바꿔 올린다. 그대로 오면 형식 안내 오류
+_HEIF_BRANDS = (b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"mif1", b"msf1", b"heif")
+
+
+def normalize_content_type(content_type: str) -> str:
+    """클라이언트가 알려 준 MIME 정리 (대소문자·공백·비표준 JPEG 별칭)."""
+    value = content_type.strip().lower()
+    return MIME_ALIASES.get(value, value)
+
+
+def _looks_like_heif(data: bytes) -> bool:
+    return data[4:8] == b"ftyp" and any(brand in data[8:64] for brand in _HEIF_BRANDS)
+
+
 @dataclass(frozen=True, slots=True)
 class ImageInfo:
     content_type: str
@@ -69,6 +85,11 @@ def inspect_image(
         )
     if not data:
         raise UnprocessableError("Uploaded file is empty", code=ErrorCode.INVALID_IMAGE)
+    if _looks_like_heif(data):
+        raise UnprocessableError(
+            "HEIC/HEIF must be converted to JPEG before upload",
+            code=ErrorCode.UNSUPPORTED_FILE_TYPE,
+        )
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)

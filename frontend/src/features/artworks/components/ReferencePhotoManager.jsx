@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useAsync } from '../../../hooks/useAsync'
+import { prepareImageFiles } from '../../../lib/imageFile'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { deleteReferencePhoto, listReferencePhotos } from '../api'
 import { acceptFiles, DEFAULT_MAX_REFERENCE_PHOTOS } from '../referencePhotos'
@@ -34,18 +35,21 @@ export default function ReferencePhotoManager({ artworkId, onChanged }) {
     }
   }
 
-  function handleAdd(files) {
+  // 고른 사진을 먼저 준비 (형식 판별, HEIC·HEIF → JPEG) → 미리보기·장수 확인
+  async function handleAdd(files) {
+    const prepared = await prepareImageFiles(files)
     const pending = uploads.queue.filter((q) => !q.replacesId).length
-    const { accepted, rejected } = acceptFiles(files, max - uploaded.length - pending)
-    setMessages(rejected.map((r) => `${r.name}: ${r.message}`))
+    const { accepted, rejected } = acceptFiles(prepared.files, max - uploaded.length - pending)
+    setMessages([...prepared.rejected, ...rejected].map((r) => `${r.name}: ${r.message}`))
     if (!accepted.length) return
     const items = uploads.add(accepted)
     run(() => uploads.uploadAll(artworkId, items))
   }
 
-  function handleReplace(photoId, file) {
-    const { accepted, rejected } = acceptFiles([file], 1)
-    setMessages(rejected.map((r) => `${r.name}: ${r.message}`))
+  async function handleReplace(photoId, file) {
+    const prepared = await prepareImageFiles([file])
+    const { accepted, rejected } = acceptFiles(prepared.files, 1)
+    setMessages([...prepared.rejected, ...rejected].map((r) => `${r.name}: ${r.message}`))
     if (!accepted.length) return
     const items = uploads.add(accepted, { replacesId: photoId })
     run(() => uploads.uploadAll(artworkId, items))

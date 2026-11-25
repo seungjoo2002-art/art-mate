@@ -17,10 +17,11 @@ describe('v1.1 원본 제시물·표현 의도 화면 계산', () => {
     )
     expect(accepted.map((f) => f.name)).toEqual(['a.png', 'c.jpg'])
     expect(rejected.map((r) => r.name)).toEqual(['b.gif', 'd.webp', 'e.png'])
-    expect(rejected[0].message).toMatch('JPG, PNG, WEBP')
+    expect(rejected[0].message).toMatch('JPG·JPEG·PNG·WEBP·HEIC·HEIF')
     expect(rejected[1].message).toMatch('최대 장수')
     expect(rejected[2].message).toMatch('10MB')
-    expect(acceptFiles([file('h.heic', 'image/heic')], 5).rejected[0].message).toMatch('HEIC')
+    // HEIC·HEIF는 고를 때 prepareImageFiles가 JPEG로 바꾼 뒤 여기로 온다 (변환 전 원본은 받지 않음)
+    expect(acceptFiles([file('h.heic', 'image/heic')], 5).accepted).toEqual([])
   })
 
   it('표현 방식 토글은 정의 순서 유지', () => {

@@ -27,6 +27,7 @@ import { labelOf } from '../../lib/options'
 import { toErrorMessage } from '../../utils/errorMessages'
 import { useExamTimer } from './useExamTimer'
 import styles from './Exam.module.css'
+import { IMAGE_ACCEPT } from '../../lib/imageFile'
 
 /**
  * 실기시험 진행 (/artworks/:artworkId/exam)
@@ -61,6 +62,7 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [photoError, setPhotoError] = useState('') // 사진 칸 바로 아래에 보여 줌
 
   const { exam, elapsed, limitSeconds } = timer
   const stages = exam.stages
@@ -145,12 +147,12 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
     e.target.value = ''
     if (!file) return
     setUploading(true)
-    setActionError('')
+    setPhotoError('')
     try {
       await uploadStagePhoto(artwork.id, photoStage, file, { replacesPhotoId: photo?.id })
       onPhotoChanged()
     } catch (err) {
-      setActionError(toErrorMessage(err))
+      setPhotoError(toErrorMessage(err))
     } finally {
       setUploading(false)
     }
@@ -227,7 +229,7 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
           <label className={`${styles.upload} ${photo?.url ? styles.hasPhoto : ''}`} aria-busy={uploading}>
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept={IMAGE_ACCEPT}
               className={styles.fileInput}
               onChange={handlePhoto}
               disabled={uploading}
@@ -244,6 +246,15 @@ function ExamProgress({ artwork, timer, onPhotoChanged }) {
               </>
             )}
           </label>
+          {photoError && (
+            <p
+              className={styles.error}
+              role="alert"
+              ref={(el) => el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })}
+            >
+              {photoError}
+            </p>
+          )}
           {photo && <p className={styles.small}>사진을 누르면 다시 올릴 수 있어요.</p>}
         </section>
 

@@ -37,6 +37,9 @@ import styles from './ArtworkPage.module.css'
  * renderTimeline({ artworkId, sections }): 단계 묶음과 그 아래 피드백 등록·보기 버튼을 그리는 함수.
  * features끼리 직접 import하지 않도록 라우터에서 주입. 없으면 단계 사진만 그림
  */
+/** 사진 오류가 화면 아래쪽에 생겨도 바로 보이게 */
+const showAlert = (el) => el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+
 export default function ArtworkDetailPage({ renderTimeline }) {
   const { artworkId } = useParams()
   const navigate = useNavigate()
@@ -44,6 +47,8 @@ export default function ArtworkDetailPage({ renderTimeline }) {
   const { data: artwork, error, reload } = useAsync(load)
   // 사진 작업 중인 단계 { stage: 단계 key, upload: 사진 추가 중인지 }
   const [busy, setBusy] = useState(null)
+  // 사진 추가·교체·삭제 실패: 그 단계 바로 아래에 보여 줌 { stage: 단계 key, message }
+  const [photoError, setPhotoError] = useState(null)
   const [photoIndex, setPhotoIndex] = useState({}) // 단계 key → 슬라이드에서 보는 사진 순서
   const [viewer, setViewer] = useState(null) // 크게 보는 사진 { photo, alt }
   const closeViewer = useCallback(() => setViewer(null), [])
@@ -71,13 +76,13 @@ export default function ArtworkDetailPage({ renderTimeline }) {
   async function run(stage, action, { upload = false, then } = {}) {
     if (busy) return
     setBusy({ stage: stage.key, upload })
-    setActionError('')
+    setPhotoError(null)
     try {
       await action()
       then?.()
       reload()
     } catch (err) {
-      setActionError(toErrorMessage(err))
+      setPhotoError({ stage: stage.key, message: toErrorMessage(err) })
     } finally {
       setBusy(null)
     }
@@ -172,6 +177,11 @@ export default function ArtworkDetailPage({ renderTimeline }) {
             onDelete={(photo) => handleDeletePhoto(stage, photo)}
             onOpen={(photo) => setViewer({ photo, alt: `${stage.label} 사진` })}
           />
+          {photoError?.stage === stage.key && (
+            <p className={styles.error} role="alert" ref={showAlert}>
+              {photoError.message}
+            </p>
+          )}
         </>
       ),
     }
