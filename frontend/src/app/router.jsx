@@ -12,7 +12,6 @@ import FeedbackList from '../features/feedback/components/FeedbackList'
 import FeedbackTimeline from '../features/feedback/components/FeedbackTimeline'
 import AiConsentPage from '../features/feedback/pages/AiConsentPage'
 import GrowthReportPage from '../features/growth/pages/GrowthReportPage'
-import GrowthReportsPage from '../features/growth/pages/GrowthReportsPage'
 import RecommendationPage from '../features/growth/pages/RecommendationPage'
 import RecommendationsPage from '../features/growth/pages/RecommendationsPage'
 import FeedbackRecordPage from '../features/feedback/pages/FeedbackRecordPage'
@@ -116,7 +115,8 @@ export const router = createBrowserRouter([
           { path: '/artworks/:artworkId/notes/new', element: <NoteFormPage /> },
           { path: '/feedback-notes/:noteId/edit', element: <NoteFormPage /> },
           { path: '/ai-consent', element: <AiConsentPage /> },
-          { path: '/growth/reports', element: <GrowthReportsPage /> },
+          // 기간별 성장 리포트 목록은 분석 리포트 맨 아래 '기간별로 보기'로 합침
+          { path: '/growth/reports', element: <Navigate to="/archive?tab=report" replace /> },
           { path: '/growth/reports/:reportId', element: <GrowthReportPage /> },
           { path: '/growth/recommendations', element: <RecommendationsPage /> },
           { path: '/growth/recommendations/:recommendationId', element: <RecommendationPage /> },

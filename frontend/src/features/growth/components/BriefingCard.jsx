@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Bot, ChevronRight } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, PencilLine } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
@@ -62,33 +62,41 @@ function BriefingBody({ briefing }) {
       {short.highlight && <p className={styles.text}>{short.highlight}</p>}
       {short.practice && (
         <div className={styles.practice}>
-          <span className={styles.practiceLabel}>오늘의 연습</span>
+          <span className={styles.practiceLabel}>
+            <PencilLine size={13} aria-hidden /> 오늘의 연습
+          </span>
           <p className={styles.practiceText}>{short.practice.content}</p>
           <Link to={`/feedbacks/${short.practice.feedback_id}`} className={styles.practiceSource}>
-            {short.practice.artwork_title} 첨삭에서
+            {short.practice.artwork_title} 첨삭 보기
+            <ChevronRight size={13} aria-hidden />
           </Link>
         </div>
       )}
       {hasDetails && (
         <details className={styles.details}>
-          <summary>자세히 보기</summary>
-          <p className={styles.detailTitle}>{briefing.headline}</p>
-          {view.lines.length > 0 && (
-            <ul className={styles.lines}>
-              {view.lines.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          )}
-          {ai && (
-            <div className={styles.ai} aria-live="polite">
-              <span className={styles.aiLabel}>
-                <Bot size={14} aria-hidden /> {ai.label}
-              </span>
-              {ai.text && <p className={styles.aiText}>{ai.text}</p>}
-              {ai.note && <p className={styles.aiNote}>{ai.note}</p>}
-            </div>
-          )}
+          <summary>
+            자세히 보기
+            <ChevronDown size={16} aria-hidden className={styles.detailsChevron} />
+          </summary>
+          <div className={styles.detailsBody}>
+            <p className={styles.detailTitle}>{briefing.headline}</p>
+            {view.lines.length > 0 && (
+              <ul className={styles.lines}>
+                {view.lines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            )}
+            {ai && (
+              <div className={styles.ai} aria-live="polite">
+                <span className={styles.aiLabel}>
+                  <Bot size={14} aria-hidden /> {ai.label}
+                </span>
+                {ai.text && <p className={styles.aiText}>{ai.text}</p>}
+                {ai.note && <p className={styles.aiNote}>{ai.note}</p>}
+              </div>
+            )}
+          </div>
         </details>
       )}
       {view.cta && (

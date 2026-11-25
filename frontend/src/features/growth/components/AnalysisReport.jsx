@@ -1,27 +1,27 @@
-import { useCallback } from 'react'
-import { Bot, ChevronRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useCallback, useState } from 'react'
+import {
+  BookOpen,
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  MessageSquareText,
+  Sprout,
+  Target,
+  ThumbsUp,
+} from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../app/providers/AuthContext'
 import MascotCheer from '../../../components/mascot/MascotCheer'
+import { MASCOT_POSES } from '../../../components/mascot/poses'
 import { Button, Card } from '../../../components/ui'
-import tabStyles from '../../artworks/SectionTabs.module.css'
-import { tabColor } from '../../artworks/sectionTabs'
 import { useAsync } from '../../../hooks/useAsync'
 import { formatMonthDay } from '../../../utils/date'
 import { toErrorMessage } from '../../../utils/errorMessages'
-import { getAnalysisReport, getWeaknesses } from '../api'
+import { createReport, getAnalysisReport, getWeaknesses, listReports } from '../api'
 import { TAG_LABELS } from '../growthView'
-import {
-  aiCommentView,
-  improvingLine,
-  repeatedLine,
-  reportIntro,
-  strengthLine,
-  trendSteps,
-} from '../insightsView'
-import EvidenceList from './EvidenceList'
+import { PERIOD_LABELS } from '../labels'
+import { aiCommentView, josa, reportIntro, splitSentences, trendSteps } from '../insightsView'
 import Notes from './Notes'
-import PracticeTips from './PracticeTips'
 import styles from './AnalysisReport.module.css'
 
 async function loadReport() {
@@ -67,118 +67,401 @@ export default function AnalysisReport() {
         {intro.title}
       </MascotCheer>
 
-      <Section title="전체 학습 기록" color={1}>
+      {ready && <Glance report={report} />}
+
+      <Section icon={BookOpen} title="전체 학습 기록" tone={TONE.base}>
         <RecordSummary report={report} />
       </Section>
 
-      <Section title="최근 첨삭 요약" color={2}>
+      <Section icon={MessageSquareText} title="최근 받은 첨삭" tone={TONE.recent}>
         <RecentFeedbacks items={report.recent_feedbacks} />
       </Section>
 
       {ready ? (
         <>
-          <Section title="반복적으로 지적받은 부분" color={3}>
-            <TagList
-              tags={report.repeated_mistakes}
-              empty="아직 2개 이상의 작품에서 반복된 지적은 없어요."
-              render={(t) => (
-                <>
-                  <span className={styles.small}>{repeatedLine(t, formatMonthDay)}</span>
-                  <Themes themes={t.themes} />
-                  <RelatedArtworks artworks={t.related_artworks} />
-                  <EvidenceList evidence={t.issue_evidence} limit={2} withSource />
-                </>
-              )}
-            />
-          </Section>
+          <ChatSection
+            id="report-strengths"
+            cat="good"
+            title="잘하고 있어요!"
+            tone={TONE.good}
+            tags={report.strengths}
+            say={(t) => marked(t, '이', '가', ' 좋아요!')}
+            quote={(t) => t.positive_evidence}
+            empty="작품이 더 쌓이면 잘하는 점을 찾아 줄게요!"
+          />
 
-          <Section title="긍정적인 평가를 받은 부분" color={4}>
-            <TagList
-              tags={report.strengths}
-              empty="2개 이상의 작품에서 긍정 평가를 받은 부분이 아직 없어요. 지적이 없다는 이유로 강점이라고 하지 않아요."
-              render={(t) => (
-                <>
-                  <span className={styles.small}>{strengthLine(t, formatMonthDay)}</span>
-                  <EvidenceList evidence={t.positive_evidence} limit={2} withSource />
-                </>
-              )}
-            />
-          </Section>
+          <ChatSection
+            id="report-improving"
+            right
+            cat="cheer"
+            title="점점 좋아지고 있어요!"
+            tone={TONE.up}
+            tags={report.improving}
+            say={(t) => marked(t, '이', '가', ' 좋아지고 있어요!')}
+            note={(t) =>
+              t.improvement_confirmed ? '계속 칭찬받는 중이에요' : '조금 더 지켜볼게요'
+            }
+            quote={(t) => t.positive_evidence}
+            top={(t) => <TrendSteps tag={t} />}
+            empty="지적받은 부분이 칭찬으로 바뀌면 알려 줄게요."
+          />
 
-          <Section title="개선되고 있는 부분" color={5}>
-            <TagList
-              tags={report.improving}
-              empty="지적을 받은 뒤 긍정 평가로 이어진 부분이 아직 없어요."
-              render={(t) => (
-                <>
-                  <span className={styles.small}>{improvingLine(t, formatMonthDay)}</span>
-                  <TrendSteps tag={t} />
-                  <EvidenceList evidence={t.positive_evidence} limit={2} withSource />
-                </>
-              )}
-            />
-          </Section>
-
-          <Section title="여전히 개선이 필요한 부분" color={6}>
-            <TagList
-              tags={report.needs_work}
-              empty="가장 최근 첨삭에서 다시 지적된 부분은 없어요."
-              render={(t) => (
-                <>
-                  <span className={styles.small}>{repeatedLine(t, formatMonthDay)}</span>
-                  <Themes themes={t.themes} />
-                  <EvidenceList evidence={t.issue_evidence} limit={1} withSource />
-                  {t.practice_evidence.length > 0 && (
-                    <>
-                      <span className={styles.subLabel}>선생님의 수정 지시</span>
-                      <EvidenceList evidence={t.practice_evidence} limit={1} />
-                    </>
-                  )}
-                </>
-              )}
-            />
-          </Section>
+          <ChatSection
+            id="report-needs"
+            cat="artist"
+            title="이것만 보완하면 더 좋아져요"
+            tone={TONE.issue}
+            tags={report.needs_work}
+            say={(t) => marked(t, '을', '를', ' 조금 더 다듬어 봐요')}
+            quote={(t) => t.issue_evidence}
+            tip={(t) => t.practice_evidence?.[0]?.content}
+            empty="최근 첨삭에서 다시 지적받은 부분이 없어요. 아주 좋아요!"
+          />
         </>
       ) : (
-        <Section title="성장 분석" color={3}>
+        <Section icon={Target} title="성장 분석" tone={TONE.issue}>
           <div className={styles.empty}>
             <p className={styles.emptyTitle}>{report.message ?? '분석할 기록이 아직 없어요.'}</p>
             <p className={styles.muted}>
-              확정한 강사 첨삭이 있는 작품 {report.counts.analyzed_artwork_count}개 /{' '}
-              {report.criteria.required_artwork_count}개
+              첨삭 받은 작품 {report.counts.analyzed_artwork_count}점 /{' '}
+              {report.criteria.required_artwork_count}점
             </p>
           </div>
         </Section>
       )}
 
-      <Section title="다음 연습 추천" color={7}>
-        {practiceTips?.length ? (
-          <PracticeTips tips={practiceTips} onChanged={reload} />
-        ) : report.next_practice.length ? (
-          <div className={styles.body}>
-            <EvidenceList evidence={report.next_practice} limit={5} />
-          </div>
-        ) : (
-          <p className={styles.muted}>
-            확정한 첨삭에 '다음 작품 연습 과제'가 생기면 여기에 모아 보여 드려요.
-          </p>
-        )}
-      </Section>
+      <NextPractice tips={practiceTips} fallback={report.next_practice} />
 
-      <div className={styles.links}>
-        <Link to="/growth/reports" className={styles.pill}>
-          기간별 성장 리포트 <ChevronRight size={16} aria-hidden />
-        </Link>
-        <Link to="/growth/recommendations" className={styles.pill}>
-          맞춤 연습 과제 <ChevronRight size={16} aria-hidden />
-        </Link>
+      <PeriodReport />
+
+      <div className={styles.footer}>
+        <Notes notes={report.notes} />
+        <details className={styles.criteria}>
+          <summary>분석 기준 보기</summary>
+          <p>
+            반복·강점은 작품 {report.criteria.repeated_min_artworks}개 이상에서 나온 것만 보여요.
+            전체 분석은 선생님 첨삭을 받은 작품이 {report.criteria.required_artwork_count}점 이상일
+            때 시작해요. {report.criteria.improvement_rule}
+          </p>
+        </details>
       </div>
-      <p className={styles.small}>
-        판정 기준: 반복·강점은 작품 {report.criteria.repeated_min_artworks}개 이상, 전체 분석은 확정
-        강사 첨삭이 있는 작품 {report.criteria.required_artwork_count}개 이상.{' '}
-        {report.criteria.improvement_rule}
+    </div>
+  )
+}
+
+/** 다음에 연습할 것: 선생님이 남긴 '다음 작품 연습 과제' 문장만 간단히 (담기·체크 없음) */
+function NextPractice({ tips, fallback }) {
+  const items = tips?.length
+    ? tips.map((t) => ({ key: t.tip.item_id, text: t.tip.content, tag: TAG_LABELS[t.tag] }))
+    : fallback.map((e) => ({ key: e.item_id, text: e.content }))
+  // 섹션 제목 없이: 왼쪽에 안경 쓴 선생님 고양이, 오른쪽에 말풍선이 차례로.
+  // 그 아래 '맞춤 연습 과제' 카드에는 책상에서 연습하는 고양이
+  return (
+    <section className={styles.talkWrap} aria-label="다음에 연습할 것">
+      <div className={styles.talk}>
+        <img src={MASCOT_POSES.teacher} alt="" className={styles.talkCat} />
+        <div className={styles.talkBubbles}>
+          <p className={`${styles.bubble} ${styles.bubbleLead}`}>
+            {items.length
+              ? '이런 걸 연습해 봐요!'
+              : '선생님이 다음 연습할 걸 알려 주면 내가 여기서 알려 줄게요!'}
+          </p>
+          {items.slice(0, 5).map((item, i) => (
+            <p key={item.key} className={styles.bubble} style={{ '--i': i + 1 }}>
+              {item.tag && <span className={styles.practiceTag}>{item.tag}</span>}
+              {item.text}
+            </p>
+          ))}
+        </div>
+      </div>
+
+      {/* 맞춤 연습 과제로: 테이프 붙은 노란 포스트잇 + 옆에서 기다리는 책상 고양이 */}
+      <Link to="/growth/recommendations" className={styles.postit}>
+        <span className={styles.postitNote}>
+          <span className={styles.postitTitle}>연습장 펼치러 가기!</span>
+          <span className={styles.postitSub}>
+            맞춤 연습 과제 <ChevronRight size={12} aria-hidden />
+          </span>
+        </span>
+        <img src={MASCOT_POSES.practice} alt="" className={styles.postitCat} />
+      </Link>
+    </section>
+  )
+}
+
+/**
+ * 고양이 채팅 섹션 (카드 없음, 누르지 않아도 다 보임).
+ * 맨 위: 고양이 + 큰 말풍선(title). 그 아래 항목마다 고양이가 차례로 말함:
+ *   한마디(say, note) → 선생님 문장 말풍선(첫 1개, 출처: 작품 · 날짜) → 수정 지시(tip)가 있으면 '이렇게 해 보래요'
+ * right: 고양이·말풍선을 오른쪽으로 (섹션마다 번갈아). 근거 더 있으면 '다른 첨삭 N개'로 펼침
+ */
+function ChatSection({
+  id,
+  cat,
+  title,
+  tone,
+  tags,
+  say,
+  note,
+  quote,
+  top,
+  tip,
+  empty,
+  right = false,
+}) {
+  return (
+    <section
+      id={id}
+      className={`${styles.chatSection} ${right ? styles.chatRight : ''}`}
+      style={{ '--tone': tone }}
+      aria-label={title}
+    >
+      <div className={styles.chatHead}>
+        <img
+          src={MASCOT_POSES[cat]}
+          alt=""
+          className={`${styles.chatCat} ${cat === 'good' ? styles.chatCatBig : ''}`}
+        />
+        <p className={styles.chatTitle}>{title}</p>
+      </div>
+      {tags.length ? (
+        <div className={styles.chatItems}>
+          {tags.map((t, i) => (
+            <ChatItem
+              key={t.tag}
+              tag={t}
+              index={i}
+              say={say}
+              note={note}
+              quote={quote}
+              top={top}
+              tip={tip}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className={styles.chatEmpty}>{empty}</p>
+      )}
+    </section>
+  )
+}
+
+function ChatItem({ tag: t, index, say, note, quote, top, tip }) {
+  const [open, setOpen] = useState(false)
+  const evidence = quote(t) ?? []
+  const shown = open ? evidence.slice(0, 3) : evidence.slice(0, 1)
+  const more = Math.min(evidence.length, 3) - 1
+  const fix = tip?.(t)
+  return (
+    <div className={styles.chatItem} style={{ '--i': index }}>
+      <p className={styles.chatSay}>
+        {say(t)}
+        {note && <span className={styles.chatNote}>{note(t)}</span>}
       </p>
-      <Notes notes={report.notes} />
+      {top?.(t)}
+      {shown.map((e) => (
+        <Link key={e.item_id} to={`/feedbacks/${e.feedback_id}`} className={styles.chatQuote}>
+          <span>“{e.content}”</span>
+          {e.artwork_title && (
+            <span className={styles.chatSource}>
+              {e.artwork_title}
+              {e.work_date && ` · ${formatMonthDay(e.work_date)}`} 첨삭에서
+            </span>
+          )}
+        </Link>
+      ))}
+      {fix && (
+        <p className={styles.chatTip}>
+          <span className={styles.chatSource}>선생님이 이렇게 해 보래요</span>
+          {fix}
+        </p>
+      )}
+      {more > 0 && (
+        <button type="button" className={styles.chatMore} onClick={() => setOpen((v) => !v)}>
+          {open ? '접기' : `다른 첨삭 ${more}개`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * 고양이 한마디: 영역 이름(구도·원근·공간감…)에 형광펜 + 조사 + 나머지 말.
+ * '기타'(OTHER)는 무엇인지 몰라 '기타가 좋아요!' 같은 문장을 만들지 않고 이름만
+ */
+function marked(tag, withBatchim, withoutBatchim, rest) {
+  const name = <mark className={styles.hl}>{tag.label}</mark>
+  if (tag.tag === 'OTHER') return name
+  const particle = josa(tag.label, withBatchim, withoutBatchim).slice(tag.label.length)
+  return (
+    <>
+      {name}
+      {particle}
+      {rest}
+    </>
+  )
+}
+
+const PERIODS = ['WEEK', 'MONTH', 'ALL']
+
+/**
+ * 기간별로 보기 (예전 '기간별 성장 리포트' 화면을 합침): 기간 고르고 → 그 기간 리포트 화면으로.
+ * 학습 시간·약점 순위·아트메이트 설명은 리포트 화면에서. 지난 리포트는 접어 둠
+ */
+function PeriodReport() {
+  const navigate = useNavigate()
+  const load = useCallback(() => listReports(), [])
+  const { data } = useAsync(load)
+  const [period, setPeriod] = useState('MONTH')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const past = data?.items ?? []
+
+  async function open() {
+    setBusy(true)
+    setError('')
+    try {
+      const report = await createReport({ period, includeAi: false })
+      navigate(`/growth/reports/${report.id}`)
+    } catch (err) {
+      setError(toErrorMessage(err))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className={styles.periodBox}>
+      <div className={styles.periodHead}>
+        <img src={MASCOT_POSES.growth} alt="" className={styles.periodCat} />
+        <h2 className={styles.periodTitle}>기간별로 성장 리포트 보기</h2>
+      </div>
+      <div className={styles.periodRow}>
+        <div className={styles.periods} role="radiogroup" aria-label="기간">
+          {PERIODS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              role="radio"
+              aria-checked={period === p}
+              className={styles.period}
+              onClick={() => setPeriod(p)}
+            >
+              {PERIOD_LABELS[p]}
+            </button>
+          ))}
+        </div>
+        <button type="button" className={styles.periodGo} onClick={open} disabled={busy}>
+          {busy ? '만드는 중…' : '보기'}
+        </button>
+      </div>
+      {error && <p className={styles.error}>{error}</p>}
+      {past.length > 0 && (
+        <>
+          <p className={styles.pastHead}>지난 리포트</p>
+          {/* 기간을 작은 날짜 칩으로 줄줄이 (최근 12개). 누르면 그 리포트 */}
+          <ul className={styles.pastChips}>
+            {past.slice(0, 12).map((r) => (
+              <li key={r.id}>
+                <Link
+                  to={`/growth/reports/${r.id}`}
+                  className={`${styles.pastChip} ${r.status === 'INSUFFICIENT_DATA' ? styles.pastThin : ''}`}
+                  title={PERIOD_LABELS[r.period_type]}
+                >
+                  {r.period_start
+                    ? `${dot(r.period_start)}~${dot(r.period_end)}`
+                    : `~${dot(r.period_end)}`}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  )
+}
+
+/** "2026-11-25" → "11.25" */
+const dot = (iso) => {
+  const [, m, d] = iso.split('-').map(Number)
+  return `${m}.${d}`
+}
+
+// 섹션 색: 뜻으로 나눔 (지적 분홍 · 칭찬 초록 · 좋아짐 하늘 · 보완 노랑 · 나머지 주황/보라)
+const TONE = {
+  base: '#f2933a',
+  recent: '#a99ff0',
+  issue: '#f29bb0',
+  good: '#9fb34a',
+  up: '#6fb8dc',
+  todo: '#e9b949',
+}
+
+/**
+ * 한눈에 보기: 잘하는 점(웃는 고양이) → 좋아지는 점(응원 고양이) → 보완할 점(붓 든 고양이),
+ * 각각 짧은 문장 3개까지 (칭찬 먼저)
+ * 문장은 서버가 준 영역 이름·작품 수로만 만듦 (해석 덧붙이지 않음). 누르면 그 섹션으로
+ */
+function Glance({ report }) {
+  const groups = [
+    {
+      id: 'report-strengths',
+      icon: ThumbsUp,
+      cat: 'happy',
+      title: '잘하고 있어요!',
+      tone: TONE.good,
+      tags: report.strengths,
+      line: () => '칭찬을 여러 번 받았어요',
+      empty: '작품이 더 쌓이면 잘하는 점을 찾아 드릴게요!',
+    },
+    {
+      id: 'report-improving',
+      icon: Sprout,
+      cat: 'cheer',
+      title: '점점 좋아지고 있어요!',
+      tone: TONE.up,
+      tags: report.improving,
+      line: (t) =>
+        t.improvement_confirmed
+          ? '지적받은 뒤 계속 칭찬받고 있어요'
+          : '지적받은 뒤 칭찬으로 바뀌었어요',
+      empty: '지적받은 부분이 칭찬으로 바뀌면 알려 드릴게요',
+    },
+    {
+      id: 'report-needs',
+      icon: Target,
+      cat: 'artist',
+      title: '이것만 보완하면 더 좋아져요',
+      tone: TONE.issue,
+      tags: report.needs_work,
+      line: (t) =>
+        t.issue_artwork_count >= 2
+          ? '조금만 더 신경 쓰면 좋아져요'
+          : '최근 첨삭에서 한 번 더 짚어 줬어요',
+      empty: '지금은 보완할 부분이 없어요. 아주 좋아요!',
+    },
+  ]
+  return (
+    <div className={styles.glance}>
+      {groups.map(({ id, cat, title, tone, line, tags, empty }) => (
+        <a key={id} href={`#${id}`} className={styles.glanceRow} style={{ '--tone': tone }}>
+          <img src={MASCOT_POSES[cat]} alt="" className={styles.glanceCat} />
+          <span className={styles.glanceText}>
+            <span className={styles.glanceTitle}>{title}</span>
+            {tags.length ? (
+              <ul className={styles.glanceLines}>
+                {tags.slice(0, 3).map((t) => (
+                  <li key={t.tag}>
+                    <mark className={styles.hl}>{t.label}</mark> {line(t)}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className={styles.glanceEmpty}>{empty}</span>
+            )}
+          </span>
+          <ChevronRight size={16} className={styles.glanceChevron} aria-hidden />
+        </a>
+      ))}
     </div>
   )
 }
@@ -258,69 +541,72 @@ function RecordSummary({ report }) {
 }
 
 function RecentFeedbacks({ items }) {
-  if (!items.length) return <p className={styles.muted}>아직 확정한 첨삭이 없어요.</p>
+  if (!items.length) return <p className={styles.muted}>아직 정리된 첨삭이 없어요.</p>
   return (
-    <div className={styles.sources}>
-      {items.map((f) => (
-        <div key={f.feedback_id} className={styles.sourceItem}>
-          <Link to={`/artworks/${f.artwork_id}`} className={styles.rowTitle}>
-            {f.artwork_title} · {formatMonthDay(f.work_date)}
-          </Link>
-          <Link to={`/feedbacks/${f.feedback_id}`} className={styles.source}>
-            {f.summary}
-          </Link>
-          {f.tags.length > 0 && (
-            <div className={styles.chips}>
-              {f.tags.map((tag) => (
-                <span key={tag} className={styles.chip}>
-                  {TAG_LABELS[tag] ?? tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+    <ul className={styles.recent}>
+      {items.map((f, i) => (
+        <RecentFeedback key={f.feedback_id} feedback={f} defaultOpen={i === 0} />
       ))}
-    </div>
+    </ul>
   )
 }
 
-function TagList({ tags, empty, render }) {
-  if (!tags.length) return <p className={styles.muted}>{empty}</p>
+/**
+ * 최근 첨삭 하나 = 접고 펴는 줄. 머리(작품 · 날짜 · ⌄)를 누르면 요약 문장·분류·첨삭 보기가 펼쳐짐.
+ * 가장 최근 것만 처음에 펼쳐 둠. 글자는 그대로, 문장마다 줄만 나눔
+ */
+function RecentFeedback({ feedback: f, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className={styles.body}>
-      {tags.map((t) => (
-        <div key={t.tag} className={styles.block}>
-          <span className={styles.rowTitle}>{t.label}</span>
-          {render(t)}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function Themes({ themes }) {
-  if (!themes?.length) return null
-  return (
-    <div className={styles.chips}>
-      {themes.map((theme) => (
-        <span key={theme.code} className={styles.chip}>
-          {theme.label} · 작품 {theme.artwork_count}개
+    <li className={styles.recentItem}>
+      <button
+        type="button"
+        className={styles.recentHead}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <DateBadge date={f.work_date} />
+        <span className={styles.recentText}>
+          <span className={styles.recentTitle}>{f.artwork_title}</span>
+          {!open && <span className={styles.recentPeek}>{splitSentences(f.summary)[0]}</span>}
         </span>
-      ))}
-    </div>
+        <ChevronDown size={16} aria-hidden className={open ? styles.chevronUp : styles.chevron} />
+      </button>
+      {open && (
+        <div className={styles.recentBody}>
+          <ul className={styles.sentences}>
+            {splitSentences(f.summary).map((sentence, i) => (
+              <li key={i}>{sentence}</li>
+            ))}
+          </ul>
+          <div className={styles.recentFoot}>
+            {f.tags.length > 0 && (
+              <div className={styles.chips}>
+                {f.tags.map((tag) => (
+                  <span key={tag} className={styles.chip}>
+                    {TAG_LABELS[tag] ?? tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            <Link to={`/feedbacks/${f.feedback_id}`} className={styles.textLink}>
+              첨삭 보기 <ChevronRight size={12} aria-hidden />
+            </Link>
+          </div>
+        </div>
+      )}
+    </li>
   )
 }
 
-function RelatedArtworks({ artworks }) {
-  if (!artworks?.length) return null
+/** 달력 한 장처럼: 위에 '11월', 아래 큰 '16' */
+function DateBadge({ date }) {
+  const [, month, day] = date.split('-').map(Number)
   return (
-    <div className={styles.chips}>
-      {artworks.slice(0, 4).map((a) => (
-        <Link key={a.id} to={`/artworks/${a.id}`} className={styles.artworkLink}>
-          {a.title} · {formatMonthDay(a.work_date)}
-        </Link>
-      ))}
-    </div>
+    <span className={styles.dateBadge} aria-label={formatMonthDay(date)}>
+      <span className={styles.dateMonth}>{month}월</span>
+      <span className={styles.dateDay}>{day}</span>
+    </span>
   )
 }
 
@@ -341,11 +627,30 @@ function TrendSteps({ tag }) {
   )
 }
 
-/** 스케치북 인덱스 탭 카드. 탭 색은 순서대로 돌아가며 (sectionTabs.js) */
-function Section({ title, color, children }) {
+/** 섹션 카드: 색 동그라미 아이콘(또는 고양이) + 제목 → 내용. 색은 섹션 뜻(TONE) */
+function Section({ id, icon: Icon, cat, title, tone, children }) {
   return (
-    <section className={tabStyles.card} style={{ '--tab': tabColor(color) }}>
-      <h2 className={tabStyles.tab}>{title}</h2>
+    <section
+      id={id}
+      className={`${styles.section} ${cat ? styles.withCat : ''}`}
+      style={{ '--tone': tone }}
+    >
+      {/* 고양이는 카드 안에 넣지 않고 카드 위 모서리에 걸터앉게 (오른쪽 위) */}
+      {cat && (
+        <img
+          src={MASCOT_POSES[cat]}
+          alt=""
+          className={`${styles.sectionCat} ${cat === 'good' ? styles.sectionCatBig : ''}`}
+        />
+      )}
+      <header className={styles.sectionHead}>
+        {Icon && (
+          <span className={styles.sectionIcon} aria-hidden>
+            <Icon size={16} />
+          </span>
+        )}
+        <h2 className={styles.sectionTitle}>{title}</h2>
+      </header>
       {children}
     </section>
   )

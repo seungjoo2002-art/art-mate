@@ -1,21 +1,20 @@
 import { useCallback, useState } from 'react'
-import { ChevronRight, Clock, Lightbulb } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Lightbulb } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import TopBar from '../../../components/layout/TopBar'
-import MascotCheer from '../../../components/mascot/MascotCheer'
+import { MASCOT_POSES } from '../../../components/mascot/poses'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
 import { usePolling } from '../../../hooks/usePolling'
 import { labelOf } from '../../../lib/options'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { generateRecommendations, getGrowthJob, listRecommendations } from '../api'
-import { DIFFICULTY_LABELS, INSUFFICIENT_REASONS, RECOMMENDATION_STATUS } from '../labels'
+import { DIFFICULTY_LABELS, INSUFFICIENT_REASONS } from '../labels'
 import styles from './RecommendationsPage.module.css'
 
 const HIDDEN = ['SUPERSEDED']
 const ORDER = { ADOPTED: 0, DRAFT: 1, IN_REVIEW: 1, COMPLETED: 2, REJECTED: 3 }
 // 상태별 배지 색 (진행 중 주황 · 새 추천 연주황 · 완료 초록 · 나머지 회색)
-const STATUS_TONE = { ADOPTED: 'doing', DRAFT: 'new', IN_REVIEW: 'new', COMPLETED: 'done' }
 // AI를 못 쓰는 경우 → 조용히 기본 추천으로
 const AI_UNAVAILABLE = ['AI_CONSENT_REQUIRED', 'GROWTH_AI_NOT_CONFIGURED']
 
@@ -101,26 +100,43 @@ export default function RecommendationsPage() {
     .sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9))
   const category = (code) => (options ? labelOf(options.weakness_categories, code) : code)
 
+  const todo = items.filter((r) => !['COMPLETED', 'REJECTED'].includes(r.status))
+  const done = items.filter((r) => r.status === 'COMPLETED')
+  const rejected = items.filter((r) => r.status === 'REJECTED')
+
   return (
     <>
       <TopBar title="맞춤 연습 과제" belowHeader />
       <main className={styles.body}>
-        <MascotCheer
-          pose="artist"
-          eyebrow="맞춤 연습 과제"
-          sub="여러 작품에서 반복해서 지적된 부분으로 과제를 만들어요."
-        >
-          약한 부분을 콕 집어 연습해 봐요
-        </MascotCheer>
+        {/* 연습장 한 장: 위에 고양이 + 제목, 줄마다 과제 하나 (끝낸 건 줄 긋기) */}
+        <section className={styles.notebook} aria-label="연습 과제 목록">
+          <div className={styles.noteHead}>
+            <img src={MASCOT_POSES.practice} alt="" className={styles.noteCat} />
+            <div>
+              <p className={styles.noteTitle}>오늘 뭐 연습할까?</p>
+              <p className={styles.noteSub}>자주 지적받은 부분으로 만든 과제예요</p>
+            </div>
+          </div>
+
+          {todo.length + done.length > 0 ? (
+            <ul className={styles.lines}>
+              {[...todo, ...done].map((r) => (
+                <TaskLine key={r.id} task={r} category={category} />
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.blank}>아직 적힌 과제가 없어요. 아래에서 받아 볼까요?</p>
+          )}
+        </section>
 
         <div className={styles.cta}>
           <button type="button" className={styles.button} onClick={recommend} disabled={working}>
             {working ? (
               <span className={styles.spinner} aria-hidden />
             ) : (
-              <Lightbulb size={16} aria-hidden />
+              <Lightbulb size={15} aria-hidden />
             )}
-            {jobActive ? '과제 만드는 중…' : busy ? '추천하는 중…' : '과제 추천받기'}
+            {jobActive ? '과제 만드는 중…' : busy ? '추천하는 중…' : '새 과제 받기'}
           </button>
           {jobActive && (
             <p className={styles.hint} role="status">
@@ -142,45 +158,44 @@ export default function RecommendationsPage() {
         </div>
         {message && <p className={styles.message}>{message}</p>}
 
-        {items.length > 0 ? (
-          <section className={styles.section}>
-            <h2 className={styles.heading}>내 과제 {items.length}개</h2>
-            <ul className={styles.list}>
-              {items.map((r) => (
-                <li key={r.id}>
-                  <Link
-                    to={`/growth/recommendations/${r.id}`}
-                    className={`${styles.card} ${r.status === 'REJECTED' ? styles.dim : ''}`}
-                  >
-                    <span className={styles.cardText}>
-                      <span className={styles.topLine}>
-                        <span className={styles.category}>{category(r.weakness_category)}</span>
-                        <span
-                          className={`${styles.status} ${styles[STATUS_TONE[r.status] ?? 'muted']}`}
-                        >
-                          {RECOMMENDATION_STATUS[r.status] ?? r.status}
-                        </span>
-                      </span>
-                      <span className={styles.title}>{r.title}</span>
-                      <span className={styles.meta}>
-                        <Clock size={13} aria-hidden /> {r.estimated_minutes}분 ·{' '}
-                        {DIFFICULTY_LABELS[r.difficulty]}
-                      </span>
-                    </span>
-                    <ChevronRight size={18} className={styles.chevron} aria-hidden />
-                  </Link>
-                </li>
+        {rejected.length > 0 && (
+          <details className={styles.folded}>
+            <summary>
+              안 하기로 한 과제 {rejected.length} <ChevronDown size={14} aria-hidden />
+            </summary>
+            <ul className={`${styles.lines} ${styles.rejectedLines}`}>
+              {rejected.map((r) => (
+                <TaskLine key={r.id} task={r} category={category} />
               ))}
             </ul>
-          </section>
-        ) : (
-          data && (
-            <p className={styles.empty}>
-              아직 받은 과제가 없어요. 위 버튼을 눌러 첫 과제를 받아 보세요.
-            </p>
-          )
+          </details>
         )}
       </main>
     </>
+  )
+}
+
+/** 연습장 한 줄: ○/● 체크 · 과제 이름 (끝냈으면 줄 긋기) · 오른쪽 작게 분류·시간. 누르면 상세 */
+function TaskLine({ task: r, category }) {
+  const finished = r.status === 'COMPLETED'
+  return (
+    <li>
+      <Link
+        to={`/growth/recommendations/${r.id}`}
+        className={`${styles.line} ${finished ? styles.finished : ''}`}
+      >
+        <span className={styles.check} aria-label={finished ? '끝냄' : '아직'}>
+          {finished && <Check size={12} strokeWidth={3} aria-hidden />}
+        </span>
+        <span className={styles.lineText}>
+          <span className={styles.lineTitle}>{r.title}</span>
+          <span className={styles.lineMeta}>
+            {category(r.weakness_category)} · {r.estimated_minutes}분 ·{' '}
+            {DIFFICULTY_LABELS[r.difficulty]}
+            {r.status === 'ADOPTED' && <b className={styles.doing}>하는 중</b>}
+          </span>
+        </span>
+      </Link>
+    </li>
   )
 }

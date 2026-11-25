@@ -161,8 +161,21 @@
 
 /* 제호 */
 .mast {
+  position: relative;
   padding-bottom: var(--space-3);
   border-bottom: 3px solid var(--zine-ink);
+}
+
+/* 제호 오른쪽: 잡지 읽는 고양이가 아래 먹색 줄 위에 앉아 있음 */
+.mastCat {
+  position: absolute;
+  right: -4px;
+  bottom: 0;
+  height: 104px;
+  width: auto;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .issue {
