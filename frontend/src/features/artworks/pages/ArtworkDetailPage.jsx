@@ -17,32 +17,36 @@ import {
   deletePhoto,
   getArtwork,
   reopenArtwork,
-  setRepresentativePhoto,
   uploadStagePhoto,
 } from '../api'
-import FeedbackRefs from '../components/FeedbackRefs'
+import PhotoViewer from '../components/PhotoViewer'
 import ReferenceCompare from '../components/ReferenceCompare'
 import refStyles from '../components/ReferenceGrid.module.css'
 import StageHeader from '../components/StageHeader'
+import StagePhotos from '../components/StagePhotos'
 import StageStepper from '../components/StageStepper'
-import TimelinePhotoCard from '../components/TimelinePhotoCard'
-import { hasFinalPhoto, isCompleted, photoTime, stagePhotos, stagesWithPhotos } from '../stages'
+import { hasFinalPhoto, isCompleted, stagePhotos, stagesWithPhotos } from '../stages'
 import { formatMinutes } from '../exam'
 import { artworkConditions, EXPRESSION_METHODS } from '../referencePhotos'
 import styles from './ArtworkPage.module.css'
 
 /**
- * renderTimeline({ artworkId, sections, renderFeedbackExtras }): 단계마다
- * [단계 머리 → 그 단계의 사진과 단계 피드백을 올린 시각 순으로(피드백 아래 기준 사진)],
- * 맨 아래 작품 전체 피드백을 그리는 함수 (v0.9.8 단계별 사진 타임라인).
- * features끼리 직접 import하지 않도록 라우터에서 주입. 없으면 단계 사진만 순서대로 그림
+ * 작품 상세 (아카이브): 작품 정보 → 단계마다 [사진 수·사진 추가 → 사진 가로 슬라이드(교체·삭제)
+ * → 녹음·글 첨삭 등록 → 단계 피드백 보기] → 작품 전체 피드백.
+ * 피드백 내용은 여기 늘어놓지 않고 피드백 보기 화면(/artworks/:id/feedback)에서 본다.
+ * renderTimeline({ artworkId, sections }): 단계 묶음과 그 아래 피드백 등록·보기 버튼을 그리는 함수.
+ * features끼리 직접 import하지 않도록 라우터에서 주입. 없으면 단계 사진만 그림
  */
 export default function ArtworkDetailPage({ renderTimeline }) {
   const { artworkId } = useParams()
   const navigate = useNavigate()
   const load = useCallback(() => getArtwork(artworkId), [artworkId])
   const { data: artwork, error, reload } = useAsync(load)
-  const [busyStage, setBusyStage] = useState(null) // 업로드·삭제 중인 단계
+  // 사진 작업 중인 단계 { stage: 단계 key, upload: 사진 추가 중인지 }
+  const [busy, setBusy] = useState(null)
+  const [photoIndex, setPhotoIndex] = useState({}) // 단계 key → 슬라이드에서 보는 사진 순서
+  const [viewer, setViewer] = useState(null) // 크게 보는 사진 { photo, alt }
+  const closeViewer = useCallback(() => setViewer(null), [])
   const [actionError, setActionError] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [statusBusy, setStatusBusy] = useState(false)
@@ -62,34 +66,50 @@ export default function ArtworkDetailPage({ renderTimeline }) {
   const finalPhoto = hasFinalPhoto(artwork)
   // VER.2 P0: 커뮤니티 공유는 단계 사진 1장만 있어도 가능 (공유할 사진은 글쓰기에서 고름)
   const hasAnyPhoto = (artwork.photos?.length ?? 0) > 0
-  const custom = stages.some((s) => s.id) // v0.9.7 작품 단계가 있는 응답
 
-  // 사진 올리기·삭제·대표 지정 (busyStage: 단계 key 또는 사진 id)
-  async function run(key, action) {
-    if (busyStage) return
-    setBusyStage(key)
+  // 사진 올리기·교체·삭제 (한 번에 하나)
+  async function run(stage, action, { upload = false, then } = {}) {
+    if (busy) return
+    setBusy({ stage: stage.key, upload })
     setActionError('')
     try {
       await action()
+      then?.()
       reload()
     } catch (err) {
       setActionError(toErrorMessage(err))
     } finally {
-      setBusyStage(null)
+      setBusy(null)
     }
   }
 
-  // 사진은 교체하지 않고 단계에 계속 쌓는다 (단계 id가 없으면 예전 고정 단계 값)
-  const handleUpload = (stage, file) =>
-    run(stage.key, () => uploadStagePhoto(artwork.id, stage.id ?? stage.legacy, file))
+  // 단계 id가 없으면 예전 고정 단계 값
+  const stageValue = (stage) => stage.id ?? stage.legacy
+  const indexOf = (stage, count) => Math.min(photoIndex[stage.key] ?? 0, Math.max(count - 1, 0))
+  const showPhoto = (stage, i) => setPhotoIndex((prev) => ({ ...prev, [stage.key]: i }))
 
-  function handleDeletePhoto(photo) {
-    if (!window.confirm('이 사진을 삭제할까요? 이 사진을 기준으로 한 피드백 기록은 남아요.')) return
-    run(photo.id, () => deletePhoto(artwork.id, photo.id))
+  // 새 사진은 단계 슬라이드 끝에 붙고, 올린 사진을 바로 보여 줌
+  const handleUpload = (stage, file, count) =>
+    run(stage, () => uploadStagePhoto(artwork.id, stageValue(stage), file), {
+      upload: true,
+      then: () => showPhoto(stage, count),
+    })
+
+  // 교체: 지금 보는 사진 자리에 (등록 순서·단계·대표 여부 그대로. 교체 전 사진을 본 피드백은 그대로)
+  function handleReplace(stage, photo, file) {
+    const message =
+      '지금 보는 사진을 새로 고른 사진으로 교체할까요?\n' +
+      '이 사진을 보고 받은 피드백은 교체 전 사진을 그대로 기억해요.'
+    if (!window.confirm(message)) return
+    run(stage, () =>
+      uploadStagePhoto(artwork.id, stageValue(stage), file, { replacesPhotoId: photo.id }),
+    )
   }
 
-  const handleRepresentative = (photo) =>
-    run(photo.id, () => setRepresentativePhoto(artwork.id, photo.id))
+  function handleDeletePhoto(stage, photo) {
+    if (!window.confirm('이 사진을 삭제할까요? 이 사진을 기준으로 한 피드백 기록은 남아요.')) return
+    run(stage, () => deletePhoto(artwork.id, photo.id))
+  }
 
   /** 작품 완성 / 작업 다시 시작 */
   async function setStatus(action) {
@@ -118,61 +138,44 @@ export default function ArtworkDetailPage({ renderTimeline }) {
     }
   }
 
-  // 단계 타임라인의 사진 항목 (올린 시각으로 피드백과 함께 정렬)
-  const photoItem = (photo, stageLabel) => ({
-    key: photo.id,
-    time: photoTime(photo),
-    node: (
-      <TimelinePhotoCard
-        artworkId={artwork.id}
-        photo={photo}
-        stageLabel={stageLabel}
-        locked={completed}
-        busy={busyStage === photo.id}
-        onMakeRepresentative={() => handleRepresentative(photo)}
-        onDelete={() => handleDeletePhoto(photo)}
-      />
-    ),
-  })
-
   const sections = stages.map((stage, index) => {
     // 예전 응답(단계 id 없음)은 예전 고정 단계 값으로 묶음
     const photos = stage.id
       ? stagePhotos(artwork, stage.id)
       : stagePhotos(artwork, null).filter((p) => p.stage === stage.legacy)
+    const current = indexOf(stage, photos.length)
+    const stageBusy = busy?.stage === stage.key
     return {
       key: stage.key,
       stageId: stage.id,
       title: stage.label,
-      items: photos.map((photo) => photoItem(photo, stage.label)),
+      photoId: photos[current]?.id, // 새 피드백의 기본 기준 사진
       node: (
-        <StageHeader
-          stage={stage}
-          index={index}
-          photoCount={photos.length}
-          busy={busyStage === stage.key}
-          locked={completed}
-          onSelectFile={(file) => handleUpload(stage, file)}
-        />
+        <>
+          <StageHeader
+            stage={stage}
+            index={index}
+            photoCount={photos.length}
+            busy={stageBusy && busy.upload}
+            locked={completed}
+            onSelectFile={(file) => handleUpload(stage, file, photos.length)}
+          />
+          <StagePhotos
+            artworkId={artwork.id}
+            photos={photos}
+            index={current}
+            onIndexChange={(i) => showPhoto(stage, i)}
+            stageLabel={stage.label}
+            locked={completed}
+            busy={stageBusy}
+            onReplace={(photo, file) => handleReplace(stage, photo, file)}
+            onDelete={(photo) => handleDeletePhoto(stage, photo)}
+            onOpen={(photo) => setViewer({ photo, alt: `${stage.label} 사진` })}
+          />
+        </>
       ),
     }
   })
-
-  // 피드백 아래: 이 피드백이 근거로 삼은 사진 (확인·변경)
-  const refsKey = (feedback) =>
-    [feedback.id, feedback.image_refs?.status]
-      .concat((feedback.image_refs?.photos ?? []).map((p) => p.photo_id))
-      .join('-')
-  const renderFeedbackExtras = (feedback, stageId, reloadFeedback) =>
-    custom && (
-      <FeedbackRefs
-        key={refsKey(feedback)}
-        artwork={artwork}
-        feedback={feedback}
-        stages={stages}
-        onChanged={reloadFeedback}
-      />
-    )
 
   return (
     <>
@@ -238,23 +241,22 @@ export default function ArtworkDetailPage({ renderTimeline }) {
         <StageStepper stages={stages} />
 
         {renderTimeline ? (
-          renderTimeline({
-            artworkId: artwork.id,
-            sections,
-            renderFeedbackExtras,
-          })
+          renderTimeline({ artworkId: artwork.id, sections })
         ) : (
           <div className={styles.stageList}>
             {sections.map((section) => (
               <div key={section.key} className={styles.stageList}>
                 {section.node}
-                {section.items.map((item) => (
-                  <div key={item.key}>{item.node}</div>
-                ))}
               </div>
             ))}
           </div>
         )}
+        <PhotoViewer
+          artworkId={artwork.id}
+          photo={viewer?.photo}
+          alt={viewer?.alt}
+          onClose={closeViewer}
+        />
         {actionError && <p className={styles.error}>{actionError}</p>}
 
         {completed ? (

@@ -355,15 +355,18 @@ class SharingService:
         return photo
 
     async def _final_photo(self, artwork: Artwork) -> ArtworkPhoto | None:
+        """완성 단계 대표 사진 = 가장 먼저 등록한 사진 (representative.py와 같은 규칙)."""
         return (
             await self.session.execute(
-                select(ArtworkPhoto).where(
+                select(ArtworkPhoto)
+                .where(
                     ArtworkPhoto.artwork_id == artwork.id,
                     ArtworkPhoto.stage == ArtworkStage.FINAL,
                     ArtworkPhoto.status == PhotoStatus.ACTIVE,
-                    ArtworkPhoto.is_representative,
                     visible_stage_photo(),
                 )
+                .order_by(ArtworkPhoto.uploaded_at, ArtworkPhoto.id)
+                .limit(1)
             )
         ).scalar_one_or_none()
 

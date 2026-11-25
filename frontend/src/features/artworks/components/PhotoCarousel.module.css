@@ -1,0 +1,159 @@
+.carousel {
+  /* 사진 칸 높이 고정: 사진 수와 상관없이 단계가 차지하는 세로 길이가 같음 */
+  --slide-height: min(72vw, 340px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+}
+
+.track {
+  display: flex;
+  overflow-x: auto;
+  /* 세로 긴 사진이 칸 안에서 세로로 스크롤되지 않게 (세로 스와이프는 화면 스크롤로) */
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.track::-webkit-scrollbar {
+  display: none;
+}
+
+.track:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.single {
+  overflow: hidden;
+}
+
+/* 마우스로 끄는 동안: 붙는 효과를 끄고 손 모양 */
+.dragging {
+  scroll-snap-type: none;
+  cursor: grabbing;
+}
+
+.slide {
+  display: flex;
+  flex: 0 0 100%;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--slide-height);
+  overflow: hidden;
+  padding: 0;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  cursor: zoom-in;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* 원래 비율 그대로, 잘리지 않게 (칸 높이 안에 맞춤) */
+.image {
+  display: block;
+  max-width: 100%;
+  max-height: var(--slide-height);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* 사진을 아직 못 받았을 때 자리 */
+span.image {
+  width: 100%;
+  height: 100%;
+}
+
+.counter {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.arrow {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--color-text);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  transform: translateY(-50%);
+}
+
+.arrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.prev {
+  left: var(--space-2);
+}
+
+.next {
+  right: var(--space-2);
+}
+
+/* 터치 화면에서는 화살표 대신 스와이프 (마우스가 있는 화면에만 화살표) */
+@media (hover: none) {
+  .arrow {
+    display: none;
+  }
+}
+
+.dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+}
+
+/* 점은 작게, 누르는 자리는 넉넉히 */
+.dot {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border);
+  transition:
+    width 0.15s,
+    background 0.15s;
+}
+
+.dot[aria-selected='true']::before {
+  width: 14px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+}

@@ -12,7 +12,7 @@ const STATUS_TEXT = {
   CONFIRMED: { title: '이 사진을 보고 받은 피드백', sub: '' },
   SUGGESTED: {
     title: '이 사진 보고 받은 피드백 맞나요?',
-    sub: '그때 가장 최근 사진을 골라 뒀어요',
+    sub: '자동으로 골라 둔 사진이에요',
   },
   NONE: {
     title: '어떤 사진을 보고 받은 피드백인가요?',
@@ -29,7 +29,10 @@ const STATUS_TEXT = {
 export default function FeedbackRefs({ artwork, feedback, stages, onChanged }) {
   const refs = feedback.image_refs ?? { status: 'NONE', photos: [] }
   const [editing, setEditing] = useState(false)
-  const [selected, setSelected] = useState(() => refs.photos.map((p) => p.photo_id))
+  // 고르기는 지금 있는 사진에서만 (교체·삭제된 사진은 다시 고를 수 없음)
+  const [selected, setSelected] = useState(() =>
+    refs.photos.filter((p) => p.photo_status === 'ACTIVE').map((p) => p.photo_id),
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const photoById = Object.fromEntries(artwork.photos.map((p) => [p.id, p]))
@@ -61,7 +64,9 @@ export default function FeedbackRefs({ artwork, feedback, stages, onChanged }) {
     }))
 
   const text = STATUS_TEXT[refs.status] ?? STATUS_TEXT.NONE
-  const suggested = refs.status === 'SUGGESTED'
+  // 교체·삭제된 사진이 섞인 제안은 그대로 확인할 수 없음 (서버는 지금 있는 사진만 받음) → 다시 고르기
+  const suggested =
+    refs.status === 'SUGGESTED' && refs.photos.every((p) => p.photo_status === 'ACTIVE')
 
   return (
     <div className={`${styles.box} ${styles[refs.status] ?? ''}`}>
@@ -78,11 +83,21 @@ export default function FeedbackRefs({ artwork, feedback, stages, onChanged }) {
                       url={photoById[ref.photo_id].url}
                       className={styles.image}
                     />
+                  ) : ref.replaced ? (
+                    // 교체된 사진: 피드백 받을 때 본 교체 전 사진을 그대로 (서버가 파일을 남겨 둠)
+                    <ArtworkPhoto
+                      artworkId={artwork.id}
+                      photoId={ref.photo_id}
+                      className={styles.image}
+                      fallback={<span className={`${styles.image} ${styles.gone}`}>삭제됨</span>}
+                    />
                   ) : (
                     <span className={`${styles.image} ${styles.gone}`}>삭제됨</span>
                   )}
-                  {stageName(ref.stage_id) && (
-                    <span className={styles.caption}>{stageName(ref.stage_id)}</span>
+                  {(ref.replaced || stageName(ref.stage_id)) && (
+                    <span className={styles.caption}>
+                      {ref.replaced ? '교체 전 사진' : stageName(ref.stage_id)}
+                    </span>
                   )}
                 </li>
               ))}

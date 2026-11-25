@@ -46,6 +46,11 @@ export default function ReferencePicker({ artworkId, stageId, value, onChange })
       {!value.touched && suggested && (
         <span className={styles.hint}>가장 최근 사진을 골라 두었어요. 다르면 직접 골라 주세요.</span>
       )}
+      {value.preset && (
+        <span className={styles.hint}>
+          작품 화면에서 보던 사진을 골라 두었어요. 다르면 직접 골라 주세요.
+        </span>
+      )}
       <PhotoChooser groups={groups} selected={selected} onToggle={toggle} />
       <Checkbox
         checked={value.confirmed}

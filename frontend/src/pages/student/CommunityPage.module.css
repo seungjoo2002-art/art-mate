@@ -19,126 +19,6 @@
   transform: scale(0.95);
 }
 
-/* 게시판: 말풍선 대화 */
-.board {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-}
-
-/* 작성자 동그라미: 분류 색 연하게 + 첫 글자 */
-.avatar {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--tone) 22%, var(--color-surface));
-  color: color-mix(in srgb, var(--tone) 75%, var(--color-text));
-  font-family: var(--font-display);
-  font-size: var(--text-md);
-}
-
-/* 말풍선: 작성자 쪽 위 모서리만 뾰족 */
-.bubble {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: 4px 18px 18px 18px;
-  background: var(--color-surface);
-  box-shadow:
-    0 0 0 1px var(--color-border),
-    0 2px 8px rgba(31, 31, 31, 0.04);
-}
-
-.row:active .bubble {
-  background: var(--color-bg);
-}
-
-.head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.author {
-  overflow: hidden;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 분류 꼬리표: 분류 색 연한 바탕 + 진한 글자 */
-.category {
-  flex-shrink: 0;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--tone) 14%, var(--color-surface));
-  color: color-mix(in srgb, var(--tone) 70%, var(--color-text));
-  font-size: 11px;
-  font-weight: var(--weight-bold);
-}
-
-.title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-bold);
-}
-
-.excerpt {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-/* 사진은 말풍선 안에 크게 */
-.photo {
-  display: block;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  margin: var(--space-1) 0;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  object-fit: cover;
-}
-
-.meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: 2px;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
-  color: var(--color-text-sub);
-}
-
-.likes,
-.count {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.likes {
-  color: #c43a5e;
-}
-
 .srOnly {
   position: absolute;
   width: 1px;
@@ -148,131 +28,12 @@
   white-space: nowrap;
 }
 
-/* 작품 갤러리: 하트 가장 많은 작품 크게 */
-.featured {
-  position: relative;
-  display: block;
-  overflow: hidden;
-  border-radius: var(--radius-xl);
-  background: var(--color-surface-muted);
-  box-shadow: 0 10px 24px rgba(31, 31, 31, 0.12);
-}
-
-.featuredImage {
-  display: block;
-  width: 100%;
-  max-height: 420px;
-  object-fit: cover;
-}
-
-.featuredBadge {
-  position: absolute;
-  top: var(--space-3);
-  left: var(--space-3);
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-  color: var(--color-text-on-primary);
-  font-family: var(--font-display);
-  font-size: var(--text-md);
-  rotate: -3deg;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-}
-
-/* 나머지: 원래 비율 그대로 두 줄 벽돌 쌓기 */
-.masonry {
-  columns: 2;
-  column-gap: var(--space-3);
-}
-
-.brick {
-  position: relative;
-  display: block;
-  margin-bottom: var(--space-3);
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
-  break-inside: avoid;
-}
-
-.brickImage {
-  display: block;
-  width: 100%;
-  height: auto;
-  min-height: 80px;
-}
-
-/* 사진 아래 어둡게 + 흰 글씨 */
-.caption {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-6) var(--space-3) var(--space-2);
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
-  color: #fff;
-}
-
-.captionLarge {
-  padding: var(--space-10) var(--space-4) var(--space-4);
-}
-
-.captionText {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.captionTitle {
-  overflow: hidden;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.captionLarge .captionTitle {
-  font-size: var(--text-lg);
-}
-
-.captionAuthor {
-  font-size: var(--text-xs);
-  opacity: 0.85;
-}
-
-.captionLikes {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
-}
-
 .empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-6) 0;
-}
-
-.emptyTitle {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
-}
-
-.emptySub {
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
 }
 
 .message {
@@ -562,108 +323,6 @@
   opacity: 1;
 }
 
-/* 게시판 = 잡지 지면 */
-.zine .board {
-  gap: var(--space-6);
-}
-
-.post {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-/* 그림 있는 글: 그림 크게, 아래 가는 줄로 끝 */
-.spread {
-  padding-bottom: var(--space-5);
-  border-bottom: 1px solid var(--zine-ink);
-}
-
-/* 그림 없는 글: 얇은 테두리 상자 */
-.note {
-  padding: var(--space-4);
-  border: 1.5px solid var(--zine-ink);
-  background: #fff;
-}
-
-/* 작성자 줄 (인스타처럼) */
-.byline {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.zine .avatar {
-  width: 30px;
-  height: 30px;
-  border: 1.5px solid var(--zine-ink);
-  background: #fff;
-  color: var(--zine-ink);
-  font-size: var(--text-sm);
-}
-
-/* 익명 글쓴이: 동그라미 안에 고양이 얼굴만 보이게 */
-.zine .avatar {
-  position: relative;
-  overflow: hidden;
-}
-
-/* 서 있는 고양이 그림을 위에 붙여 머리만 동그라미에 들어오게 */
-.anonCat {
-  position: absolute;
-  top: 2px;
-  left: 50%;
-  width: 115%;
-  max-width: none;
-  height: auto;
-  transform: translateX(-50%);
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-.zine .author {
-  font-size: var(--text-sm);
-}
-
-.zine .category {
-  margin-left: auto;
-  border: 1px solid var(--zine-ink);
-  background: transparent;
-  color: var(--zine-ink);
-}
-
-/* 그림: 화면 폭 가득, 원래 비율 (너무 길면 4:5에서 자름) */
-.zine .photo {
-  width: 100%;
-  aspect-ratio: auto;
-  max-height: 125vw;
-  margin: var(--space-1) 0;
-  border-radius: 0;
-  box-shadow: 0 1px 0 var(--zine-ink);
-}
-
-.zine .title {
-  color: var(--zine-ink);
-  font-family: var(--font-display);
-  font-size: var(--text-xl);
-  font-weight: 400;
-  line-height: 1.3;
-}
-
-.zine .excerpt {
-  color: var(--zine-sub);
-}
-
-.zine .meta {
-  color: var(--zine-sub);
-}
-
-.zine .count {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
 /* 글쓰기: 먹색 네모 + 주황 판 그림자 (그림 말고 유일한 포인트) */
 .zine .write {
   border-radius: 16px;
@@ -672,59 +331,12 @@
   box-shadow: 3px 3px 0 var(--color-primary);
 }
 
-/* 갤러리: 테두리 없이 그림만, 아래 먹색 줄 */
-.zine .featured,
-.zine .brick {
-  border-radius: 2px;
-  box-shadow: 0 1px 0 var(--zine-ink);
-}
-
-.zine .featuredBadge {
-  background: var(--zine-ink);
-  color: #fff;
-}
-
 .zine .footnote {
   color: var(--zine-sub);
 }
 
-/* 글 본문 링크 (좋아요는 링크 밖이라 눌러도 게시물로 안 넘어감) */
-.postLink {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-/* 갤러리 사진 링크: 칸 전체 */
-.cover {
-  display: block;
-}
-
-/* 갤러리 글씨 띠는 눌러도 아래 사진 링크로, 하트만 눌림 */
-.caption {
-  pointer-events: none;
-}
-
-/* 목록 좋아요 버튼: 하트·숫자 크게 + 손가락으로 누르기 쉽게 터치 영역 넓힘 */
-.likeButton {
-  gap: 4px;
-  margin: -8px;
-  padding: 8px;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
-  color: inherit;
-  font: inherit;
-  pointer-events: auto;
-  cursor: pointer;
-}
-
 .likedOn {
   color: #e5304d;
-}
-
-/* 어두운 사진 띠 위에서는 조금 밝은 빨강 */
-.caption .likedOn {
-  color: #ff5a6e;
 }
 
 /* 두 번 누르기 영역: 가운데 하트를 띄우는 기준, 두 번 눌러도 글자 선택·확대 안 되게 */
@@ -773,4 +385,125 @@
   .heartPop {
     animation-duration: 0.01s;
   }
+}
+
+/* ───────── 게시판: 한 줄에 글 하나 (가는 줄로 구분) ───────── */
+.board {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border-top: 1.5px solid var(--zine-ink);
+  list-style: none;
+}
+
+.board > li + li {
+  border-top: 1px solid #d9d4cb;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  color: var(--zine-ink);
+}
+
+.line:active {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.lineText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* 제목이 가장 눈에 띄게: 한 줄, 넘치면 말줄임 */
+.lineTitle {
+  overflow: hidden;
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lineCategory {
+  color: var(--zine-sub);
+  font-weight: var(--weight-semibold);
+}
+
+.lineExcerpt {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  color: var(--zine-sub);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lineMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 5px;
+  font-size: var(--text-xs);
+  color: #8a847b;
+}
+
+.lineAuthor {
+  overflow: hidden;
+  max-width: 10em;
+  color: var(--zine-sub);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 그림 있는 글만 오른쪽 작은 정사각형 (없는 글은 자리도 비우지 않음) */
+.lineThumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  background: var(--color-surface-muted);
+  object-fit: cover;
+}
+
+/* ───────── 작품 갤러리: 정사각형 3열 그리드 ───────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  position: relative;
+  display: block;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+.tileImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 사진 여러 장인 게시물: 오른쪽 위 겹친 사진 아이콘 */
+.multi {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  pointer-events: none;
 }

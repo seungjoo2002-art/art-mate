@@ -18,19 +18,20 @@ const plan = [
 const photo = (id, extra) => ({
   id,
   kind: 'STAGE',
+  status: 'ACTIVE',
   is_representative: false,
   uploaded_at: '2026-11-13T01:00:00Z',
   ...extra,
 })
 
 describe('stagesWithPhotos', () => {
-  it('uses the custom stage plan and representative stage photos only', () => {
+  it('uses the custom stage plan and the first photo of each stage', () => {
     const artwork = {
       stage_plan: plan,
       stages: [],
       photos: [
-        photo('p1', { stage_id: 's2', is_representative: true }),
-        photo('p2', { stage_id: 's2' }),
+        photo('p2', { stage_id: 's2', uploaded_at: '2026-11-13T02:00:00Z' }),
+        photo('p1', { stage_id: 's2' }),
         photo('r1', { stage_id: 's2', kind: 'REVISION', feedback_note_id: 'n1' }),
       ],
     }
@@ -75,15 +76,26 @@ describe('stagePhotos (v0.9.8 timeline)', () => {
     expect(stagePhotos(artwork, null)).toHaveLength(4)
   })
 
-  it('lets a photo taken after feedback be the stage representative', () => {
+  it('makes the first registered photo the representative (no manual pick)', () => {
     const artwork = {
       stage_plan: plan.slice(0, 1),
       photos: [
-        photo('p1', { stage_id: 's1' }),
-        photo('r1', { stage_id: 's1', kind: 'REVISION', is_representative: true }),
+        photo('p2', { stage_id: 's1', uploaded_at: '2026-11-13T02:00:00Z' }),
+        // 예전에 직접 대표로 지정한 사진이어도 첫 사진이 대표
+        photo('r1', { stage_id: 's1', is_representative: true, uploaded_at: '2026-11-13T03:00:00Z' }),
+        // 첫 사진을 교체한 사진: 교체 전 등록 시각을 이어받아 그대로 첫 자리
+        photo('n1', {
+          stage_id: 's1',
+          uploaded_at: '2026-11-13T01:00:00Z',
+          created_at: '2026-11-14T09:00:00Z',
+        }),
+        photo('d1', { stage_id: 's1', status: 'DELETED', uploaded_at: '2026-11-13T00:00:00Z' }),
       ],
     }
-    expect(stagesWithPhotos(artwork)[0].photo.id).toBe('r1')
+    expect(stagesWithPhotos(artwork)[0].photo.id).toBe('n1')
+    // 첫 사진을 지우면 다음 사진이 대표
+    artwork.photos = artwork.photos.filter((p) => p.id !== 'n1')
+    expect(stagesWithPhotos(artwork)[0].photo.id).toBe('p2')
   })
 })
 

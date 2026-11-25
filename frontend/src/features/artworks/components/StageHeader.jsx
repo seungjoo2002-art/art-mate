@@ -2,8 +2,8 @@ import { Camera, ImagePlus } from 'lucide-react'
 import styles from './StageHeader.module.css'
 
 /**
- * 단계 타임라인 머리 (v0.9.8): STEP · 단계 이름 · 사진 수 · 사진 추가.
- * 사진은 교체하지 않고 계속 쌓인다 (피드백 전후 구분 없음). 아직 사진이 없으면 도화지 모양 업로드 칸.
+ * 단계 머리: STEP · 단계 이름 · 사진 수 · 사진 추가. 추가한 사진은 단계 슬라이드 끝에 붙는다
+ * (피드백 전후 구분 없음). 아직 사진이 없으면 도화지 모양 업로드 칸.
  */
 export default function StageHeader({ stage, index, photoCount, busy, locked, onSelectFile }) {
   function handleChange(e) {

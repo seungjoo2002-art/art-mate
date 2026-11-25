@@ -62,13 +62,6 @@ export const replaceStages = (artworkId, stages) =>
 
 export const deleteArtwork = (artworkId) => api(`/artworks/${artworkId}`, { method: 'DELETE' })
 
-/** 단계 대표 사진으로 지정 (같은 단계의 기존 대표는 해제) */
-export const setRepresentativePhoto = (artworkId, photoId) =>
-  api(`/artworks/${artworkId}/photos/${photoId}`, {
-    method: 'PATCH',
-    body: { is_representative: true },
-  })
-
 /**
  * 피드백 기준 이미지 저장 (v0.9.8). feedback: { type: 'NOTE' | 'RECORDING', id }
  * photoIds 빈 배열 + confirmed = 사진 없이 받은 피드백이라고 확인

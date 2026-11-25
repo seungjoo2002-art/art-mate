@@ -276,17 +276,19 @@ async def test_replace_representative_and_delete(
     ).json()
     assert first["is_representative"] and not second["is_representative"]
 
-    # 대표 사진 변경
+    # 예전 방식으로 대표를 바꿔도(저장 값만 바뀜) 조회는 단계에서 가장 먼저 올린 사진이 대표
     switched = await client.patch(
         f"{API}/{artwork['id']}/photos/{second['id']}",
         json={"is_representative": True},
         headers=student.headers,
     )
-    assert switched.json()["is_representative"] is True
+    assert switched.status_code == 200
     photos = (await client.get(f"{API}/{artwork['id']}/photos", headers=student.headers)).json()
-    assert [p["id"] for p in photos if p["is_representative"]] == [second["id"]]
+    assert [p["id"] for p in photos if p["is_representative"]] == [first["id"]]
+    detail = (await client.get(f"{API}/{artwork['id']}", headers=student.headers)).json()
+    assert detail["cover_photo_id"] == first["id"]
 
-    # 교체: 새 사진이 대표를 이어받고 기존 파일은 삭제
+    # 교체: 새 사진이 그 자리(두 번째)를 이어받고 기존 파일은 삭제
     old_path = next(path for path in storage.objects if second["id"] in path)
     replaced = await _upload(
         client,
@@ -298,18 +300,22 @@ async def test_replace_representative_and_delete(
         replaces_photo_id=second["id"],
     )
     assert replaced.status_code == 200, replaced.text
-    assert replaced.json()["is_representative"] is True
     assert old_path not in storage.objects
     photos = (await client.get(f"{API}/{artwork['id']}/photos", headers=student.headers)).json()
-    assert {p["id"] for p in photos} == {first["id"], replaced.json()["id"]}
+    assert [(p["id"], p["is_representative"]) for p in photos] == [
+        (first["id"], True),
+        (replaced.json()["id"], False),
+    ]
 
-    # 대표 사진 삭제 → 남은 사진이 대표
+    # 대표(첫) 사진 삭제 → 다음 사진이 대표
     deleted = await client.delete(
-        f"{API}/{artwork['id']}/photos/{replaced.json()['id']}", headers=student.headers
+        f"{API}/{artwork['id']}/photos/{first['id']}", headers=student.headers
     )
     assert deleted.status_code == 204
     photos = (await client.get(f"{API}/{artwork['id']}/photos", headers=student.headers)).json()
-    assert [(p["id"], p["is_representative"]) for p in photos] == [(first["id"], True)]
+    assert [(p["id"], p["is_representative"]) for p in photos] == [(replaced.json()["id"], True)]
+    detail = (await client.get(f"{API}/{artwork['id']}", headers=student.headers)).json()
+    assert detail["cover_photo_id"] == replaced.json()["id"]
     assert len(storage.objects) == 1
 
 

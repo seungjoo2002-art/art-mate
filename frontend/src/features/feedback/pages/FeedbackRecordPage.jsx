@@ -12,7 +12,7 @@ import { judgeSignal } from '../audioSignal'
 import ConsentForm from '../components/ConsentForm'
 import ReferencePicker from '../components/ReferencePicker'
 import StagePicker from '../components/StagePicker'
-import { EMPTY_REFS, referenceBody } from '../imageRefs'
+import { presetRefs, referenceBody } from '../imageRefs'
 import { processingPath } from '../processingFlow'
 import { formatDuration } from '../format'
 import { useAudioRecorder } from '../useAudioRecorder'
@@ -56,7 +56,8 @@ function Recorder({ artworkId }) {
   const [params] = useSearchParams()
   const [stageId, setStageId] = useState(params.get('stage') ?? '')
   // v0.9.8 이 피드백을 받을 때 본 작품 사진
-  const [refs, setRefs] = useState(EMPTY_REFS)
+  // 작품 화면에서 보던 사진(?photo=)을 기본 기준 사진으로
+  const [refs, setRefs] = useState(() => presetRefs(params.get('photo')))
   const { status, elapsedMs, result, error, silentInput, start, stop, reset, loadFile } =
     useAudioRecorder()
   const [uploading, setUploading] = useState(false)

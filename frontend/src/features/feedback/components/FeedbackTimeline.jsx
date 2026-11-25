@@ -1,212 +1,80 @@
-import { useCallback, useState } from 'react'
-import { Mic, PenLine, Trash2 } from 'lucide-react'
+import { ChevronRight, MessageSquareText } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useAsync } from '../../../hooks/useAsync'
-import { useOptions } from '../../../hooks/useOptions'
-import { formatUploadedAt } from '../../../utils/date'
-import { toErrorMessage } from '../../../utils/errorMessages'
-import { deleteRecording, listRecordings, setRecordingStage } from '../api'
-import { listNotes } from '../notesApi'
-import NoteCard from './NoteCard'
-import RecordingAiStatus from './RecordingAiStatus'
-import RecordingPlayer from './RecordingPlayer'
+import { countByStage } from '../feedbackGroups'
+import { useArtworkFeedback } from '../useArtworkFeedback'
+import AddFeedbackButtons from './AddFeedbackButtons'
 import styles from './FeedbackTimeline.module.css'
 
-/** 오래된 순 (문자열 비교는 시간대 표기가 섞이면 틀리므로 시각으로 비교) */
-const byTime = (a, b) => Date.parse(a.time) - Date.parse(b.time)
-
 /**
- * 작품 상세의 단계별 타임라인 (v0.9.7, v0.9.8)
- * 단계마다 [단계 머리(section.node) → 그 단계의 사진(section.items)과 피드백(녹음·글 첨삭)을 시각 순으로],
- * 맨 아래에 단계를 정하지 않은 '작품 전체 피드백'.
- * sections: [{ key, stageId, title, node, items? }] — stageId가 없으면(예전 응답) 모든 피드백이 전체 피드백으로
- *   items: 그 단계의 추가 사진 등 [{ key, time, node }] → 그 단계 피드백과 함께 올린 시각 순으로 섞음
- * renderFeedbackExtras({ type, id, image_refs }, stageId, reload): 피드백 아래 영역
- *   (작품 기능에서 주입: 피드백 기준 이미지). reload는 피드백 목록을 다시 불러옴
- * extraItems: 단계를 알 수 없는 항목 (예전 응답의 추가 사진) → 전체 피드백과 함께 시간순
- * actions: 맨 아래 (작품 쪽에서 넘긴 사진 추가 등, VER.2)
+ * 작품 상세의 단계별 묶음 (아카이브 상세):
+ * 단계마다 [단계 머리·사진 슬라이드(section.node) → 녹음·글 첨삭 등록 아이콘 → '단계 피드백 보기 (N개)'],
+ * 맨 아래 '작품 전체 피드백'. 피드백 내용은 여기 늘어놓지 않고 피드백 보기 화면에서 본다.
+ * sections: [{ key, stageId, title, node, photoId? }] — stageId가 없으면(예전 응답) 모든 피드백이 전체 피드백
+ *   photoId: 지금 슬라이드에서 보는 사진 → 새 피드백의 기본 기준 사진
+ * actions: 맨 아래 (작품 쪽에서 넘긴 버튼 등)
  */
-export default function FeedbackTimeline({
-  artworkId,
-  sections,
-  renderFeedbackExtras,
-  extraItems = [],
-  actions = null,
-}) {
-  const options = useOptions()
-  const load = useCallback(() => listRecordings(artworkId), [artworkId])
-  const { data, reload } = useAsync(load)
-  const loadNotes = useCallback(() => listNotes(artworkId), [artworkId])
-  const { data: notes, reload: reloadNotes } = useAsync(loadNotes)
-  const [busyId, setBusyId] = useState(null)
-  const [actionError, setActionError] = useState('')
+export default function FeedbackTimeline({ artworkId, sections, actions = null }) {
+  const { items, error, reload } = useArtworkFeedback(artworkId)
   const stageIds = new Set(sections.map((s) => s.stageId).filter(Boolean))
-  const stageOptions = sections.filter((s) => s.stageId)
-
-  async function run(id, action) {
-    setBusyId(id)
-    setActionError('')
-    try {
-      await action()
-      reload()
-    } catch (error) {
-      setActionError(toErrorMessage(error))
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  function handleDelete(recording) {
-    if (!window.confirm('이 녹음을 삭제할까요? 삭제하면 되돌릴 수 없어요.')) return
-    run(recording.id, () => deleteRecording(artworkId, recording.id))
-  }
-
-  const moveRecording = (recording, stageId) =>
-    run(recording.id, () => setRecordingStage(artworkId, recording.id, stageId || null))
-
-  // 숨긴 단계(목록에 없는 단계)의 피드백도 잃어버리지 않게 전체 피드백 쪽에 보여 줌
-  const stageOf = (item) => (item.stage_id && stageIds.has(item.stage_id) ? item.stage_id : null)
-
-  // 이 API는 페이지 객체가 아니라 배열을 그대로 돌려줌
-  const recordingItems = (data ?? []).map((recording) => ({
-    key: recording.id,
-    stageId: stageOf(recording),
-    time: recording.recorded_at ?? recording.uploaded_at ?? recording.created_at,
-    feedback: { type: 'RECORDING', id: recording.id, image_refs: recording.image_refs },
-    node: (
-      <div className={styles.recording}>
-        <span className={styles.label}>
-          <Mic size={16} aria-hidden />
-          {recording.title ?? '피드백 녹음'}
-        </span>
-        <div className={styles.row}>
-          <RecordingPlayer artworkId={artworkId} recording={recording} />
-          <button
-            type="button"
-            className={styles.delete}
-            onClick={() => handleDelete(recording)}
-            disabled={busyId === recording.id}
-            aria-label="녹음 삭제"
-          >
-            <Trash2 size={18} />
-          </button>
-        </div>
-        <RecordingAiStatus artworkId={artworkId} recording={recording} />
-        {stageOptions.length > 0 && (
-          <label className={styles.stageSelect}>
-            <span>연결 단계</span>
-            <select
-              value={stageOf(recording) ?? ''}
-              onChange={(e) => moveRecording(recording, e.target.value)}
-              disabled={busyId === recording.id}
-            >
-              <option value="">작품 전체</option>
-              {stageOptions.map((s) => (
-                <option key={s.stageId} value={s.stageId}>
-                  {s.title}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
-    ),
-  }))
-
-  // 이 API도 배열을 그대로 돌려줌
-  const noteItems = (notes ?? []).map((note) => ({
-    key: note.id,
-    stageId: stageOf(note),
-    time: note.created_at,
-    feedback: { type: 'NOTE', id: note.id, image_refs: note.image_refs },
-    node: <NoteCard note={note} options={options} onChanged={reloadNotes} />,
-  }))
-
-  const all = [...recordingItems, ...noteItems]
-  const feedbackOf = (stageId) => all.filter((item) => item.stageId === stageId).sort(byTime)
-
-  const reloadAll = () => {
-    reload()
-    reloadNotes()
-  }
-
-  // 피드백과 (작품 쪽에서 넘긴) 사진을 올린 시각 순으로. 피드백 아래에는 그 피드백의 기준 사진
-  const feedbackList = (items, stageId) =>
-    items.length > 0 && (
-      <ol className={styles.timeline}>
-        {items.map((item) => (
-          <li key={item.key} className={styles.entry}>
-            {item.time && <span className={styles.time}>{formatUploadedAt(item.time)}</span>}
-            <div className={styles.feedback}>
-              {item.node}
-              {item.feedback && renderFeedbackExtras?.(item.feedback, stageId, reloadAll)}
-            </div>
-          </li>
-        ))}
-      </ol>
-    )
-  const withExtras = (feedback, extras = []) => [...feedback, ...extras].sort(byTime)
-
-  const addButtons = (stageId, compact) => {
-    const query = stageId ? `?stage=${stageId}` : ''
-    return (
-      <div className={`${styles.buttons} ${compact ? styles.compact : ''}`}>
-        {/* 녹음·글 첨삭은 아이콘만 (글자 없이도 알아봄). 화면 낭독기·툴팁에는 이름을 줌 */}
-        <Link
-          to={`/artworks/${artworkId}/recordings/new${query}`}
-          className={`${styles.recordButton} ${styles.iconOnly}`}
-          aria-label="피드백 녹음"
-          title="피드백 녹음"
-        >
-          <Mic size={compact ? 16 : 18} aria-hidden />
-        </Link>
-        <Link
-          to={`/artworks/${artworkId}/notes/new${query}`}
-          className={`${styles.recordButton} ${styles.iconOnly}`}
-          aria-label="글로 첨삭 남기기"
-          title="글로 첨삭 남기기"
-        >
-          <PenLine size={compact ? 16 : 18} aria-hidden />
-        </Link>
-      </div>
-    )
-  }
-
-  const overall = feedbackOf(null)
+  const counts = items ? countByStage(items, stageIds) : null
   const staged = stageIds.size > 0
+
+  const viewLink = (label, stageId, photoId) => {
+    const params = new URLSearchParams()
+    if (stageId) params.set('stage', stageId)
+    if (photoId) params.set('photo', photoId)
+    const query = params.toString()
+    const count = counts?.get(stageId ?? null) ?? 0
+    return (
+      <Link
+        to={`/artworks/${artworkId}/feedback${query ? `?${query}` : ''}`}
+        className={styles.viewButton}
+      >
+        <MessageSquareText size={16} aria-hidden />
+        <span className={styles.viewLabel}>
+          {label} 피드백 보기{counts ? ` (${count}개)` : ''}
+        </span>
+        <ChevronRight size={16} aria-hidden className={styles.viewChevron} />
+      </Link>
+    )
+  }
 
   return (
     <section className={styles.section}>
-      {sections.map((section) => {
-        const feedback = section.stageId ? feedbackOf(section.stageId) : []
-        const items = withExtras(feedback, section.items)
-        return (
-          <section key={section.key} className={styles.stage} aria-label={section.title}>
-            {section.node}
-            {!section.stageId && feedbackList(withExtras([], section.items), null)}
-            {section.stageId && (
-              <>
-                {feedback.length > 0 && (
-                  <span className={styles.subhead}>
-                    {section.title} 피드백 {feedback.length}개
-                  </span>
-                )}
-                {feedbackList(items, section.stageId)}
-                {addButtons(section.stageId, true)}
-              </>
-            )}
-          </section>
-        )
-      })}
+      {sections.map((section) => (
+        <section key={section.key} className={styles.stage} aria-label={section.title}>
+          {section.node}
+          {section.stageId && (
+            <div className={styles.stageFoot}>
+              <AddFeedbackButtons
+                artworkId={artworkId}
+                stageId={section.stageId}
+                photoId={section.photoId}
+                compact
+              />
+              {viewLink(`${section.title} 단계`, section.stageId, section.photoId)}
+            </div>
+          )}
+        </section>
+      ))}
 
       <section className={styles.stage} aria-label="작품 전체 피드백">
         <h2 className={styles.heading}>{staged ? '작품 전체 피드백' : '피드백'}</h2>
         {staged && (
           <p className={styles.caption}>특정 단계가 아닌 작품 전체에 대한 피드백이에요.</p>
         )}
-        {feedbackList(withExtras(overall, extraItems), null)}
-        {actionError && <p className={styles.error}>{actionError}</p>}
-        {addButtons(null, false)}
+        {error && (
+          <p className={styles.error}>
+            피드백을 불러오지 못했어요.{' '}
+            <button type="button" className={styles.retry} onClick={reload}>
+              다시 시도
+            </button>
+          </p>
+        )}
+        <div className={styles.stageFoot}>
+          <AddFeedbackButtons artworkId={artworkId} />
+          {viewLink(staged ? '작품 전체' : '전체', null)}
+        </div>
         {actions}
       </section>
     </section>

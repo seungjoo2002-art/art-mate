@@ -10,7 +10,7 @@ import { toErrorMessage } from '../../../utils/errorMessages'
 import { getAiConsent } from '../aiApi'
 import ReferencePicker from '../components/ReferencePicker'
 import StagePicker from '../components/StagePicker'
-import { referenceBody, refsFromRead } from '../imageRefs'
+import { presetRefs, referenceBody, refsFromRead } from '../imageRefs'
 import { createNote, getNote, setNoteImageRefs, updateNote } from '../notesApi'
 import styles from './NoteFormPage.module.css'
 
@@ -53,7 +53,8 @@ function NoteForm({ artworkId, note }) {
   const [params] = useSearchParams()
   const [stageId, setStageId] = useState(note ? (note.stage_id ?? '') : (params.get('stage') ?? ''))
   // v0.9.8 이 첨삭을 받을 때 본 작품 사진 (수정 화면은 저장된 연결)
-  const initialRefs = refsFromRead(note?.image_refs)
+  // 새 첨삭: 작품 화면에서 보던 사진(?photo=)을 기본 기준 사진으로
+  const initialRefs = note ? refsFromRead(note.image_refs) : presetRefs(params.get('photo'))
   const [refs, setRefs] = useState(initialRefs)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
@@ -81,7 +82,8 @@ function NoteForm({ artworkId, note }) {
         if (refs.touched && JSON.stringify(refs) !== JSON.stringify(initialRefs)) {
           await setNoteImageRefs(note.id, refs.photoIds, refs.confirmed)
         }
-        navigate(artworkPath, { replace: true })
+        // 피드백 보기 화면에서 고쳤으면 그 화면으로
+        navigate(location.state?.from ?? artworkPath, { replace: true })
         return
       }
       // AI 동의가 없으면 저장만 되고 요약은 요청되지 않음 → 동의 화면으로 안내
