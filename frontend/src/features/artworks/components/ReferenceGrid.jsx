@@ -1,8 +1,9 @@
 import { useRef } from 'react'
 import { ImagePlus, RefreshCw, Trash2, X } from 'lucide-react'
+import { IMAGE_ACCEPT } from '../../../lib/imageFile'
 import styles from './ReferenceGrid.module.css'
 
-const ACCEPT = 'image/jpeg,image/png,image/webp'
+const ACCEPT = IMAGE_ACCEPT
 
 /**
  * v1.1 원본 제시물 사진 격자 (작품 등록·수정·상세 공통, 모바일 우선 2~3열).

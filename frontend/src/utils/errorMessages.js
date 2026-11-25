@@ -22,9 +22,9 @@ const API_MESSAGES = {
   FORBIDDEN: '이 기능을 사용할 권한이 없어요.',
 
   // 작품 사진 (docs/frontend-integration-v0.4.md §7)
-  UNSUPPORTED_FILE_TYPE: 'JPG, PNG, WEBP 사진만 올릴 수 있어요.',
+  UNSUPPORTED_FILE_TYPE: 'JPG·JPEG·PNG·WEBP·HEIC·HEIF 사진만 올릴 수 있어요.',
   FILE_TOO_LARGE: '파일이 너무 커요. 사진은 10MB, 녹음은 25MB 이하만 올릴 수 있어요.',
-  INVALID_IMAGE: '사진 파일을 읽을 수 없어요. 다른 사진을 선택해 주세요.',
+  INVALID_IMAGE: '사진 파일이 손상됐거나 실제 사진이 아니에요. 다른 사진을 선택해 주세요.',
   PHOTO_LIMIT_REACHED: '이 단계에 올릴 수 있는 사진 수를 넘었어요.',
   DUPLICATE_PHOTO: '이미 올린 사진이에요.',
   UPLOAD_EXPIRED: '업로드 시간이 지났어요. 다시 올려 주세요.',

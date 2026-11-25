@@ -3,7 +3,7 @@
 import pytest
 
 from app.core.exceptions import UnprocessableError
-from app.services.images import check_declared_file, inspect_image
+from app.services.images import check_declared_file, inspect_image, normalize_content_type
 from tests.fake_storage import image_bytes
 
 ALLOWED = ["image/jpeg", "image/png", "image/webp"]
@@ -63,3 +63,37 @@ def test_declared_file_checks(content_type: str, file_name: str, size: int, code
         check_declared_file(content_type, file_name, size, allowed=ALLOWED, max_bytes=1_000_000)
     assert _code(exc) == code
     check_declared_file("image/jpeg", "photo.JPG", 10, allowed=ALLOWED, max_bytes=1_000_000)
+
+
+# ----------------------------------------------------------------- mobile compatibility
+
+
+@pytest.mark.parametrize(
+    ("declared", "expected"),
+    [
+        ("image/jpeg", "image/jpeg"),
+        ("IMAGE/JPEG", "image/jpeg"),
+        (" image/jpg ", "image/jpeg"),  # 일부 안드로이드 앱
+        ("image/pjpeg", "image/jpeg"),
+        ("image/png", "image/png"),
+        ("image/heic", "image/heic"),  # 별칭 아님: 허용 목록 검사에서 거부
+    ],
+)
+def test_normalize_content_type(declared: str, expected: str) -> None:
+    assert normalize_content_type(declared) == expected
+
+
+def test_jpeg_alias_and_uppercase_extension_pass_declared_check() -> None:
+    check_declared_file(
+        normalize_content_type("image/jpg"), "IMG_0001.JPG", 10, allowed=ALLOWED, max_bytes=100
+    )
+    check_declared_file("image/jpeg", "IMG_0002.JPEG", 10, allowed=ALLOWED, max_bytes=100)
+
+
+@pytest.mark.parametrize("brand", [b"heic", b"mif1", b"heix"])
+def test_raw_heif_bytes_get_unsupported_type(brand: bytes) -> None:
+    """HEIC·HEIF는 앱이 JPEG로 바꿔 올린다. 변환 없이 오면(이름만 .jpg) 형식 안내 오류."""
+    data = b"\x00\x00\x00\x18ftyp" + brand + b"\x00\x00\x00\x00mif1heic" + b"\x00" * 64
+    with pytest.raises(UnprocessableError) as exc:
+        inspect_image(data, declared_type="image/jpeg", **LIMITS)
+    assert _code(exc) == "UNSUPPORTED_FILE_TYPE"

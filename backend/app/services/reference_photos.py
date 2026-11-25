@@ -44,7 +44,12 @@ from app.schemas.reference_photos import (
     ReferenceUploadTicket,
 )
 from app.services.artworks import ArtworkService
-from app.services.images import check_declared_file, inspect_image, storage_extension
+from app.services.images import (
+    check_declared_file,
+    inspect_image,
+    normalize_content_type,
+    storage_extension,
+)
 
 _LIVE = (PhotoStatus.PENDING, PhotoStatus.ACTIVE)
 
@@ -159,7 +164,7 @@ class ReferencePhotoService:
     ) -> ReferenceUploadTicket:
         storage = self._require_storage()
         settings = self.settings
-        content_type = data.content_type.lower()
+        content_type = normalize_content_type(data.content_type)
         check_declared_file(
             content_type,
             data.file_name,

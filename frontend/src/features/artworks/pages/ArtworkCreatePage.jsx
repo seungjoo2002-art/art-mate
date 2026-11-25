@@ -9,6 +9,7 @@ import PaintSplash from '../../../components/decor/PaintSplash'
 import { Button, Card, Input } from '../../../components/ui'
 import { useAsync } from '../../../hooks/useAsync'
 import { useOptions } from '../../../hooks/useOptions'
+import { prepareImageFiles } from '../../../lib/imageFile'
 import { labelOf } from '../../../lib/options'
 import { toErrorMessage } from '../../../utils/errorMessages'
 import { createArtwork, deleteArtwork, putExamPlan } from '../api'
@@ -92,10 +93,12 @@ export default function ArtworkCreatePage() {
 
   const typeLabelOf = (code) => (code && options ? labelOf(options.practical_types, code) : '')
 
-  function addReferences(files) {
+  // 고른 사진을 먼저 준비 (형식 판별, HEIC·HEIF → JPEG) → 미리보기·장수 확인
+  async function addReferences(files) {
+    const prepared = await prepareImageFiles(files)
     const used = references.queue.length
-    const { accepted, rejected } = acceptFiles(files, DEFAULT_MAX_REFERENCE_PHOTOS - used)
-    setRefMessages(rejected.map((r) => `${r.name}: ${r.message}`))
+    const { accepted, rejected } = acceptFiles(prepared.files, DEFAULT_MAX_REFERENCE_PHOTOS - used)
+    setRefMessages([...prepared.rejected, ...rejected].map((r) => `${r.name}: ${r.message}`))
     if (accepted.length) references.add(accepted)
   }
 

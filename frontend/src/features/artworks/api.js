@@ -1,4 +1,5 @@
 import { api } from '../../lib/api'
+import { IMAGE_ERRORS, MAX_IMAGE_BYTES, prepareImageFile } from '../../lib/imageFile'
 import { supabase } from '../../lib/supabase'
 
 /** 목록 필터 (v0.5.1): workCategory MOCK_EXAM | PERSONAL_PRACTICE | CLASS_WORK, practicalType 실기 유형 */
@@ -123,8 +124,8 @@ export const putExamDefaults = (stages) =>
 export const getPhotoUrl = (artworkId, photoId) =>
   api(`/artworks/${artworkId}/photos/${photoId}/url`)
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-const MAX_BYTES = 10 * 1024 * 1024
+// 서버·Storage가 저장하는 형식 (HEIC·HEIF는 prepareImageFile이 JPEG로 바꾼 뒤 올림)
+const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 const LEGACY_STAGES = ['SKETCH', 'PROGRESS', 'FINAL']
 
@@ -133,17 +134,13 @@ const LEGACY_STAGES = ['SKETCH', 'PROGRESS', 'FINAL']
  * stage: 작품 단계 id (v0.9.7) 또는 예전 SKETCH | PROGRESS | FINAL
  * kind REVISION: 피드백을 반영한 수정 사진 → feedbackNoteId 또는 feedbackRecordingId 1개 필수
  */
-/** 업로드 전에 형식·크기 확인 (서버가 다시 검증). 문제가 있으면 { userMessage } 를 던진다 */
+/**
+ * prepareImageFile로 준비한 파일의 형식·크기 확인 (서버가 다시 검증). 문제가 있으면 { userMessage }.
+ * 휴대폰에서 고른 원래 파일은 먼저 prepareImageFile(s)로 준비할 것 (HEIC 변환·형식 판별)
+ */
 export function checkImageFile(file) {
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    const isHeic = /heic|heif/i.test(file.type) || /\.hei[cf]$/i.test(file.name)
-    throw {
-      userMessage: isHeic
-        ? '아이폰 HEIC 사진은 올릴 수 없어요. 설정 > 카메라 > 포맷에서 "높은 호환성"으로 바꿔 주세요.'
-        : 'JPG, PNG, WEBP 사진만 올릴 수 있어요.',
-    }
-  }
-  if (file.size > MAX_BYTES) throw { userMessage: '10MB 이하 사진만 올릴 수 있어요.' }
+  if (!UPLOAD_TYPES.includes(file.type)) throw { userMessage: IMAGE_ERRORS.UNSUPPORTED }
+  if (file.size > MAX_IMAGE_BYTES) throw { userMessage: IMAGE_ERRORS.TOO_LARGE }
 }
 
 export async function uploadStagePhoto(
@@ -152,15 +149,8 @@ export async function uploadStagePhoto(
   file,
   { replacesPhotoId, kind = 'STAGE', feedbackNoteId, feedbackRecordingId } = {},
 ) {
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    const isHeic = /heic|heif/i.test(file.type) || /\.hei[cf]$/i.test(file.name)
-    throw {
-      userMessage: isHeic
-        ? '아이폰 HEIC 사진은 올릴 수 없어요. 설정 > 카메라 > 포맷에서 "높은 호환성"으로 바꿔 주세요.'
-        : 'JPG, PNG, WEBP 사진만 올릴 수 있어요.',
-    }
-  }
-  if (file.size > MAX_BYTES) throw { userMessage: '10MB 이하 사진만 올릴 수 있어요.' }
+  // 실제 내용으로 형식 판별, HEIC·HEIF는 JPEG로 변환 (MIME이 비었거나 틀려도 됨)
+  file = await prepareImageFile(file)
 
   // 1) 업로드 요청 → PENDING 사진 + Signed upload URL
   const ticket = await api(`/artworks/${artworkId}/photos`, {
@@ -199,6 +189,7 @@ export const listReferencePhotos = (artworkId, { includeUrls = true } = {}) =>
 
 /** 원본 사진 1장 올리기 (요청 → Storage 직접 업로드 → 완료). replacesPhotoId면 그 자리 교체 */
 export async function uploadReferencePhoto(artworkId, file, { replacesPhotoId } = {}) {
+  file = await prepareImageFile(file)
   checkImageFile(file)
   const ticket = await api(`/artworks/${artworkId}/reference-photos`, {
     method: 'POST',

@@ -1,5 +1,6 @@
 import { Camera, ImagePlus } from 'lucide-react'
 import styles from './StageHeader.module.css'
+import { IMAGE_ACCEPT } from '../../../lib/imageFile'
 
 /**
  * 단계 머리: STEP · 단계 이름 · 사진 수 · 사진 추가. 추가한 사진은 단계 슬라이드 끝에 붙는다
@@ -15,7 +16,7 @@ export default function StageHeader({ stage, index, photoCount, busy, locked, on
   const input = (
     <input
       type="file"
-      accept="image/jpeg,image/png,image/webp"
+      accept={IMAGE_ACCEPT}
       className={styles.input}
       onChange={handleChange}
       disabled={busy}

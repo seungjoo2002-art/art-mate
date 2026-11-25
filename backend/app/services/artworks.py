@@ -117,7 +117,12 @@ from app.services.artwork_stages import (
     resolve_stage,
 )
 from app.services.feedback_image_refs import is_feedback_reference
-from app.services.images import check_declared_file, inspect_image, storage_extension
+from app.services.images import (
+    check_declared_file,
+    inspect_image,
+    normalize_content_type,
+    storage_extension,
+)
 from app.services.practice_links import link_artwork
 from app.services.representative import registration_key, representative_ids
 from app.services.sharing import retire_post_images, withdraw_artwork_sharing
@@ -780,14 +785,14 @@ class ArtworkService:
     ) -> UploadTicket:
         storage = self._require_storage()
         settings = self.settings
+        content_type = normalize_content_type(data.content_type)
         check_declared_file(
-            data.content_type.lower(),
+            content_type,
             data.file_name,
             data.file_size,
             allowed=settings.artwork_allowed_content_types,
             max_bytes=settings.artwork_max_upload_bytes,
         )
-        content_type = data.content_type.lower()
         # 작품 행 잠금: 단계별 장수 제한·대표 사진 지정·완료 처리를 직렬화
         artwork = await self.owned(owner, artwork_id, for_update=True)
         self._ensure_photos_editable(artwork)

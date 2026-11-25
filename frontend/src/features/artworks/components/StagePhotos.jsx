@@ -3,6 +3,7 @@ import { formatUploadedAt } from '../../../utils/date'
 import { photoShownAt } from '../stages'
 import PhotoCarousel from './PhotoCarousel'
 import styles from './StagePhotos.module.css'
+import { IMAGE_ACCEPT } from '../../../lib/imageFile'
 
 /**
  * 단계 사진 가로 슬라이드 + 지금 보는 사진의 올린 시각 · 교체 · 삭제 (아카이브 상세).
@@ -53,7 +54,7 @@ export default function StagePhotos({
             >
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept={IMAGE_ACCEPT}
                 className={styles.input}
                 onChange={handleFile}
                 disabled={busy}
