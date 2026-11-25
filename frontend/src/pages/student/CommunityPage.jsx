@@ -236,19 +236,13 @@ function GalleryItem({ post }) {
 
 /**
  * 게시판 글 한 줄: [분류] 제목 → 작성자 · 시간 · 좋아요 · 댓글, 그림이 있으면 오른쪽 작은 정사각형.
- * 줄 전체가 게시물 링크 (한 번 누르면 이동, 두 번 누르면 좋아요)
+ * 줄 전체가 게시물 링크 (한 번 누르면 바로 이동. 좋아요는 게시물 화면에서)
  */
 function BoardPost({ post }) {
-  const like = useLike(post)
   const thumb = post.image?.url
   const excerpt = post.question || post.body
   return (
-    <DoubleTapLink
-      to={`/community/posts/${post.id}`}
-      className={styles.line}
-      onDoubleTap={like.likeOnce}
-      popKey={like.pop}
-    >
+    <Link to={`/community/posts/${post.id}`} className={styles.line}>
       <span className={styles.lineText}>
         <span className={styles.lineTitle}>
           <span className={styles.lineCategory}>[{postCategory(post)}]</span> {post.title}
@@ -259,13 +253,13 @@ function BoardPost({ post }) {
           <span aria-hidden>·</span>
           <time dateTime={post.created_at}>{formatTimeAgo(post.created_at)}</time>
           <span aria-hidden>·</span>
-          <span className={like.liked ? styles.likedOn : ''}>좋아요 {like.count}</span>
+          <span className={post.liked ? styles.likedOn : ''}>좋아요 {post.like_count}</span>
           <span aria-hidden>·</span>
           <span>댓글 {post.comment_count}</span>
         </span>
       </span>
       {thumb && <img src={thumb} alt="" className={styles.lineThumb} loading="lazy" />}
-    </DoubleTapLink>
+    </Link>
   )
 }
 
@@ -316,7 +310,7 @@ function DoubleTapLink({ to, className, onDoubleTap, popKey, label, children }) 
 
 /**
  * 목록 좋아요 상태: 먼저 화면에 반영하고, 실패하면 되돌림
- * toggle: 켜고 끄기 / likeOnce: 두 번 누르기 (켜기만, 이미 눌렀으면 하트만 띄움)
+ * likeOnce: 갤러리에서 두 번 누르기 (켜기만, 이미 눌렀으면 하트만 띄움)
  */
 function useLike(post) {
   const [state, setState] = useState({ liked: post.liked, count: post.like_count })
@@ -341,7 +335,6 @@ function useLike(post) {
   return {
     ...state,
     pop,
-    toggle: () => apply(!state.liked),
     likeOnce: () => {
       setPop((n) => n + 1)
       if (!state.liked) apply(true)

@@ -119,6 +119,7 @@ from app.services.artwork_stages import (
 from app.services.feedback_image_refs import is_feedback_reference
 from app.services.images import check_declared_file, inspect_image, storage_extension
 from app.services.practice_links import link_artwork
+from app.services.representative import registration_key, representative_ids
 from app.services.sharing import retire_post_images, withdraw_artwork_sharing
 
 logger = logging.getLogger(__name__)
@@ -161,10 +162,12 @@ def _stage_rank(stage: ArtworkStage) -> int:
 def summarize(artwork: Artwork, photos: list[ArtworkPhoto]) -> ArtworkProgressRead:
     # v0.9.8: 피드백 뒤에 올린 사진(예전 REVISION)도 일반 단계 사진과 같게 센다
     active = [p for p in photos if p.status == PhotoStatus.ACTIVE]
+    # 단계 대표 = 그 단계에서 가장 먼저 등록한 사진 (예전에 직접 고른 is_representative는 읽지 않음)
+    representatives = representative_ids(active)
     stages = []
     for stage in ARTWORK_STAGE_ORDER:
-        items = sorted((p for p in active if p.stage == stage), key=lambda p: (p.uploaded_at, p.id))
-        representative = next((p.id for p in items if p.is_representative), None)
+        items = sorted((p for p in active if p.stage == stage), key=registration_key)
+        representative = next((p.id for p in items if p.id in representatives), None)
         stages.append(
             StageSummary(
                 stage=stage,
@@ -187,7 +190,13 @@ def summarize(artwork: Artwork, photos: list[ArtworkPhoto]) -> ArtworkProgressRe
     )
 
 
-def photo_read(photo: ArtworkPhoto, url: str | None = None, expires: datetime | None = None):  # type: ignore[no-untyped-def]
+def photo_read(  # type: ignore[no-untyped-def]
+    photo: ArtworkPhoto,
+    url: str | None = None,
+    expires: datetime | None = None,
+    representative: bool | None = None,
+):
+    """representative: 계산한 단계 대표 여부 (목록 조회). 없으면 저장된 값"""
     return PhotoRead(
         id=photo.id,
         artwork_id=photo.artwork_id,
@@ -201,7 +210,7 @@ def photo_read(photo: ArtworkPhoto, url: str | None = None, expires: datetime | 
         size_bytes=photo.size_bytes,
         width=photo.width,
         height=photo.height,
-        is_representative=photo.is_representative,
+        is_representative=photo.is_representative if representative is None else representative,
         uploaded_at=photo.uploaded_at,
         created_at=photo.created_at,
         url=url,
@@ -403,19 +412,22 @@ class ArtworkService:
         include_urls: bool,
         rank: dict[uuid.UUID, int] | None = None,
     ) -> list[PhotoRead]:
+        representatives = representative_ids(photos)
         ordered = sorted(
             photos,
             key=lambda p: (
                 rank.get(p.stage_id, 99) if rank else _stage_rank(p.stage),
-                not p.is_representative,
-                p.uploaded_at,
+                *registration_key(p),
             ),
         )
         urls: dict[str, str] = {}
         expires = clock.utc_now() + timedelta(seconds=self.settings.storage_signed_url_seconds)
         if include_urls and ordered:
             urls = await self._sign([p.storage_path for p in ordered], token)
-        return [photo_read(p, urls.get(p.storage_path), expires) for p in ordered]
+        return [
+            photo_read(p, urls.get(p.storage_path), expires, p.id in representatives)
+            for p in ordered
+        ]
 
     async def _sign(self, paths: list[str], token: str) -> dict[str, str]:
         storage = self._require_storage()

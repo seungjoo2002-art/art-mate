@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countByStage, feedbackStage, groupStageFeedback, refPhotoIds } from './feedbackGroups'
+import { countByStage, feedbackStage, groupStageFeedback, linkedPhotos } from './feedbackGroups'
 
 const ref = (photo_id, extra = {}) => ({ photo_id, photo_status: 'ACTIVE', ...extra })
 const item = (key, stageId, refs = [], time = '2026-11-20T10:00:00Z') => ({
@@ -18,16 +18,24 @@ describe('feedbackStage', () => {
   })
 })
 
-describe('refPhotoIds', () => {
-  it('교체된 기준 사진은 지금 그 자리의 사진으로', () => {
+describe('linkedPhotos', () => {
+  it('교체된 기준 사진은 지금 사진이 아니라 "교체 전" 자리로', () => {
     const it1 = item('a', 's1', [
       ref('old', { photo_status: 'DELETED', replaced: true, current_photo_id: 'new' }),
-      ref('p2', { current_photo_id: 'p2' }),
+      ref('p2'),
+      ref('gone', { photo_status: 'DELETED', replaced: false, current_photo_id: null }),
     ])
-    expect(refPhotoIds(it1)).toEqual(['new', 'p2'])
+    expect(linkedPhotos(it1)).toEqual({ direct: ['p2'], replaced: ['new'] })
   })
-  it('기준 사진이 없으면 빈 배열', () => {
-    expect(refPhotoIds({ imageRefs: null })).toEqual([])
+  it('교체 전·후 사진을 둘 다 고른 피드백은 지금 사진 피드백', () => {
+    const it1 = item('a', 's1', [
+      ref('old', { photo_status: 'DELETED', replaced: true, current_photo_id: 'new' }),
+      ref('new'),
+    ])
+    expect(linkedPhotos(it1)).toEqual({ direct: ['new'], replaced: [] })
+  })
+  it('기준 사진이 없으면 빈 목록', () => {
+    expect(linkedPhotos({ imageRefs: null })).toEqual({ direct: [], replaced: [] })
   })
 })
 
@@ -51,21 +59,35 @@ describe('groupStageFeedback', () => {
     item('none', 's1'),
     item('deleted', 's1', [ref('x', { photo_status: 'DELETED', current_photo_id: null })]),
     item('otherStagePhoto', 's1', [ref('q1')]),
-    item('replaced', 's1', [ref('old', { current_photo_id: 'p2', replaced: true })]),
+    item('replaced', 's1', [
+      ref('old', { photo_status: 'DELETED', current_photo_id: 'p2', replaced: true }),
+    ]),
+    item('replacedGone', 's1', [
+      ref('old2', { photo_status: 'DELETED', current_photo_id: null, replaced: true }),
+    ]),
     item('s2', 's2', [ref('p1')]),
     item('overall', null, [ref('p1')]),
   ]
 
   it('사진별로 나누고 섞지 않음, 연결 안 된 건 단계 공통', () => {
-    const { byPhoto, common, total } = groupStageFeedback(items, {
+    const { byPhoto, beforeReplace, common, total } = groupStageFeedback(items, {
       stageId: 's1',
       stageIds,
       photoIds: ['p1', 'p2'],
     })
     expect(byPhoto.get('p1').map((i) => i.key)).toEqual(['early', 'both', 'late'])
-    expect(byPhoto.get('p2').map((i) => i.key)).toEqual(['both', 'replaced'])
-    expect(common.map((i) => i.key).sort()).toEqual(['deleted', 'none', 'otherStagePhoto'])
-    expect(total).toBe(7)
+    // 교체 전 사진 피드백은 새 사진(p2) 피드백으로 세지 않고 따로
+    expect(byPhoto.get('p2').map((i) => i.key)).toEqual(['both'])
+    expect(beforeReplace.get('p2').map((i) => i.key)).toEqual(['replaced'])
+    expect(beforeReplace.get('p1')).toEqual([])
+    // 교체한 사진까지 지워진 자리는 단계 공통 (누락 없음)
+    expect(common.map((i) => i.key).sort()).toEqual([
+      'deleted',
+      'none',
+      'otherStagePhoto',
+      'replacedGone',
+    ])
+    expect(total).toBe(8)
   })
 
   it('사진이 없는 단계: 모두 단계 공통', () => {

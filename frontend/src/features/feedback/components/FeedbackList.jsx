@@ -14,7 +14,8 @@ import styles from './FeedbackTimeline.module.css'
 
 /**
  * 단계별 피드백 화면의 목록 (아카이브 상세 → 피드백 보기).
- * stageId가 있으면: 위에서 고른 사진(photos[photoIndex])에 연결된 피드백만, 그 아래 단계 공통 피드백
+ * stageId가 있으면: 위에서 고른 사진(photos[photoIndex])에 연결된 피드백만, 그 사진 자리의 '교체 전 사진'
+ * 피드백(따로 표시, 새 사진 피드백으로 세지 않음), 그 아래 단계 공통 피드백
  * (이 단계 사진과 연결되지 않은 피드백). stageId가 없으면 작품 전체 피드백 전부.
  * stages: [{ stageId, title }] 지금 보이는 단계 (녹음의 연결 단계 바꾸기·숨긴 단계 판단)
  * renderFeedbackExtras({ type, id, image_refs }, stageId, reload): 피드백 아래 (기준 사진 확인·변경)
@@ -153,6 +154,7 @@ export default function FeedbackList({
   }
 
   const photoFeedback = current ? groups.byPhoto.get(current.id) : []
+  const replacedFeedback = current ? groups.beforeReplace.get(current.id) : []
   const single = photos.length === 1
   return (
     <div className={styles.section}>
@@ -174,6 +176,18 @@ export default function FeedbackList({
           {photoFeedback.length
             ? list(photoFeedback)
             : empty('이 사진에 연결된 피드백이 없어요.')}
+        </section>
+      )}
+      {replacedFeedback.length > 0 && (
+        <section className={styles.group} aria-label="교체 전 사진 피드백">
+          <h2 className={styles.heading}>
+            교체 전 사진 피드백{' '}
+            <span className={styles.headingCount}>{replacedFeedback.length}개</span>
+          </h2>
+          <p className={styles.caption}>
+            이 자리의 사진을 바꾸기 전에 받은 피드백이에요. 그때 본 사진은 각 피드백 아래에 있어요.
+          </p>
+          {list(replacedFeedback)}
         </section>
       )}
       {(groups.common.length > 0 || !current) && (

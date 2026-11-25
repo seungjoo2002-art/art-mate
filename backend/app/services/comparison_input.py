@@ -16,6 +16,7 @@ from app.schemas.comparison import (
     ComparisonReadiness,
     ComparisonStage,
 )
+from app.services.representative import representative_ids
 
 
 def _intent(artwork: Artwork) -> ComparisonIntent:
@@ -50,6 +51,7 @@ def build_comparison_input(
         for r in sorted(references, key=lambda r: (r.position, r.uploaded_at or r.created_at))
         if r.status == PhotoStatus.ACTIVE
     ]
+    representatives = representative_ids(photos)  # 단계마다 가장 먼저 등록한 사진
     by_stage: dict[object, list[ArtworkPhoto]] = {}
     for photo in photos:
         if photo.status == PhotoStatus.ACTIVE:
@@ -71,7 +73,7 @@ def build_comparison_input(
                         width=p.width,
                         height=p.height,
                         uploaded_at=p.uploaded_at,
-                        is_representative=p.is_representative,
+                        is_representative=p.id in representatives,
                     )
                     for p in stage_photos
                 ],

@@ -107,7 +107,8 @@ def test_comparison_input_without_intent_forbids_assuming_it() -> None:
     assert [r.role for r in built.references] == ["REFERENCE", "REFERENCE"]  # 삭제 제외
     assert [s.name for s in built.stages] == ["스케치", "채색", "완성"]  # 단계 순서
     sketch_photos = built.stages[0].photos
-    assert [p.is_representative for p in sketch_photos] == [False, True]  # 올린 순서
+    # 올린 순서, 대표 = 단계에서 가장 먼저 올린 사진 (예전에 직접 고른 값 rep=True는 읽지 않음)
+    assert [p.is_representative for p in sketch_photos] == [True, False]
     assert built.stages[2].photos == []  # 업로드 미완료 제외
     assert built.readiness.ready is True and built.readiness.missing == []
     assert built.exam.topic == "유리컵과 사과"

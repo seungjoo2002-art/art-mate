@@ -153,6 +153,7 @@ from app.services.growth_analytics import (
 from app.services.growth_insights import build_insights, summarize_insights
 from app.services.notifications import NotificationService
 from app.services.practice_links import link_artwork, personal_recommendation, unlink_artwork
+from app.services.representative import representative_ids
 from app.services.tasks import TaskService
 
 logger = logging.getLogger(__name__)
@@ -2379,6 +2380,7 @@ class GrowthService:
         self, scope: Scope, artwork: Artwork, photo_urls: dict[uuid.UUID, tuple[str, Any]]
     ) -> ComparisonSide:
         photos = (await self._photo_map([artwork.id]))[artwork.id]
+        representatives = representative_ids(photos)  # 단계마다 가장 먼저 등록한 사진
         summaries = list(
             (
                 await self.session.execute(
@@ -2425,7 +2427,7 @@ class GrowthService:
                     url_expires_at=photo_urls.get(p.id, (None, None))[1],
                 )
                 for p in photos
-                if p.is_representative
+                if p.id in representatives
             ],
             feedback_count=len(summaries),
             categories=merged,
@@ -2500,7 +2502,7 @@ class GrowthService:
             raise UnprocessableError("Choose two different artworks")
         photo_urls: dict[uuid.UUID, tuple[str, Any]] = {}
         photos = await self._photo_map([previous.id, current.id])
-        reps = [p for ps in photos.values() for p in ps if p.is_representative]
+        reps = [p for ps in photos.values() for p in ps if p.id in representative_ids(ps)]
         if storage is not None and token and reps:
             expires = clock.utc_now() + timedelta(seconds=self.settings.storage_signed_url_seconds)
             try:
