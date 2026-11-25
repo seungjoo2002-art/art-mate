@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Flame, Heart, MessageCircle, PenLine, Search, X } from 'lucide-react'
+import { Copy, Heart, PenLine, Search, X } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import MascotCheer from '../../components/mascot/MascotCheer'
 import { Button, Card } from '../../components/ui'
@@ -7,6 +7,7 @@ import { listFeed, setLiked } from '../../features/community/api'
 import { authorName } from '../../features/community/anonName'
 import { CATEGORY_FILTERS, postCategory } from '../../features/community/labels'
 import { useAsync } from '../../hooks/useAsync'
+import { formatTimeAgo } from '../../utils/date'
 import { toErrorMessage } from '../../utils/errorMessages'
 import styles from './CommunityPage.module.css'
 
@@ -193,99 +194,76 @@ function SearchBox({ initial, onSearch }) {
 }
 
 /**
- * 작품 갤러리: 하트를 가장 많이 받은 작품 하나 크게 + 나머지는 원래 비율 그대로 두 줄 벽돌 쌓기
- * (불러온 게시물 안에서 고름. 하트가 0이거나 작품이 3개 미만이면 크게 보이는 칸 없이)
+ * 작품 갤러리: 탐색 탭처럼 정사각형 3열 그리드 (불러온 순서 그대로, 인기 작품도 같은 크기).
+ * 썸네일은 칸에 맞춰 잘라 보여 주기만 하고 원본은 게시물 화면에서 원래 비율로 봄
  */
 function Gallery({ posts }) {
-  const top = posts.reduce((best, p) => (p.like_count > (best?.like_count ?? 0) ? p : best), null)
-  const featured = posts.length >= 3 && top ? top : null
-  const rest = featured ? posts.filter((p) => p.id !== featured.id) : posts
-
   return (
-    <>
-      {featured && <GalleryItem post={featured} large />}
-      <div className={styles.masonry}>
-        {rest.map((post) => (
-          <GalleryItem key={post.id} post={post} />
-        ))}
-      </div>
-    </>
+    <ul className={styles.grid}>
+      {posts.map((post) => (
+        <li key={post.id}>
+          <GalleryItem post={post} />
+        </li>
+      ))}
+    </ul>
   )
 }
 
-/** 갤러리 한 칸: 한 번 누르면 게시물로, 두 번 누르면 좋아요 */
-function GalleryItem({ post, large = false }) {
+/** 갤러리 한 칸: 한 번 누르면 게시물로, 두 번 누르면 좋아요. 글씨 없이 그림만 */
+function GalleryItem({ post }) {
   const like = useLike(post)
+  // 지금 게시물 이미지는 1장. 여러 장(images)이 오면 첫 장을 보여 주고 겹친 사진 표시
+  const multiple = (post.images?.length ?? 0) > 1
   return (
-    <div className={large ? styles.featured : styles.brick}>
-      <DoubleTapLink
-        to={`/community/posts/${post.id}`}
-        className={styles.cover}
-        onDoubleTap={like.likeOnce}
-        popKey={like.pop}
-      >
-        {large && (
-          <span className={styles.featuredBadge}>
-            <Flame size={14} fill="currentColor" aria-hidden /> 인기
-          </span>
-        )}
-        <img
-          src={post.image.url}
-          alt={post.title}
-          className={large ? styles.featuredImage : styles.brickImage}
-          loading={large ? undefined : 'lazy'}
-        />
-      </DoubleTapLink>
-      {/* 사진 링크 위에 겹친 글씨 띠: 하트만 눌리고 나머지는 눌러도 아래 사진 링크로 감 */}
-      <span className={`${styles.caption} ${large ? styles.captionLarge : ''}`}>
-        <span className={styles.captionText}>
-          <span className={styles.captionTitle}>{post.title}</span>
-          {large && <span className={styles.captionAuthor}>{authorName(post)}</span>}
+    <DoubleTapLink
+      to={`/community/posts/${post.id}`}
+      className={styles.tile}
+      onDoubleTap={like.likeOnce}
+      popKey={like.pop}
+      label={post.title}
+    >
+      <img src={post.image.url} alt="" className={styles.tileImage} loading="lazy" />
+      {multiple && (
+        <span className={styles.multi} aria-label="사진 여러 장">
+          <Copy size={16} strokeWidth={2.4} aria-hidden />
         </span>
-        <LikeButton like={like} className={styles.captionLikes} />
-      </span>
-    </div>
+      )}
+    </DoubleTapLink>
   )
 }
 
 /**
- * 게시판 글 하나 = 잡지 지면. 그림만 색이 있고 나머지는 먹색·종이.
- * 맨 위 작성자 줄(인스타처럼, 익명이면 고양이 별명) → 그림 크게 → 분류 · 제목 · 미리보기 · 하트·댓글
- * 그림 없는 글은 얇은 테두리 상자. 한 번 누르면 게시물로, 두 번 누르면 좋아요
+ * 게시판 글 한 줄: [분류] 제목 → 작성자 · 시간 · 좋아요 · 댓글, 그림이 있으면 오른쪽 작은 정사각형.
+ * 줄 전체가 게시물 링크 (한 번 누르면 이동, 두 번 누르면 좋아요)
  */
 function BoardPost({ post }) {
-  const name = authorName(post)
-  const hasImage = Boolean(post.image?.url)
   const like = useLike(post)
+  const thumb = post.image?.url
+  const excerpt = post.question || post.body
   return (
-    <div className={`${styles.post} ${hasImage ? styles.spread : styles.note}`}>
-      <DoubleTapLink
-        to={`/community/posts/${post.id}`}
-        className={styles.postLink}
-        onDoubleTap={like.likeOnce}
-        popKey={like.pop}
-      >
-        <span className={styles.byline}>
-          <span className={styles.avatar} aria-hidden>
-            {post.author?.is_anonymous ? '🐾' : name.slice(0, 1)}
-          </span>
-          <span className={styles.author}>{name}</span>
-          <span className={styles.category}>{postCategory(post)}</span>
+    <DoubleTapLink
+      to={`/community/posts/${post.id}`}
+      className={styles.line}
+      onDoubleTap={like.likeOnce}
+      popKey={like.pop}
+    >
+      <span className={styles.lineText}>
+        <span className={styles.lineTitle}>
+          <span className={styles.lineCategory}>[{postCategory(post)}]</span> {post.title}
         </span>
-        {hasImage && <img src={post.image.url} alt="" className={styles.photo} loading="lazy" />}
-        <span className={styles.title}>{post.title}</span>
-        {(post.question || post.body) && (
-          <span className={styles.excerpt}>{post.question || post.body}</span>
-        )}
-      </DoubleTapLink>
-      <span className={styles.meta}>
-        <LikeButton like={like} className={styles.count} />
-        <Link to={`/community/posts/${post.id}`} className={styles.count}>
-          <MessageCircle size={13} aria-hidden />
-          <span className={styles.srOnly}>댓글</span> {post.comment_count}
-        </Link>
+        {excerpt && <span className={styles.lineExcerpt}>{excerpt}</span>}
+        <span className={styles.lineMeta}>
+          <span className={styles.lineAuthor}>{authorName(post)}</span>
+          <span aria-hidden>·</span>
+          <time dateTime={post.created_at}>{formatTimeAgo(post.created_at)}</time>
+          <span aria-hidden>·</span>
+          <span className={like.liked ? styles.likedOn : ''}>좋아요 {like.count}</span>
+          <span aria-hidden>·</span>
+          <span>댓글 {post.comment_count}</span>
+        </span>
       </span>
-    </div>
+      {thumb && <img src={thumb} alt="" className={styles.lineThumb} loading="lazy" />}
+    </DoubleTapLink>
   )
 }
 
@@ -296,7 +274,7 @@ const DOUBLE_TAP_MS = 280
  * 두 번째 누름을 기다리느라 한 번 누를 때 이동이 DOUBLE_TAP_MS 만큼 늦어짐.
  * 두 번 누르면 가운데에 하트가 잠깐 떠오름 (popKey가 바뀔 때마다 다시 재생)
  */
-function DoubleTapLink({ to, className, onDoubleTap, popKey, children }) {
+function DoubleTapLink({ to, className, onDoubleTap, popKey, label, children }) {
   const navigate = useNavigate()
   const timer = useRef(null)
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -318,7 +296,12 @@ function DoubleTapLink({ to, className, onDoubleTap, popKey, children }) {
   }
 
   return (
-    <Link to={to} className={`${className} ${styles.tapArea}`} onClick={handleClick}>
+    <Link
+      to={to}
+      className={`${className} ${styles.tapArea}`}
+      onClick={handleClick}
+      aria-label={label}
+    >
       {children}
       {popKey > 0 && (
         <span key={popKey} className={styles.heartPop} aria-hidden>
@@ -331,7 +314,7 @@ function DoubleTapLink({ to, className, onDoubleTap, popKey, children }) {
 
 /**
  * 목록 좋아요 상태: 먼저 화면에 반영하고, 실패하면 되돌림
- * toggle: 하트 버튼 (누르면 켜고 끄기) / likeOnce: 두 번 누르기 (켜기만, 이미 눌렀으면 하트만 띄움)
+ * toggle: 켜고 끄기 / likeOnce: 두 번 누르기 (켜기만, 이미 눌렀으면 하트만 띄움)
  */
 function useLike(post) {
   const [state, setState] = useState({ liked: post.liked, count: post.like_count })
@@ -362,19 +345,4 @@ function useLike(post) {
       if (!state.liked) apply(true)
     },
   }
-}
-
-function LikeButton({ like, className = '' }) {
-  return (
-    <button
-      type="button"
-      className={`${className} ${styles.likeButton} ${like.liked ? styles.likedOn : ''}`}
-      onClick={like.toggle}
-      aria-pressed={like.liked}
-      aria-label={`좋아요 ${like.count}`}
-    >
-      <Heart size={18} strokeWidth={2.2} fill={like.liked ? 'currentColor' : 'none'} aria-hidden />
-      {like.count}
-    </button>
-  )
 }

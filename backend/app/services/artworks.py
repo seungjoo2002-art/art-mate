@@ -116,6 +116,7 @@ from app.services.artwork_stages import (
     replace_stages,
     resolve_stage,
 )
+from app.services.feedback_image_refs import is_feedback_reference
 from app.services.images import check_declared_file, inspect_image, storage_extension
 from app.services.practice_links import link_artwork
 from app.services.sharing import retire_post_images, withdraw_artwork_sharing
@@ -344,6 +345,36 @@ class ArtworkService:
         photo = (await self.session.execute(stmt)).scalar_one_or_none()
         if photo is None or photo.status == PhotoStatus.DELETED:
             raise NotFoundError("Photo not found")
+        return photo
+
+    async def _replaced_reference(
+        self, artwork_id: uuid.UUID, photo_id: uuid.UUID
+    ) -> ArtworkPhoto | None:
+        """교체됐지만 피드백 기준 사진이라 파일을 남겨 둔 사진 (그 피드백에서 계속 보여 줌)."""
+        photo = (
+            await self.session.execute(
+                select(ArtworkPhoto).where(
+                    ArtworkPhoto.artwork_id == artwork_id,
+                    ArtworkPhoto.id == photo_id,
+                    ArtworkPhoto.status == PhotoStatus.DELETED,
+                    ArtworkPhoto.storage_cleanup_pending.is_(False),
+                )
+            )
+        ).scalar_one_or_none()
+        if photo is None:
+            return None
+        replaced = (
+            await self.session.execute(
+                select(ArtworkPhoto.id)
+                .where(
+                    ArtworkPhoto.replaces_photo_id == photo.id,
+                    ArtworkPhoto.uploaded_at.isnot(None),
+                )
+                .limit(1)
+            )
+        ).first() is not None
+        if not replaced or not await is_feedback_reference(self.session, photo.id):
+            return None
         return photo
 
     async def _page(
@@ -662,6 +693,22 @@ class ArtworkService:
                 storage_cleanup_pending=True,
                 updated_at=func.now(),
             )
+        )
+        # 교체 후에도 피드백 기준 사진이라 남겨 둔 파일도 이제 정리
+        await self.session.execute(
+            update(ArtworkPhoto)
+            .where(
+                ArtworkPhoto.artwork_id == artwork.id,
+                ArtworkPhoto.status == PhotoStatus.DELETED,
+                ArtworkPhoto.id.in_(
+                    select(ArtworkPhoto.replaces_photo_id).where(
+                        ArtworkPhoto.artwork_id == artwork.id,
+                        ArtworkPhoto.replaces_photo_id.isnot(None),
+                    )
+                ),
+                ArtworkPhoto.storage_cleanup_pending.is_(False),
+            )
+            .values(storage_cleanup_pending=True, updated_at=func.now())
         )
         # v1.1 원본 제시물 사진도 함께 삭제 처리 (파일은 아래 cleanup_storage가 정리)
         await self.session.execute(
@@ -1007,7 +1054,11 @@ class ArtworkService:
             replaced.status = PhotoStatus.DELETED
             replaced.deleted_at = now
             replaced.is_representative = False
-            replaced.storage_cleanup_pending = True
+            # 피드백 기준 사진이었으면 파일은 남겨 둔다: 그 피드백은 계속 교체 전 사진을 본다
+            # (작품을 지울 때 함께 정리). 아니면 예전처럼 Storage에서 지운다
+            replaced.storage_cleanup_pending = not await is_feedback_reference(
+                self.session, replaced.id
+            )
             await self.session.flush()
             # VER.2: 교체된 사진으로 만든 게시물 이미지는 내림 (게시물은 남고 사진만 빠짐)
             await retire_post_images(
@@ -1023,7 +1074,8 @@ class ArtworkService:
             )
         ).first() is not None
         photo.status = PhotoStatus.ACTIVE
-        photo.uploaded_at = now
+        # 교체 사진은 교체 전 사진의 등록 순서(올린 시각)를 이어받는다 (실제 올린 시각은 created_at)
+        photo.uploaded_at = replaced.uploaded_at if replaced and replaced.uploaded_at else now
         photo.size_bytes = info.size_bytes
         photo.width = info.width
         photo.height = info.height
@@ -1094,8 +1146,10 @@ class ArtworkService:
         await self.cleanup_storage(owner, token)
 
     async def photo_url(self, artwork_id: uuid.UUID, photo_id: uuid.UUID, token: str) -> SignedUrl:
-        photo = await self._photo(artwork_id, photo_id)
-        if photo.status != PhotoStatus.ACTIVE:
+        photo = await self._replaced_reference(artwork_id, photo_id)
+        if photo is None:
+            photo = await self._photo(artwork_id, photo_id)
+        if photo.status != PhotoStatus.ACTIVE and photo.status != PhotoStatus.DELETED:
             raise ConflictError("The photo is not uploaded yet", code=ErrorCode.PHOTO_NOT_ACTIVE)
         urls = await self._sign([photo.storage_path], token)
         if photo.storage_path not in urls:

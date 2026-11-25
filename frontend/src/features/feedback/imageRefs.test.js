@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_REFS, referenceBody, refsFromRead, suggestPhoto } from './imageRefs'
+import { EMPTY_REFS, presetRefs, referenceBody, refsFromRead, suggestPhoto } from './imageRefs'
 
 const p = (id, extra) => ({ id, status: 'ACTIVE', uploaded_at: '2026-11-13T01:00:00Z', ...extra })
 
@@ -40,5 +40,15 @@ describe('feedback reference images', () => {
     })
     expect(refsFromRead({ status: 'NONE', photos: [] })).toEqual(EMPTY_REFS)
     expect(refsFromRead(undefined)).toEqual(EMPTY_REFS)
+  })
+
+  it('presets the photo seen on the artwork screen as an unconfirmed suggestion', () => {
+    const value = presetRefs('b')
+    expect(referenceBody(value)).toEqual({
+      reference_photo_ids: ['b'],
+      reference_confirmed: false,
+    })
+    expect(presetRefs(null)).toBe(EMPTY_REFS)
+    expect(referenceBody(presetRefs(undefined))).toEqual({})
   })
 })

@@ -75,7 +75,7 @@ export default function NoteCard({ note, options, onChanged }) {
         </span>
         <Link
           to={`/feedback-notes/${note.id}/edit`}
-          state={{ from: location.pathname }}
+          state={{ from: location.pathname + location.search }}
           className={styles.icon}
           aria-label="첨삭 수정"
         >

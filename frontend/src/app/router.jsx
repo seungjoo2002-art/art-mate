@@ -4,9 +4,11 @@ import SubLayout from '../components/layout/SubLayout'
 import ArtworkCreatePage from '../features/artworks/pages/ArtworkCreatePage'
 import ArtworkDetailPage from '../features/artworks/pages/ArtworkDetailPage'
 import ArtworkEditPage from '../features/artworks/pages/ArtworkEditPage'
+import ArtworkFeedbackPage from '../features/artworks/pages/ArtworkFeedbackPage'
 import PostDetailPage from '../features/community/pages/PostDetailPage'
 import PostEditPage from '../features/community/pages/PostEditPage'
 import PostWritePage from '../features/community/pages/PostWritePage'
+import FeedbackList from '../features/feedback/components/FeedbackList'
 import FeedbackTimeline from '../features/feedback/components/FeedbackTimeline'
 import AiConsentPage from '../features/feedback/pages/AiConsentPage'
 import GrowthReportPage from '../features/growth/pages/GrowthReportPage'
@@ -43,6 +45,7 @@ import ProtectedRoute from './ProtectedRoute'
 import PublicOnlyRoute from './PublicOnlyRoute'
 
 const renderArtworkTimeline = (props) => <FeedbackTimeline {...props} />
+const renderArtworkFeedback = (props) => <FeedbackList {...props} />
 
 export const router = createBrowserRouter([
   // 로그인 전
@@ -91,6 +94,11 @@ export const router = createBrowserRouter([
           {
             path: '/artworks/:artworkId',
             element: <ArtworkDetailPage renderTimeline={renderArtworkTimeline} />,
+          },
+          {
+            // 단계별 피드백 (?stage=단계 id&photo=사진 id) · 작품 전체 피드백 (stage 없음)
+            path: '/artworks/:artworkId/feedback',
+            element: <ArtworkFeedbackPage renderFeedback={renderArtworkFeedback} />,
           },
           { path: '/artworks/:artworkId/recordings/new', element: <FeedbackRecordPage /> },
           { path: '/artworks/:artworkId/exam', element: <ExamProgressPage /> },

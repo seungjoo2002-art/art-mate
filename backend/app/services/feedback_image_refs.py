@@ -47,6 +47,50 @@ async def latest_photo(
     return (await session.execute(stmt.limit(1))).scalar_one_or_none()
 
 
+async def is_feedback_reference(session: AsyncSession, photo_id: uuid.UUID) -> bool:
+    """이 사진을 기준 사진으로 삼은 피드백이 있는지 (사진 교체 때 파일을 남길지 정함)."""
+    found = await session.execute(
+        select(FeedbackImageRef.id).where(FeedbackImageRef.photo_id == photo_id).limit(1)
+    )
+    return found.first() is not None
+
+
+MAX_REPLACE_HOPS = 10
+
+
+async def _successors(
+    session: AsyncSession, photo_ids: Sequence[uuid.UUID]
+) -> tuple[dict[uuid.UUID, uuid.UUID], set[uuid.UUID]]:
+    """교체된 사진 id → 지금 그 자리에 있는 ACTIVE 사진 id (여러 번 교체돼도 따라감),
+    그리고 교체된(삭제가 아닌) 사진 id 모음."""
+    current: dict[uuid.UUID, uuid.UUID] = {}
+    replaced: set[uuid.UUID] = set()
+    frontier = {pid: pid for pid in photo_ids}  # 따라가는 중인 id → 처음 id
+    for _ in range(MAX_REPLACE_HOPS):
+        if not frontier:
+            break
+        rows = (
+            await session.execute(
+                select(ArtworkPhoto.id, ArtworkPhoto.replaces_photo_id, ArtworkPhoto.status).where(
+                    ArtworkPhoto.replaces_photo_id.in_(list(frontier)),
+                    # 업로드를 끝낸 교체만 (실패·만료된 교체 요청은 uploaded_at이 없음)
+                    ArtworkPhoto.uploaded_at.isnot(None),
+                )
+            )
+        ).all()
+        nxt: dict[uuid.UUID, uuid.UUID] = {}
+        for new_id, old_id, status in rows:
+            origin = frontier[old_id]
+            if old_id == origin:
+                replaced.add(origin)
+            if status == PhotoStatus.ACTIVE:
+                current[origin] = new_id
+            else:
+                nxt[new_id] = origin
+        frontier = nxt
+    return current, replaced
+
+
 async def _check_photos(
     session: AsyncSession, artwork_id: uuid.UUID, photo_ids: Sequence[uuid.UUID]
 ) -> list[uuid.UUID]:
@@ -157,6 +201,7 @@ async def refs_by_feedback(
         conditions.append(FeedbackImageRef.feedback_recording_id.in_(list(recording_ids)))
     if note_ids:
         conditions.append(FeedbackImageRef.feedback_note_id.in_(list(note_ids)))
+    found: list[tuple[FeedbackImageRef, ArtworkPhoto]] = []
     for condition in conditions:
         rows = await session.execute(
             select(FeedbackImageRef, ArtworkPhoto)
@@ -164,17 +209,25 @@ async def refs_by_feedback(
             .where(condition)
             .order_by(FeedbackImageRef.position)
         )
-        for ref, photo in rows:
-            key = ref.feedback_recording_id or ref.feedback_note_id
-            out[key].append(  # type: ignore[index]
-                FeedbackImageRefRead(
-                    photo_id=photo.id,
-                    stage_id=photo.stage_id,
-                    position=ref.position,
-                    photo_status=photo.status,
-                    uploaded_at=photo.uploaded_at,
-                )
+        found.extend((ref, photo) for ref, photo in rows)
+    # 교체된 기준 사진: 연결은 교체 전 사진 그대로 두고, 지금 그 자리의 사진을 함께 알려 줌
+    successors, replaced = await _successors(
+        session, [photo.id for _, photo in found if photo.status == PhotoStatus.DELETED]
+    )
+    for ref, photo in found:
+        key = ref.feedback_recording_id or ref.feedback_note_id
+        current = photo.id if photo.status == PhotoStatus.ACTIVE else successors.get(photo.id)
+        out[key].append(  # type: ignore[index]
+            FeedbackImageRefRead(
+                photo_id=photo.id,
+                stage_id=photo.stage_id,
+                position=ref.position,
+                photo_status=photo.status,
+                uploaded_at=photo.uploaded_at,
+                replaced=photo.id in replaced,
+                current_photo_id=current,
             )
+        )
     return out
 
 

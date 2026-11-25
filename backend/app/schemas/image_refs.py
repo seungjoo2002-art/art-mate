@@ -16,6 +16,14 @@ class FeedbackImageRefRead(BaseModel):
     position: int
     photo_status: PhotoStatus = Field(description="DELETED면 사진이 삭제됨 (연결 기록은 보존)")
     uploaded_at: dt.datetime | None
+    replaced: bool = Field(
+        default=False,
+        description="true: 다른 사진으로 교체됨 (연결은 교체 전 사진 그대로, 파일도 남겨 둠)",
+    )
+    current_photo_id: uuid.UUID | None = Field(
+        default=None,
+        description="지금 그 자리에 있는 ACTIVE 사진 (ACTIVE면 photo_id, 교체됐으면 교체한 사진)",
+    )
 
 
 class ImageRefsRead(BaseModel):

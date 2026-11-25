@@ -10,6 +10,13 @@ export function suggestPhoto(photos, stageId) {
 
 export const EMPTY_REFS = { photoIds: [], confirmed: false, touched: false }
 
+/**
+ * 작품 화면 슬라이드에서 보던 사진을 기본 기준 사진으로 (?photo=). 확인 전이라 '제안'으로 저장되고,
+ * 학생이 확인 체크하거나 다른 사진을 고를 수 있다. 없으면 예전처럼 최신 사진 제안
+ */
+export const presetRefs = (photoId) =>
+  photoId ? { photoIds: [photoId], confirmed: false, touched: true, preset: true } : EMPTY_REFS
+
 /** 저장된 기준 이미지 → 고르기 상태 (수정 화면) */
 export const refsFromRead = (imageRefs) =>
   imageRefs && (imageRefs.status === 'CONFIRMED' || imageRefs.photos?.length)

@@ -34,9 +34,8 @@ export function stagesWithPhotos(artwork) {
     })
   }
   return plan.map((stage) => {
-    // v0.9.8: 피드백 뒤에 올린 사진도 같은 단계 사진 (대표 지정 가능)
-    const photos = artwork.photos.filter((p) => p.stage_id === stage.id)
-    const photo = photos.find((p) => p.is_representative) ?? photos[0] ?? null
+    // 단계 대표 사진 = 가장 먼저 올린 사진 (직접 지정하지 않음. 삭제하면 다음 사진, 교체해도 그 자리)
+    const photo = stagePhotos(artwork, stage.id)[0] ?? null
     return {
       key: stage.id,
       id: stage.id,
@@ -50,17 +49,23 @@ export function stagesWithPhotos(artwork) {
   })
 }
 
-/** 사진을 올린 시각 (타임라인 정렬) */
+/** 사진 등록 순서 시각 (정렬). 교체한 사진은 교체 전 사진의 시각을 이어받는다 */
 export const photoTime = (photo) => photo.uploaded_at ?? photo.created_at
 
+/** 화면에 보여 줄 사진 시각: 실제로 이 사진을 올린 시각 (교체한 사진이면 교체한 시각) */
+export const photoShownAt = (photo) => photo.created_at ?? photo.uploaded_at
+
 /**
- * 단계의 사진 전부 (v0.9.8 타임라인): 올린 시각 순. 피드백 뒤에 올린 사진(예전 수정 사진 포함)도
+ * 단계의 사진 전부: 등록 순서 (첫 사진이 단계 대표). 피드백 뒤에 올린 사진(예전 수정 사진 포함)도
  * 일반 단계 사진과 같게 보여 준다. stageId가 없으면(예전 응답) 작품의 모든 사진
  */
 export const stagePhotos = (artwork, stageId) =>
   artwork.photos
     .filter((p) => p.status === 'ACTIVE' && (stageId == null || p.stage_id === stageId))
-    .sort((a, b) => Date.parse(photoTime(a)) - Date.parse(photoTime(b)))
+    .sort((a, b) => Date.parse(photoTime(a)) - Date.parse(photoTime(b)) || byId(a, b))
+
+// 같은 시각이면 id 순 (서버가 다음 대표 사진을 고르는 순서와 같게)
+const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 
 let seq = 0
 /** 단계 편집 목록의 한 줄. id는 서버 단계 id (새 단계면 없음), key는 화면용 */
