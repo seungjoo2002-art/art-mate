@@ -30,7 +30,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -46,7 +46,9 @@ from app.integrations.ai.openai_image import EditImage, ImageEditError, ImageEdi
 from app.integrations.ai.stt import SpeechToText, SttError
 from app.integrations.supabase.storage import (
     AudioFetcher,
+    SignedUrlUploader,
     StorageError,
+    StorageObjectExists,
     StorageObjectNotFound,
     StorageObjectTooLarge,
 )
@@ -176,10 +178,13 @@ class JobRunner:
         worker_id: str | None = None,
         job_types: frozenset[AiJobType] | None = None,
         image_editor: ImageEditor | None = None,
+        uploader: SignedUrlUploader | None = None,
     ) -> None:
         self.database = database
         # v1.3 AI 수정본 (OpenAI 이미지 수정). 없으면 IMAGE_REVISE 작업을 처리할 수 없다
         self.image_editor = image_editor
+        # v1.3.1 결과 바로 저장 (요청 때 받은 Signed upload URL). 없으면 DB 임시 저장만
+        self.uploader = uploader
         self.settings = settings
         self.stt = stt
         self.llm = llm
@@ -1349,6 +1354,34 @@ class JobRunner:
             )
             await session.commit()
 
+    async def _store_directly(
+        self,
+        data: bytes,
+        content_type: str,
+        ext: str,
+        planned_path: str | None,
+        url: str | None,
+        expires: str | None,
+    ) -> tuple[bool, int | None]:
+        """요청 때 받은 Signed upload URL로 결과를 바로 저장 (실패해도 생성 API는 다시 안 부름)."""
+        if self.uploader is None or not url or not planned_path:
+            return False, None
+        if not planned_path.endswith(f".{ext}"):
+            return False, None  # 결과 형식이 예상과 다름 → 경로가 달라져 이 URL로는 저장 불가
+        if expires is not None:
+            with contextlib.suppress(ValueError):
+                if datetime.fromisoformat(expires) <= clock.utc_now():
+                    return False, None
+        started = time.monotonic()
+        try:
+            await self.uploader.upload(url, data, content_type=content_type)
+        except StorageObjectExists:
+            pass  # 같은 경로에 이미 있음 (이전 시도가 올린 같은 결과)
+        except StorageError:
+            logger.warning("ai revision direct store deferred")
+            return False, None
+        return True, int((time.monotonic() - started) * 1000)
+
     def _estimated_call_cost(self) -> Decimal:
         return Decimal(str(self.settings.image_edit_estimated_cost_usd))
 
@@ -1446,6 +1479,9 @@ class JobRunner:
             )
             source_url = job.source_url
             reference_url = (job.params or {}).get("reference_url")
+            upload_url = (job.params or {}).get("result_upload_url")
+            upload_expires = (job.params or {}).get("result_upload_expires_at")
+            planned_path = revision.storage_path
             expected_sha = revision.source_sha256
             stage_kind, stage_name, subject = stage.legacy_stage, stage.name, artwork.topic
             owner_key = str(job.owner_id)
@@ -1530,6 +1566,11 @@ class JobRunner:
                 "IMAGE_INVALID_RESPONSE", "The returned image could not be read", retryable=False
             ) from None
 
+        ext = EXTENSIONS[info.content_type]
+        stored, storage_ms = await self._store_directly(
+            info.data, info.content_type, ext, planned_path, upload_url, upload_expires
+        )
+
         async with self._session() as session:
             job = await self._locked_own_job(session, job_id)
             revision = (
@@ -1542,16 +1583,22 @@ class JobRunner:
             if revision.deleted_at is not None:
                 raise JobCancelled("AI_REVISION_DELETED")
             now = clock.utc_now()
-            ext = EXTENSIONS[info.content_type]
             revision.storage_path = f"{revision.owner_id}/{revision.artwork_id}/{revision.id}.{ext}"
-            revision.result_staging = info.data
+            # 바로 저장했으면 DB에 이미지를 두지 않는다. 못 했으면 임시 저장 (학생이 열 때 저장)
+            revision.result_staging = None if stored else info.data
             revision.content_type = info.content_type
             revision.size_bytes = len(info.data)
             revision.width = info.width
             revision.height = info.height
             revision.staged_at = now
             revision.finished_at = now
-            revision.status = AiRevisionStatus.STORING
+            if stored:
+                revision.status = AiRevisionStatus.SUCCEEDED
+                revision.stored_at = now
+                revision.storage_ms = storage_ms
+                revision.storage_attempts = 1
+            else:
+                revision.status = AiRevisionStatus.STORING
             revision.error_code = None
             revision.error_message = None
             revision.settings = {**revision.settings, "requested_size": size}

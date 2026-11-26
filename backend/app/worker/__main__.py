@@ -25,7 +25,7 @@ from app.db.session import create_database
 from app.integrations.ai.llm import build_llm
 from app.integrations.ai.openai_image import build_image_editor
 from app.integrations.ai.stt import build_stt
-from app.integrations.supabase.storage import HttpSignedUrlFetcher
+from app.integrations.supabase.storage import HttpSignedUploader, HttpSignedUrlFetcher
 from app.models.enums import AiJobType
 from app.worker.runner import JobRunner
 
@@ -144,6 +144,7 @@ async def main(argv: list[str] | None = None) -> None:
         fetcher=HttpSignedUrlFetcher(timeout=settings.storage_timeout_seconds * 6),
         job_types=job_types,
         image_editor=image_editor,
+        uploader=HttpSignedUploader(timeout=settings.storage_timeout_seconds * 6),
     )
     try:
         if args.once:

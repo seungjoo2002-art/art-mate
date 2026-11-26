@@ -51,6 +51,7 @@ from app.models.ai_feedback import AiProcessingConsent, AiProcessingJob
 from app.models.ai_revision import ArtworkAiRevision
 from app.models.artwork import Artwork, ArtworkPhoto, ArtworkReferencePhoto, ArtworkStageDef
 from app.models.enums import (
+    ACTIVE_JOB_STATUSES,
     REUSABLE_REVISION_STATUSES,
     AiConsentPurpose,
     AiJobStatus,
@@ -83,6 +84,8 @@ logger = logging.getLogger("app.ai_revisions")
 
 ACTIVE_REVISION_STATUSES = frozenset({AiRevisionStatus.QUEUED, AiRevisionStatus.RUNNING})
 IMAGE_STATUSES = frozenset({AiRevisionStatus.STORING, AiRevisionStatus.SUCCEEDED})
+# Supabase Signed upload URL 유효시간은 2시간 → 여유를 두고 1시간 50분까지만 사용
+SIGNED_UPLOAD_SECONDS = 110 * 60
 # 한 번의 조회에서 Storage로 옮길 임시 결과 수 (응답 지연 제한)
 FINALIZE_BATCH = 3
 CLEANUP_BATCH = 50
@@ -786,12 +789,44 @@ class AiRevisionService:
             reads = await self._reads([existing], token)
             return reads[0], False
         await self.session.refresh(revision)
+        await self._attach_upload_url(revision, job.id, token)
         logger.info(
             "ai revision requested",
             extra={"revision_id": str(revision_id), "improvements": len(improvements)},
         )
         reads = await self._reads([revision], token)
         return reads[0], True
+
+    async def _attach_upload_url(
+        self, revision: ArtworkAiRevision, job_id: uuid.UUID, token: str
+    ) -> None:
+        """결과를 Worker가 바로 Storage에 저장하도록, 이 수정본 파일 1개 전용 Signed upload URL을
+        학생 토큰으로 미리 발급해 작업에 둔다 (v1.3.1). 새 키·정책 완화 없음.
+
+        실패하거나 URL이 만료되면(Supabase 2시간) Worker는 기존처럼 DB에 임시 저장하고, 학생이
+        화면을 열 때 저장한다. 행을 먼저 커밋한 뒤 발급한다 (Storage 정책이 행을 확인).
+        """
+        storage = self.revision_storage
+        if storage is None or revision.storage_path is None:
+            return
+        try:
+            signed = await storage.create_upload_url(revision.storage_path, access_token=token)
+        except StorageError:
+            logger.warning(
+                "ai revision upload url deferred", extra={"revision_id": str(revision.id)}
+            )
+            return
+        expires = clock.utc_now() + timedelta(seconds=SIGNED_UPLOAD_SECONDS)
+        job = await self.session.get(AiProcessingJob, job_id, with_for_update=True)
+        if job is None or job.status not in ACTIVE_JOB_STATUSES:
+            await self.session.rollback()
+            return
+        job.params = {
+            **(job.params or {}),
+            "result_upload_url": signed.url,
+            "result_upload_expires_at": expires.isoformat(),
+        }
+        await self.session.commit()
 
     async def _reusable(self, owner_id: uuid.UUID, digest: str) -> ArtworkAiRevision | None:
         return (
