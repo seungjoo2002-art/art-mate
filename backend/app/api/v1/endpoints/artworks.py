@@ -21,6 +21,7 @@ from app.api.deps import (
     AudioStorage,
     DbSession,
     OptionalStorage,
+    RevisionStorage,
     SharedStorage,
     require_user_types,
 )
@@ -53,6 +54,7 @@ from app.schemas.artworks import (
 )
 from app.schemas.common import Page, PaginationQuery
 from app.schemas.students import student_ref
+from app.services.ai_revisions import AiRevisionService
 from app.services.artwork_timer import ArtworkTimerService
 from app.services.artworks import ArtworkFilters, ArtworkService
 from app.services.exam_stages import ExamStageService
@@ -194,8 +196,13 @@ async def delete_artwork(
     storage: OptionalStorage,
     audio_storage: AudioStorage,
     shared_storage: SharedStorage,
+    revision_storage: RevisionStorage,
 ) -> None:
     await _service(session, settings, storage).delete(owner, artwork_id, user.access_token)
+    # v1.3: AI 수정본 파일 정리 (실패하면 다음 요청에서 재시도)
+    await AiRevisionService(session, settings, storage, revision_storage).cleanup_storage(
+        owner, user.access_token
+    )
     # 작품에 연결된 녹음 파일 정리 (실패하면 다음 요청에서 재시도)
     await RecordingService(session, settings, audio_storage).cleanup_storage(
         owner, user.access_token
@@ -418,9 +425,14 @@ async def delete_photo(
     session: DbSession,
     settings: AppSettings,
     storage: OptionalStorage,
+    revision_storage: RevisionStorage,
 ) -> None:
     await _service(session, settings, storage).delete_photo(
         owner, artwork_id, photo_id, user.access_token
+    )
+    # v1.3: 이 사진 자리의 AI 수정본 파일 정리
+    await AiRevisionService(session, settings, storage, revision_storage).cleanup_storage(
+        owner, user.access_token
     )
 
 

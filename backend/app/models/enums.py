@@ -324,6 +324,8 @@ class AiJobType(StrEnum):
     # v0.7 성장 코치 (Gemini, 외부 전송 · GROWTH_COACHING 동의 필요)
     GROWTH_REPORT = "GROWTH_REPORT"  # 성장 리포트 설명문
     PRACTICE_RECOMMEND = "PRACTICE_RECOMMEND"  # AI 맞춤 연습 과제
+    # v1.3 AI 시각적 첨삭 (OpenAI 이미지 수정, 외부 전송 · VISUAL_CRITIQUE 동의 필요)
+    IMAGE_REVISE = "IMAGE_REVISE"
 
 
 class AiJobStatus(StrEnum):
@@ -372,6 +374,8 @@ class AiConsentPurpose(StrEnum):
 
     FEEDBACK_SUMMARY = "FEEDBACK_SUMMARY"  # v0.6: 첨삭 전사문 요약
     GROWTH_COACHING = "GROWTH_COACHING"  # v0.7: 누적 첨삭 기반 성장 리포트 설명·맞춤 과제
+    # v1.3: 고른 작품 사진 + 개선사항을 이미지 수정 AI로 보내 학습용 수정 예시 생성
+    VISUAL_CRITIQUE = "VISUAL_CRITIQUE"
 
 
 class FeedbackStatus(StrEnum):
@@ -810,6 +814,34 @@ class NotificationType(StrEnum):
     TASK_RECOMMENDED = "TASK_RECOMMENDED"  # 새 맞춤 과제 (개인 추천·학원 배포)
     TASK_REMINDER = "TASK_REMINDER"  # 채택 후 미완료 과제 안내
     GOAL_CHECK = "GOAL_CHECK"  # 학습 목표 확인 안내
+    AI_REVISION_READY = "AI_REVISION_READY"  # v1.3 AI 수정본 생성 완료
+
+
+class AiRevisionStatus(StrEnum):
+    """AI 수정본(artwork_ai_revisions) 생성 상태 (v1.3). '생성 전'은 행이 없는 상태다.
+
+    QUEUED(작업 대기) → RUNNING(이미지 수정 API 처리 중) → STORING(결과는 받았고 Storage 저장 대기:
+    Worker에는 사용자 토큰이 없어 학생이 다음에 조회할 때 서버가 저장) → SUCCEEDED.
+    FAILED: 실패(재시도는 새 버전) / CANCELLED: 동의 철회·사진·작품 삭제.
+    """
+
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    STORING = "STORING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+# 같은 요청(request_hash)을 다시 만들지 않고 재사용하는 상태
+REUSABLE_REVISION_STATUSES: frozenset[AiRevisionStatus] = frozenset(
+    {
+        AiRevisionStatus.QUEUED,
+        AiRevisionStatus.RUNNING,
+        AiRevisionStatus.STORING,
+        AiRevisionStatus.SUCCEEDED,
+    }
+)
 
 
 # --------------------------------------------------------------------------- VER.2 (v0.10)

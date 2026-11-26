@@ -25,6 +25,10 @@ async def test_ai_features_flags(client: httpx.AsyncClient, app) -> None:  # typ
         "ai_provider": "openai",
         "ai_summary_status": "ENABLED",
         "ai_summary_daily_limit": 20,
+        # v1.3 AI 수정본 (DB 테스트 설정에서 켬)
+        "ai_revision_status": "ENABLED",
+        "ai_revision_daily_limit": 3,
+        "ai_revision_monthly_limit": 20,
     }
     _settings(app, stt_enabled=False, ai_summary_enabled=False)
     off = (await client.get(f"{API}/meta/ai-features")).json()

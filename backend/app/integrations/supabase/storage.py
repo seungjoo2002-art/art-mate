@@ -32,6 +32,10 @@ class StorageObjectNotFound(StorageError):
     """객체가 없음 (아직 업로드하지 않았거나 이미 삭제됨)."""
 
 
+class StorageObjectExists(StorageError):
+    """같은 경로에 이미 파일이 있음 (x-upsert: false). v1.3 저장 재시도에서 업로드 완료로 본다."""
+
+
 class StorageObjectTooLarge(StorageError):
     pass
 
@@ -101,6 +105,10 @@ class SupabaseStorage:
             raise StorageError("Storage request failed") from None
         if response.status_code in (400, 404) and "not found" in response.text.lower():
             raise StorageObjectNotFound("Object not found")
+        if response.status_code in (400, 409) and (
+            "already exists" in response.text.lower() or "duplicate" in response.text.lower()
+        ):
+            raise StorageObjectExists("Object already exists")
         if response.status_code >= 400:
             logger.warning("storage error response", extra={"status": response.status_code})
             raise StorageError(f"Storage responded with {response.status_code}")

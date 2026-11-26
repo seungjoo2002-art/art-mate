@@ -223,7 +223,7 @@ class AiFeedbackService:
         """지금 제공자(AI_PROVIDER)에 대한 철회되지 않은 동의 (보호자 확인 대기 포함)."""
         stmt = select(AiProcessingConsent).where(
             AiProcessingConsent.user_id == user_id,
-            AiProcessingConsent.provider == consent_policy.provider_for(self.settings),
+            AiProcessingConsent.provider == consent_policy.provider_for(self.settings, purpose),
             AiProcessingConsent.purpose == purpose,
             AiProcessingConsent.revoked_at.is_(None),
         )
@@ -245,7 +245,7 @@ class AiFeedbackService:
         consent = await self._active_ai_consent(user.id, purpose)
         state = consent_policy.evaluate(consent, self.settings, purpose)
         return AiConsentStatus(
-            provider=consent_policy.provider_for(self.settings),
+            provider=consent_policy.provider_for(self.settings, purpose),
             purpose=purpose,
             required_version=self.required_version(purpose),
             is_valid=state.is_valid,
@@ -309,11 +309,11 @@ class AiFeedbackService:
         if current is not None:
             current.revoked_at = now  # 이전 동의(버전·보호자 대기)는 철회 처리 (이력 보존)
             await self.session.flush()
-        guardian = consent_policy.needs_guardian(band, self.settings)
+        guardian = consent_policy.needs_guardian(band, self.settings, purpose)
         consent = AiProcessingConsent(
             id=uuid.uuid4(),
             user_id=user.id,
-            provider=consent_policy.provider_for(self.settings),
+            provider=consent_policy.provider_for(self.settings, purpose),
             purpose=purpose,
             policy_version=data.policy_version,
             granted_by=ConsentGrantor.GUARDIAN if guardian else ConsentGrantor.SELF,

@@ -19,6 +19,9 @@ import styles from './FeedbackTimeline.module.css'
  * (이 단계 사진과 연결되지 않은 피드백). stageId가 없으면 작품 전체 피드백 전부.
  * stages: [{ stageId, title }] 지금 보이는 단계 (녹음의 연결 단계 바꾸기·숨긴 단계 판단)
  * renderFeedbackExtras({ type, id, image_refs }, stageId, reload): 피드백 아래 (기준 사진 확인·변경)
+ * renderPhotoExtras({ artworkId, stageId, photo, photoIndex, feedbackKey }) (v1.3, 선택):
+ *   지금 사진 피드백 목록 아래 (AI 수정에 반영할 개선사항·피드백 반영 수정하기, 라우터에서 주입).
+ *   feedbackKey: 이 사진 피드백·AI 정리 상태가 바뀌면 달라지는 값 (개선사항 다시 불러오기)
  */
 export default function FeedbackList({
   artworkId,
@@ -27,6 +30,7 @@ export default function FeedbackList({
   photos = [],
   photoIndex = 0,
   renderFeedbackExtras,
+  renderPhotoExtras,
 }) {
   const options = useOptions()
   const { items, error, reload, reloadRecordings, reloadNotes } = useArtworkFeedback(artworkId)
@@ -173,9 +177,22 @@ export default function FeedbackList({
               compact
             />
           </div>
-          {photoFeedback.length
-            ? list(photoFeedback)
-            : empty('이 사진에 연결된 피드백이 없어요.')}
+          {photoFeedback.length ? list(photoFeedback) : empty('이 사진에 연결된 피드백이 없어요.')}
+          {renderPhotoExtras?.({
+            artworkId,
+            stageId,
+            photo: current,
+            photoIndex,
+            feedbackKey: photoFeedback
+              .map((item) =>
+                [
+                  item.id,
+                  item.note?.feedback_status ?? item.recording?.transcription_status ?? '',
+                  item.note?.version ?? '',
+                ].join(':'),
+              )
+              .join('|'),
+          })}
         </section>
       )}
       {replacedFeedback.length > 0 && (

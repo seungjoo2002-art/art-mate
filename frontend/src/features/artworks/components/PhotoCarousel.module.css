@@ -39,6 +39,17 @@
   overflow: hidden;
 }
 
+/* v1.3 비교 손잡이 조작 중: 가로로 넘어가지 않게 */
+.locked {
+  overflow-x: hidden;
+  touch-action: pan-y;
+}
+
+/* v1.3 버튼이 아닌 칸 (비교 슬라이더처럼 칸 안에서 조작) */
+.still {
+  cursor: default;
+}
+
 /* 마우스로 끄는 동안: 붙는 효과를 끄고 손 모양 */
 .dragging {
   scroll-snap-type: none;

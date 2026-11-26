@@ -21,6 +21,9 @@ class NotificationRead(BaseModel):
     recommendation_id: uuid.UUID | None = Field(
         description="관련 맞춤 과제 → GET /growth/me/recommendations/{id}"
     )
+    ai_revision_id: uuid.UUID | None = Field(
+        default=None, description="v1.3 생성 완료된 AI 수정본 → GET /ai-revisions/{id}"
+    )
     is_read: bool
     read_at: dt.datetime | None
     created_at: dt.datetime

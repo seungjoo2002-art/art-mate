@@ -5,6 +5,8 @@
 - TASK_RECOMMENDED: 개인 맞춤 과제 추천 묶음이 생김(규칙·AI) / 학원 과제로 배포됨 — 묶음·배포당 1번
 - TASK_REMINDER: 채택 후 N일(설정, 기본 3일) 동안 완료하지 않은 개인 과제 — 과제당 주 1회, 최대 3회
 - GOAL_CHECK: 학습 목표를 30일 넘게 확인·수정하지 않음 (또는 아직 없음) — 월 1회
+- AI_REVISION_READY (v1.3): AI 수정본 생성 완료 — 수정본당 1번 (학생이 직접 요청한 결과라
+  끄는 설정 없음)
 
 중복 방지: (user_id, dedupe_key) 유니크 + INSERT ... ON CONFLICT DO NOTHING
 (동시 요청·Worker 여러 대에서도 1건). 사용자가 끈 유형은 만들지 않는다.
@@ -71,6 +73,7 @@ def read(n: Notification) -> NotificationRead:
         body=n.body,
         report_id=n.report_id,
         recommendation_id=n.recommendation_id,
+        ai_revision_id=n.ai_revision_id,
         is_read=n.read_at is not None,
         read_at=n.read_at,
         created_at=n.created_at,
@@ -119,10 +122,11 @@ class NotificationService:
         dedupe_key: str,
         report_id: uuid.UUID | None = None,
         recommendation_id: uuid.UUID | None = None,
+        ai_revision_id: uuid.UUID | None = None,
     ) -> bool:
         """알림 1건 (같은 dedupe_key면 만들지 않음). 호출자가 commit 한다."""
-        prefs = await self._prefs(user_id)
-        if not prefs[PREF_FIELD[type_]]:
+        field = PREF_FIELD.get(type_)
+        if field is not None and not (await self._prefs(user_id))[field]:
             return False
         inserted = (
             await self.session.execute(
@@ -135,6 +139,7 @@ class NotificationService:
                     body=body[:300] if body else None,
                     report_id=report_id,
                     recommendation_id=recommendation_id,
+                    ai_revision_id=ai_revision_id,
                     dedupe_key=dedupe_key[:150],
                 )
                 .on_conflict_do_nothing(index_elements=["user_id", "dedupe_key"])
@@ -151,6 +156,16 @@ class NotificationService:
             body="최근 첨삭 기록을 바탕으로 한 성장 리포트를 확인해 보세요.",
             dedupe_key=f"report:{report_id}",
             report_id=report_id,
+        )
+
+    async def ai_revision_ready(self, user_id: uuid.UUID, revision_id: uuid.UUID) -> None:
+        await self.notify(
+            user_id,
+            NotificationType.AI_REVISION_READY,
+            title="AI 수정본이 준비됐어요",
+            body="강사 피드백을 반영한 수정 예시를 원본과 비교해 보세요.",
+            dedupe_key=f"ai-revision:{revision_id}",
+            ai_revision_id=revision_id,
         )
 
     async def tasks_recommended(

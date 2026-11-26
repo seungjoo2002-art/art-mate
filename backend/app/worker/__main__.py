@@ -23,6 +23,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.session import create_database
 from app.integrations.ai.llm import build_llm
+from app.integrations.ai.openai_image import build_image_editor
 from app.integrations.ai.stt import build_stt
 from app.integrations.supabase.storage import HttpSignedUrlFetcher
 from app.models.enums import AiJobType
@@ -62,7 +63,13 @@ LLM_JOB_TYPES = (
 def pending_outputs(counts: dict[str, int]) -> dict[str, int]:
     transcribe = counts.get(AiJobType.TRANSCRIBE.value, 0)
     llm = sum(counts.get(t, 0) for t in LLM_JOB_TYPES)
-    return {"transcribe": transcribe, "llm": llm, "total": sum(counts.values())}
+    image = counts.get(AiJobType.IMAGE_REVISE.value, 0)
+    return {
+        "transcribe": transcribe,
+        "llm": llm,
+        "image": image,
+        "total": sum(counts.values()),
+    }
 
 
 def write_github_output(path: str, outputs: dict[str, int]) -> None:
@@ -71,7 +78,7 @@ def write_github_output(path: str, outputs: dict[str, int]) -> None:
 
 
 def supported_job_types(
-    settings: Settings, *, has_stt: bool, has_llm: bool
+    settings: Settings, *, has_stt: bool, has_llm: bool, has_image: bool = False
 ) -> frozenset[AiJobType]:
     """이 Worker가 끝까지 처리할 수 있는 작업 종류."""
     types: set[AiJobType] = set()
@@ -81,6 +88,9 @@ def supported_job_types(
         types.add(AiJobType.SUMMARIZE)
         if settings.growth_ai_active:
             types |= {AiJobType.GROWTH_REPORT, AiJobType.PRACTICE_RECOMMEND}
+    if has_image:
+        # v1.3 AI 수정본: 요약 제공자와 무관하게 OpenAI 이미지 수정 (IMAGE_EDIT_ENABLED + 키)
+        types.add(AiJobType.IMAGE_REVISE)
     return frozenset(types)
 
 
@@ -105,8 +115,14 @@ async def main(argv: list[str] | None = None) -> None:
         return
     stt = build_stt(settings)
     llm = build_llm(settings)
+    image_editor = build_image_editor(settings)
     job_types = (
-        supported_job_types(settings, has_stt=stt is not None, has_llm=llm is not None)
+        supported_job_types(
+            settings,
+            has_stt=stt is not None,
+            has_llm=llm is not None,
+            has_image=image_editor is not None,
+        )
         if args.once
         else None
     )
@@ -116,6 +132,7 @@ async def main(argv: list[str] | None = None) -> None:
             "mode": "batch" if args.once else "forever",
             "stt": settings.stt_model if stt else None,
             "llm": llm.model_name if llm else None,
+            "image": image_editor.model_name if image_editor else None,
             "job_types": sorted(t.value for t in job_types) if job_types is not None else "all",
         },
     )
@@ -126,6 +143,7 @@ async def main(argv: list[str] | None = None) -> None:
         llm=llm,
         fetcher=HttpSignedUrlFetcher(timeout=settings.storage_timeout_seconds * 6),
         job_types=job_types,
+        image_editor=image_editor,
     )
     try:
         if args.once:
@@ -140,6 +158,13 @@ async def main(argv: list[str] | None = None) -> None:
                     "(after the provider terms review) and secret OPENAI_API_KEY "
                     "(GEMINI_API_KEY for gemini)",
                     extra={"waiting": waiting_llm},
+                )
+            if pending.get(AiJobType.IMAGE_REVISE.value) and image_editor is None:
+                logger.warning(
+                    "AI revision jobs are waiting but image editing is off on this worker: "
+                    "set IMAGE_EDIT_ENABLED=true, IMAGE_EDIT_OPERATOR_CONFIRMED=true, "
+                    "AI_PROVIDER_TERMS_CONFIRMED=true and secret OPENAI_API_KEY",
+                    extra={"waiting": pending.get(AiJobType.IMAGE_REVISE.value)},
                 )
             if pending.get(AiJobType.TRANSCRIBE.value) and stt is None:
                 logger.warning(

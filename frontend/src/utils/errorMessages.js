@@ -76,6 +76,12 @@ const API_MESSAGES = {
   TIMER_TOO_LONG: '24시간을 넘긴 시험은 이어서 기록할 수 없어요.',
   ARTWORK_COMPLETED: '완성한 작품은 사진을 바꿀 수 없어요. 작업 다시 시작!을 누른 뒤 해 보세요.',
   STORAGE_NOT_CONFIGURED: '서버 사진 저장소 설정이 필요해요. 백엔드 담당자에게 문의해 주세요.',
+  // v1.3 AI 수정본
+  AI_REVISION_DISABLED: 'AI 수정본 기능은 아직 준비 중이에요. 피드백과 사진은 그대로 볼 수 있어요.',
+  AI_REVISION_NO_IMPROVEMENTS: '수정에 반영할 개선사항을 하나 이상 골라 주세요.',
+  AI_REVISION_CANDIDATES_CHANGED: '피드백이 바뀌었어요. 개선사항을 다시 불러왔어요.',
+  AI_REVISION_LIMIT_REACHED:
+    'AI 수정본을 만들 수 있는 횟수를 모두 썼어요. 다음에 다시 만들어 주세요.',
 }
 
 export function toErrorMessage(error) {

@@ -1,0 +1,83 @@
+/* 상자 = 원본 비율. 칸 높이(--slide-height)를 넘지 않게 폭을 정하고 높이는 비율로 */
+.compare {
+  --ratio: 0.75;
+  position: relative;
+  width: min(100%, calc(var(--slide-height, 340px) * var(--ratio)));
+  aspect-ratio: var(--ratio);
+  overflow: hidden;
+  /* 가로 움직임은 비교 손잡이가, 세로 움직임은 화면 스크롤이 */
+  touch-action: pan-y;
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.after {
+  position: absolute;
+  inset: 0;
+  background: var(--color-surface-muted);
+}
+
+.label {
+  position: absolute;
+  top: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  pointer-events: none;
+}
+
+.left {
+  left: var(--space-2);
+}
+
+.right {
+  right: var(--space-2);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+  transform: translateX(-1px);
+}
+
+.handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  box-shadow: var(--shadow-primary);
+  transform: translate(-50%, -50%);
+}
+
+.handle:focus-visible {
+  outline: 3px solid var(--color-dark);
+  outline-offset: 2px;
+}

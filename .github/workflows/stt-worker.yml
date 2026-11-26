@@ -69,6 +69,15 @@ jobs:
       # API 서버(Render)와 같은 값이어야 동의가 유효하다 (빈 값은 무시되어 앱 기본값 사용)
       AI_CONSENT_VERSION: ${{ vars.AI_CONSENT_VERSION }}
       AI_GROWTH_CONSENT_VERSION: ${{ vars.AI_GROWTH_CONSENT_VERSION }}
+      # v1.3 AI 수정본 (OpenAI 이미지 수정, OPENAI_API_KEY 사용). 기본 꺼짐.
+      # 운영자 확인(동의서·처리방침·법률 검토) 전에는 IMAGE_EDIT_OPERATOR_CONFIRMED를 켜지 않는다
+      IMAGE_EDIT_ENABLED: ${{ vars.IMAGE_EDIT_ENABLED || 'false' }}
+      IMAGE_EDIT_OPERATOR_CONFIRMED: ${{ vars.IMAGE_EDIT_OPERATOR_CONFIRMED || 'false' }}
+      # 비우면 앱 기본값 (gpt-image-2.5-flare · medium · 원본 비율에 맞춘 크기)
+      IMAGE_EDIT_MODEL: ${{ vars.IMAGE_EDIT_MODEL }}
+      IMAGE_EDIT_QUALITY: ${{ vars.IMAGE_EDIT_QUALITY }}
+      IMAGE_EDIT_SIZE: ${{ vars.IMAGE_EDIT_SIZE }}
+      AI_VISUAL_CONSENT_VERSION: ${{ vars.AI_VISUAL_CONSENT_VERSION }}
       STT_MODEL: small
       STT_DEVICE: cpu
       STT_COMPUTE_TYPE: int8

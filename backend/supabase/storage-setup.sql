@@ -161,3 +161,56 @@ COMMIT;
 
 -- 확인용: 정책 9개 (artworks 3 + audio 3 + shared 3)
 -- SELECT policyname FROM pg_policies WHERE schemaname = 'storage' AND policyname LIKE 'artmate_%';
+
+-- =============================================================================
+-- v1.3 AI 시각적 첨삭: AI 수정본 비공개 버킷 ai-revisions (학생 작품 사진 버킷과 분리)
+--   * 경로: {owner_id}/{artwork_id}/{revision_id}.{ext} (서버가 정함)
+--   * 업로드·삭제: 수정본 행(artwork_ai_revisions)의 소유 학생 본인 (경로 첫 폴더 = 본인 ID)
+--   * 읽기(Signed URL): 소유 학생 본인 (삭제되지 않은 수정본, 삭제되지 않은 작품). 강사·다른 학생 불가
+--   * 선행 조건: Alembic 0017 (artmate_private.can_access_ai_revision_object)
+--   * 크기 상한은 IMAGE_EDIT_MAX_RESULT_BYTES(기본 8MB)와 맞춘다
+-- 0017은 can_access_artwork_object도 바꾼다: 교체됐지만 피드백 기준 사진·AI 수정본 원본이라 파일을
+-- 남겨 둔 사진(DELETED + storage_cleanup_pending=false)을 소유자가 읽을 수 있게 (교체 전 사진 비교)
+-- =============================================================================
+
+BEGIN;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('ai-revisions', 'ai-revisions', false, 8388608,
+        ARRAY['image/jpeg', 'image/png', 'image/webp'])
+ON CONFLICT (id) DO UPDATE
+SET public = false,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+GRANT EXECUTE ON FUNCTION artmate_private.can_access_ai_revision_object(uuid, text, text)
+    TO authenticated;
+
+DROP POLICY IF EXISTS "artmate_ai_revisions_select" ON storage.objects;
+CREATE POLICY "artmate_ai_revisions_select" ON storage.objects
+    FOR SELECT TO authenticated
+    USING (
+        bucket_id = 'ai-revisions'
+        AND artmate_private.can_access_ai_revision_object(auth.uid(), name, 'read')
+    );
+
+DROP POLICY IF EXISTS "artmate_ai_revisions_insert" ON storage.objects;
+CREATE POLICY "artmate_ai_revisions_insert" ON storage.objects
+    FOR INSERT TO authenticated
+    WITH CHECK (
+        bucket_id = 'ai-revisions'
+        AND artmate_private.can_access_ai_revision_object(auth.uid(), name, 'write')
+    );
+
+DROP POLICY IF EXISTS "artmate_ai_revisions_delete" ON storage.objects;
+CREATE POLICY "artmate_ai_revisions_delete" ON storage.objects
+    FOR DELETE TO authenticated
+    USING (
+        bucket_id = 'ai-revisions'
+        AND artmate_private.can_access_ai_revision_object(auth.uid(), name, 'write')
+    );
+
+COMMIT;
+
+-- 확인용: 정책 12개 (artworks 3 + audio 3 + shared 3 + ai-revisions 3)
+-- SELECT policyname FROM pg_policies WHERE schemaname = 'storage' AND policyname LIKE 'artmate_%';

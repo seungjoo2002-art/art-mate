@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import timezone as clock
 from app.core.exceptions import UnprocessableError
 from app.models.ai_feedback import FeedbackNote
+from app.models.ai_revision import ArtworkAiRevision
 from app.models.artwork import Artwork, ArtworkPhoto
 from app.models.dataset import MAX_IMAGE_REFS, FeedbackImageRef
 from app.models.enums import ImageRefStatus, PhotoStatus
@@ -51,6 +52,18 @@ async def is_feedback_reference(session: AsyncSession, photo_id: uuid.UUID) -> b
     """이 사진을 기준 사진으로 삼은 피드백이 있는지 (사진 교체 때 파일을 남길지 정함)."""
     found = await session.execute(
         select(FeedbackImageRef.id).where(FeedbackImageRef.photo_id == photo_id).limit(1)
+    )
+    return found.first() is not None
+
+
+async def is_kept_reference(session: AsyncSession, photo_id: uuid.UUID) -> bool:
+    """교체 때 파일을 남겨야 하는 사진: 피드백 기준 사진이거나 (v1.3) AI 수정본의 원본."""
+    if await is_feedback_reference(session, photo_id):
+        return True
+    found = await session.execute(
+        select(ArtworkAiRevision.id)
+        .where(ArtworkAiRevision.photo_id == photo_id, ArtworkAiRevision.deleted_at.is_(None))
+        .limit(1)
     )
     return found.first() is not None
 

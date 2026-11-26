@@ -94,6 +94,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.audio_storage = build_storage(settings, settings.recording_bucket)
     # 공유용 파생 이미지 (v0.8): 원본과 분리된 비공개 버킷
     app.state.shared_storage = build_storage(settings, settings.shared_bucket)
+    # v1.3 AI 수정본 (학생 작품 사진 버킷과 분리)
+    app.state.revision_storage = build_storage(settings, settings.image_edit_bucket)
     # 작업을 큐에 넣으면 GitHub Actions Worker 실행 요청 (토큰이 없으면 아무것도 안 함)
     app.state.worker_dispatcher = WorkerDispatcher()
 

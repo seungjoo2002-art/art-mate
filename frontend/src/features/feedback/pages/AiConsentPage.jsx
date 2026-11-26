@@ -9,7 +9,8 @@ import { getAiConsent } from '../aiApi'
 import AiConsentForm from '../components/AiConsentForm'
 import styles from './FeedbackRecordPage.module.css'
 
-const PURPOSES = ['FEEDBACK_SUMMARY', 'GROWTH_COACHING']
+const PURPOSES = ['FEEDBACK_SUMMARY', 'GROWTH_COACHING', 'VISUAL_CRITIQUE']
+const TITLES = { VISUAL_CRITIQUE: '외부 AI 이미지 처리 동의' }
 
 /** AI 전송 동의 (?purpose=GROWTH_COACHING). 동의하면 들어온 화면(state.from)으로 돌아감 */
 export default function AiConsentPage() {
@@ -32,7 +33,7 @@ export default function AiConsentPage() {
 
   return (
     <>
-      <TopBar title="AI 정리 동의" belowHeader />
+      <TopBar title={TITLES[purpose] ?? 'AI 정리 동의'} belowHeader />
       <main className={`${styles.body} ${styles.left}`}>
         <AiConsentForm
           purpose={purpose}

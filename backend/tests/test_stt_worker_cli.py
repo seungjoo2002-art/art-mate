@@ -31,17 +31,31 @@ def test_supported_job_types_follow_capabilities() -> None:
     assert supported_job_types(settings, has_stt=True, has_llm=False) == {AiJobType.TRANSCRIBE}
     assert supported_job_types(settings, has_stt=False, has_llm=True) == {AiJobType.SUMMARIZE}
     growth = make_settings(growth_ai_enabled=True)
-    assert supported_job_types(growth, has_stt=True, has_llm=True) == set(AiJobType)
+    assert supported_job_types(growth, has_stt=True, has_llm=True) == set(AiJobType) - {
+        AiJobType.IMAGE_REVISE
+    }
+    assert supported_job_types(growth, has_stt=True, has_llm=True, has_image=True) == set(AiJobType)
+    # v1.3 AI 수정본은 요약 LLM과 무관하게 이미지 수정 클라이언트가 있을 때만
+    assert supported_job_types(settings, has_stt=False, has_llm=False, has_image=True) == {
+        AiJobType.IMAGE_REVISE
+    }
     assert supported_job_types(settings, has_stt=False, has_llm=False) == frozenset()
 
 
 def test_pending_outputs(tmp_path: Path) -> None:
-    outputs = pending_outputs({"TRANSCRIBE": 2, "SUMMARIZE": 1, "GROWTH_REPORT": 1})
-    assert outputs == {"transcribe": 2, "llm": 2, "total": 4}
-    assert pending_outputs({}) == {"transcribe": 0, "llm": 0, "total": 0}
+    outputs = pending_outputs(
+        {"TRANSCRIBE": 2, "SUMMARIZE": 1, "GROWTH_REPORT": 1, "IMAGE_REVISE": 1}
+    )
+    assert outputs == {"transcribe": 2, "llm": 2, "image": 1, "total": 5}
+    assert pending_outputs({}) == {"transcribe": 0, "llm": 0, "image": 0, "total": 0}
     target = tmp_path / "out"
     write_github_output(str(target), outputs)
-    assert target.read_text(encoding="utf-8").splitlines() == ["transcribe=2", "llm=2", "total=4"]
+    assert target.read_text(encoding="utf-8").splitlines() == [
+        "transcribe=2",
+        "llm=2",
+        "image=1",
+        "total=5",
+    ]
 
 
 def test_workflow_guards_and_limits() -> None:
