@@ -380,7 +380,21 @@ def test_visual_consent_is_openai_only_and_age_gated() -> None:
     )
     teen = _consent(AiProvider.OPENAI, AiAgeBand.TEEN, version)
     assert policy.evaluate(teen, settings, purpose).reason == policy.TEEN_NOT_ENABLED
-    assert policy.evaluate(teen, make_settings(ai_teens_enabled=True), purpose).is_valid
+    # 만 14~17세 작품 이미지: OpenAI 약관 §3.3(c) → 보호자 확인 필수 (설정과 무관)
+    teens_on = make_settings(ai_teens_enabled=True, ai_teen_guardian_required=False)
+    assert policy.evaluate(teen, teens_on, purpose).reason == policy.GUARDIAN_PENDING
+    assert policy.needs_guardian(AiAgeBand.TEEN, teens_on, purpose) is True
+    assert (
+        policy.needs_guardian(AiAgeBand.TEEN, teens_on, AiConsentPurpose.FEEDBACK_SUMMARY) is False
+    )
+    confirmed = _consent(
+        AiProvider.OPENAI,
+        AiAgeBand.TEEN,
+        version,
+        guardian_confirmed_at=datetime.now(UTC),
+        guardian_name="보호자",
+    )
+    assert policy.evaluate(confirmed, teens_on, purpose).is_valid
     # 만 14세 미만: 운영자 허용 + 조직 ZDR 승인 + ZDR 호환 모델 모두 필요
     child = _consent(
         AiProvider.OPENAI,

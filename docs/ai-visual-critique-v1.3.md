@@ -78,25 +78,85 @@
   응답 대기 시간 초과·504·응답 중 끊김·인증·한도(insufficient_quota)·정책 거부·잘못된 요청은 재시도 안 함.
 - 호출 수·토큰(텍스트/이미지 입력, 출력)·예상 비용을 수정본과 작업에 누적 (실패 호출 포함).
 
+### 최종 검증에서 보강·확인한 것
+
+| 항목 | 동작 | 검증 |
+| --- | --- | --- |
+| 동시 요청과 월 예산 | 생성 요청은 서비스 전체에서 하나씩 처리(트랜잭션 advisory lock 안에서 한도 확인 → 행 생성 → 커밋). 월 예산은 '기록된 비용 + 진행 중 건수 × 1회 예상 비용 + 이번 요청'으로 계산 | 학생 5명 동시 요청, 예산 0.30 → 2건만 202, 3건 429 SERVICE (`test_service_budget_holds_under_concurrent_requests`) |
+| 예상보다 비싼 실제 비용 | Worker가 **보내기 직전** 실제 기록으로 예산을 다시 확인, 넘으면 보내지 않음(`SERVICE_BUDGET_EXCEEDED`, 호출 0) | `test_worker_rechecks_budget_and_records_unknown_cost` |
+| 자동 재시도 비용 | 실패한 호출도 호출 수·토큰·비용을 누적 (429 재시도 → 호출 2회 기록) | `test_transient_errors_retry_but_ambiguous_timeouts_do_not` |
+| 비용이 불명확한 호출 | 응답 대기 초과·응답 중 끊김·504, 요청 후 Worker 중단 → 다시 보내지 않고 **1회 예상 비용으로 보수적 기록**(예산 계산에 포함) | 위 테스트 + `test_lost_worker_records_estimated_cost` |
+| SDK·HTTP 자동 재시도 중복 | OpenAI SDK를 쓰지 않고 httpx로 직접 호출. httpx는 기본적으로 요청을 다시 보내지 않음(연결 재시도 0) → 재시도는 Worker의 작업 재시도 한 곳뿐 | 코드 확인 (`openai_image.py`) |
+| 저장 실패 | Storage 업로드 실패 시 임시 결과 유지, 다음 조회에서 저장만 재시도. 이미지 수정 API 재호출 없음 | `test_storage_failure_retries_only_the_upload` |
+
+남은 한계: 한 번에 진행 중인 요청 수 × (실제 비용 − 예상 비용)만큼은 넘을 수 있다 (예상 비용 $0.12를 실측 후 조정).
+
 ## 6. 운영자·법률 검토 (기능을 켜기 전)
 
 **현재 상태: 미검토 → `IMAGE_EDIT_OPERATOR_CONFIRMED=false`.**
 
+### 6-1. OpenAI 공식 문서 (2026-11-26 확인)
+
+| 문서 | 내용 (원문 인용) | 대상 |
+| --- | --- | --- |
+| [Under-18 API guidance](https://developers.openai.com/api/docs/guides/safety-checks/under-18-api-guidance) | 미성년자 = "under 18 years old". "You should not use OpenAI services to process any personal data of children under 13 or the applicable age of digital consent without first implementing zero data retention in our API." | 13세 미만·해당 지역 디지털 동의 연령 미만 → ZDR 먼저 |
+| 같은 문서 | 필요한 보호 조치: "age-appropriate disclosures to minors about AI tools", "age-appropriate content filters", "reasonable monitoring and reporting mechanisms", 필요 시 "age assurance systems". "Exercise heightened care when handling minors' data" | 18세 미만 전체 |
+| [Services Agreement](https://openai.com/policies/services-agreement) §3.3(c) | 고객은 "allow minors to use OpenAI Services without consent from their parent or guardian" 하지 않는다 | **18세 미만 전체 → 보호자 동의 필요** |
+| [Usage Policies](https://openai.com/policies/usage-policies) | "Children and teens deserve special protection." 미성년자의 "body type or appearance"를 비하·낙인찍는 사용 금지, 교육 분야 고위험 결정의 무인 자동화 금지 | 18세 미만 / 전체 |
+| [Your data](https://developers.openai.com/api/docs/guides/your-data) | API 데이터 학습 미사용(기본). `/v1/images/edits`: 남용 감시 보관 30일, ZDR 대상 "Yes". ZDR은 "subject to prior approval by OpenAI". "Image and file inputs are scanned for CSAM content upon submission" — 의심 시 ZDR이어도 수동 검토용 보관 | 전체 |
+| [Image generation guide](https://developers.openai.com/api/docs/guides/image-generation) | API Organization Verification이 필요할 수 있음. `safety_identifier` 권장(구현함) | 조직 |
+
+문서에 **없는 것**: 13~17세에게 ZDR이 필수인지(“해당 지역 디지털 동의 연령”만 언급, 숫자 없음), 미성년자 작품 이미지에 대한 별도 규정.
+
+### 6-2. 현재 구현의 연령별 조건 (작품 이미지 `VISUAL_CRITIQUE`)
+
+| 연령 | 조건 | 근거 |
+| --- | --- | --- |
+| 만 18세 이상 | 본인 동의 | — |
+| 만 14~17세 | `AI_TEENS_ENABLED` + **보호자 확인 필수**(설정과 무관, 이번에 강제) | OpenAI Services Agreement §3.3(c) |
+| 만 14세 미만 | `AI_UNDER14_ENABLED` + `AI_ZDR_APPROVED`(조직 ZDR 승인) + ZDR 호환 모델 + 법정대리인 확인. **ZDR 미승인 상태에서는 처리 불가** | Under-18 guidance(디지털 동의 연령 미만은 ZDR 먼저) + 개인정보 보호법 제22조의2(만 14세 미만 법정대리인 동의) |
+
+한국의 '디지털 동의 연령'을 만 14세로 본 것은 보수적 해석이다 (법률 검토로 확정).
+ZDR이 승인되지 않은 현재 상태에서 만 14세 미만 학생의 작품 이미지는 보내지 않는다.
+
+### 6-3. 운영자가 결정·조치할 것 (기능을 켜기 전)
+
+1. **법률 검토**: 디지털 동의 연령 해석(만 14세), 만 14~17세 보호자 확인 방식(현재 성명·관계 입력 링크)이 OpenAI §3.3(c)와 국내법에 충분한지.
+2. **개인정보 처리방침 갱신**: 처리 항목(작품 사진·개선사항 문장), 목적, 국외 이전(OpenAI·미국 등, 제28조의8), 보관 기간(수정본: 삭제 시까지 / 임시 결과 14일 / OpenAI 로그 최대 30일, CSAM 의심 시 추가 보관), 학습 미사용, 거부 권리.
+3. **ZDR 신청 여부**: 만 14세 미만을 받으려면 OpenAI에 ZDR 승인 요청 → 승인 후 `AI_ZDR_APPROVED=true`·동의서 문구·버전 갱신.
+4. **OpenAI 조직 인증**(Organization Verification) 필요 여부 확인 — 첫 실제 호출에서 드러남.
+5. **연령에 맞는 안내·신고 경로**: 동의서·화면 안내는 구현됨. 부적절한 결과 신고 경로가 필요하면 추가.
+6. 동의서 버전 `2026-12-visual-v1` 문구 확정.
+
+### 6-4. 그 밖의 확인 항목
+
 | 항목 | 확인할 것 |
 | --- | --- |
-| OpenAI 미성년자 이용 | OpenAI Under-18 API guidance: 18세 미만 대상 서비스는 연령에 맞는 안내·필터·모니터링, "13세 미만 또는 해당 지역 디지털 동의 연령 미만"은 ZDR 적용 전 처리 금지. 국내 기준 만 14세 미만은 기존과 같이 `AI_UNDER14_ENABLED`+`AI_ZDR_APPROVED`+ZDR 호환 모델일 때만 |
-| ZDR | `gpt-image-2.5-*`는 OpenAI 문서상 이미지 엔드포인트 ZDR **호환** 모델이다. **이 조직에 ZDR이 승인·적용됐는지는 별개**이며 현재 승인되지 않았다(`AI_ZDR_APPROVED=false`). 동의서에도 "아직 적용되어 있지 않아요"로 고지. 승인되면 동의서 문구·버전 갱신 |
-| 데이터 보관 | OpenAI: API 입력 학습 미사용(기본), 남용 감시 로그 최대 30일, 이미지 입력은 CSAM 검사 후 의심 시 ZDR이어도 수동 검토용 보관 |
-| 국외 이전 | 개인정보 보호법 제28조의8: 이전 국가·업체·항목·목적·보관 기간 고지 및 동의 (동의서 '제공받는 곳·보내는 내용·보관' 항목) |
-| 법정대리인 | 제22조의2: 만 14세 미만 법정대리인 동의·확인 (기존 보호자 링크 절차 재사용) |
-| 동의 범위 | 작품 **이미지** 전송은 기존 '전사문 요약' 동의 밖 → 별도 동의 `VISUAL_CRITIQUE` (버전 `2026-12-visual-v1`) |
-| 처리방침 갱신 | 처리 항목(작품 사진, 개선사항 문장), 목적(학습용 수정 예시), 수탁·국외 이전(OpenAI, 미국 등), 보관(수정본: 학생 삭제·작품 삭제까지 / 임시 결과 14일 / OpenAI 로그 최대 30일), 학습 미사용, 거부 권리 |
+| 동의 범위 | 작품 **이미지** 전송은 기존 '전사문 요약' 동의 밖 → 별도 동의 `VISUAL_CRITIQUE` |
 | 학습 데이터 | 수정본은 데이터셋·모델 학습에 쓰지 않음 (구조적으로 제외) |
-| 사진 속 개인정보 | 작품 사진에 이름·학교가 적혀 있으면 함께 전달될 수 있음 (동의서 고지). 필요하면 업로드 안내 추가 |
+| 사진 속 개인정보 | 작품 사진에 이름·학교가 적혀 있으면 함께 전달될 수 있음 (동의서 고지) |
 
-켜는 순서: 법률 검토·처리방침 반영 → Supabase에 storage-setup v1.3 적용 → Render·GitHub Actions에
+켜는 순서: 법률 검토·처리방침 반영 → Supabase에 storage-setup v1.3 적용 → 운영 DB 0017 → Render·GitHub Actions에
 `IMAGE_EDIT_ENABLED=true`, `IMAGE_EDIT_OPERATOR_CONFIRMED=true`(+ 기존 `AI_PROVIDER_TERMS_CONFIRMED=true`,
 Secret `OPENAI_API_KEY`) → 운영 테스트 계정으로 확인.
+
+### 6-5. AI 수정본 저장 구조 대안 비교
+
+현재: Worker 결과를 DB에 임시 저장 → 학생이 화면을 열면 API 서버가 학생 토큰으로 Storage에 저장.
+문제: 열지 않으면 14일 뒤 삭제 → 이미 비용을 낸 결과가 사라질 수 있음 (유료 서비스에서 불만 요인).
+
+| 방안 | 보안·접근 권한 | 운영 비용 | 데이터 유실 | 구현 |
+| --- | --- | --- | --- | --- |
+| A. 현재 구조 + 보관 정책 개선 (임시 보관을 길게, 만료 전 알림, 만료 대신 DB 보관 유지) | 가장 단순. 새 권한 없음 | DB 용량 증가 (결과 약 0.3~1MB/건이 DB에 남음, Supabase DB 용량은 Storage보다 비쌈) | 줄지만 '열기 전 저장 안 됨'은 그대로 | 작음 |
+| B. Worker에 범위를 제한한 Storage 쓰기 권한 (예: 버킷 `ai-revisions`에만 쓰는 별도 역할·정책) | Supabase Storage는 버킷·경로 RLS로 제한 가능하나 **사용자 토큰이 아닌 서버 주체가 필요** → service_role 또는 커스텀 JWT 서명 키가 Worker(GitHub Actions)에 들어감. 유출 시 그 버킷 쓰기 가능 | 추가 비용 없음 | 거의 없음 (생성 직후 저장) | 중간. 정책 신설 = 접근 정책 변경 → 승인 필요 |
+| C. 백엔드 내부 전용 저장 API (Worker → API 서버, 내부 토큰) | API 서버도 사용자 토큰 없이 Storage에 써야 하므로 결국 B와 같은 서버 권한이 API 서버에 필요. 내부 API라는 공격면 추가 | 없음 | 거의 없음 | 중간 |
+| D. 별도 저장 경로: 결과를 DB가 아닌 **사용자 토큰 없이도 되는 곳**에 (예: Worker가 학생 토큰 대신 '이 수정본 1건 전용, 짧은 만료'의 Signed **upload** URL을 요청 때 미리 받아 둠) | 요청 시점에 학생 토큰으로 `ai-revisions/{owner}/{artwork}/{revision}.jpg` 경로 하나에만 쓸 수 있는 Signed upload URL을 발급해 작업에 저장(지금의 원본 다운로드 URL과 같은 방식). 새 키·정책 완화 없음, 그 경로 1개만 쓸 수 있음 | 없음 | 업로드 URL 만료(Supabase 2시간) 전에 Worker가 처리하면 유실 없음. 늦으면 지금 방식(DB 임시 저장)으로 대체 | 작음~중간 |
+
+**추천: D + A(대체 경로)**. 서버 권한(service_role)을 새로 두지 않고, 이미 쓰는 'Signed URL을 요청 때 학생 토큰으로 발급'
+방식만 확장한다. Worker는 즉시 실행(workflow_dispatch) 기준 보통 수 분 안에 처리하므로 대부분 바로 Storage에 저장되고,
+2시간을 넘긴 경우에만 지금의 DB 임시 저장 → 열 때 저장으로 넘어간다. 이 경우를 위해 A의 개선(만료 기간 연장 예: 60일,
+만료 7일 전 알림)을 함께 적용한다. B·C는 서버에 Storage 쓰기 권한을 새로 두므로 승인 없이 진행하지 않는다.
+(아직 구현하지 않음 — 승인 후 진행)
 
 ## 7. 키·로그
 

@@ -127,6 +127,16 @@ def _month_start(today: date) -> datetime:
     return start
 
 
+async def month_spent_usd(session: AsyncSession, *, exclude: uuid.UUID | None = None) -> Decimal:
+    """이번 달(Asia/Seoul) 서비스 전체 기록된 예상 비용 (실패·불분명 호출 포함)."""
+    stmt = select(func.coalesce(func.sum(ArtworkAiRevision.estimated_cost_usd), 0)).where(
+        ArtworkAiRevision.created_at >= _month_start(clock.local_today())
+    )
+    if exclude is not None:
+        stmt = stmt.where(ArtworkAiRevision.id != exclude)
+    return Decimal((await session.execute(stmt)).scalar_one())
+
+
 def _charged():  # type: ignore[no-untyped-def]
     """한도에 세는 요청: 진행 중·결과 있음, 또는 실제로 API를 호출함 (호출 없는 실패 제외)."""
     return or_(

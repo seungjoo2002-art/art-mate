@@ -27,6 +27,7 @@ describe('consentCopy (v0.9.6)', () => {
     expect(text).toContain('ZDR')
     expect(text).toContain('그대로 쓸 수 있어요')
     expect(text).toContain('위치 정보')
+    expect(text).toContain('만 18세 미만은 OpenAI 이용 조건에 따라 보호자')
   })
 
   it('explains why consent is not valid yet', () => {

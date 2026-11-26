@@ -31,6 +31,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select, text, update
@@ -99,7 +100,7 @@ from app.services.ai_revision_images import (
     prepare_source,
 )
 from app.services.ai_revision_prompt import build_prompt as build_revision_prompt
-from app.services.ai_revisions import estimate_cost
+from app.services.ai_revisions import estimate_cost, month_spent_usd
 from app.services.ai_summary import (
     KIND_FIELDS,
     PROMPT_VERSION,
@@ -1305,14 +1306,23 @@ class JobRunner:
         text_tokens: int = 0,
         image_tokens: int = 0,
         output_tokens: int = 0,
+        cost_override: Decimal | None = None,
         **values: Any,
     ) -> None:
-        """이미지 수정 API 호출 1번의 사용량·예상 비용을 수정본과 작업에 누적 (성공·실패 모두)."""
-        cost = estimate_cost(
-            self.settings,
-            text_tokens=text_tokens,
-            image_tokens=image_tokens,
-            output_tokens=output_tokens,
+        """이미지 수정 API 호출 1번의 사용량·예상 비용을 수정본과 작업에 누적 (성공·실패 모두).
+
+        cost_override: 응답을 못 받아 토큰을 모르는 호출(처리 여부 불분명)은 1회 예상 비용으로
+        보수적으로 기록한다 → 서비스 월 예산 계산에서 빠지지 않게.
+        """
+        cost = (
+            cost_override
+            if cost_override is not None
+            else estimate_cost(
+                self.settings,
+                text_tokens=text_tokens,
+                image_tokens=image_tokens,
+                output_tokens=output_tokens,
+            )
         )
         async with self._session() as session:
             await session.execute(
@@ -1338,6 +1348,9 @@ class JobRunner:
                 )
             )
             await session.commit()
+
+    def _estimated_call_cost(self) -> Decimal:
+        return Decimal(str(self.settings.image_edit_estimated_cost_usd))
 
     async def _fetch_image(self, url: str | None, *, what: str) -> bytes:
         if not url:
@@ -1390,10 +1403,27 @@ class JobRunner:
                 )
             if revision.api_started_at is not None and revision.api_finished_at is None:
                 # 이전 시도가 요청을 보낸 뒤 멈춤(Worker 중단 등) → 이미 처리·과금됐을 수 있으므로
-                # 자동으로 다시 보내지 않는다 (학생이 직접 다시 만들 수 있음)
+                # 자동으로 다시 보내지 않는다 (학생이 직접 다시 만들 수 있음).
+                # 비용은 모르므로 1회 예상 비용으로 기록 (예산 계산에 포함)
+                await self._add_revision_usage(
+                    revision_id, job_id, cost_override=self._estimated_call_cost()
+                )
                 raise JobFailure(
                     "IMAGE_RESULT_UNKNOWN",
                     "A previous attempt stopped after sending the request",
+                    retryable=False,
+                )
+            # 서비스 월 예산: 요청 때(진행 중 예상분 포함)에 이어 보내기 직전에도 기록으로 확인.
+            # 넘으면 보내지 않는다 (비용 0, 재시도 없음)
+            budget = settings.image_edit_service_monthly_budget_usd
+            if budget and (
+                float(await month_spent_usd(session, exclude=revision_id))
+                + settings.image_edit_estimated_cost_usd
+                > budget
+            ):
+                raise JobFailure(
+                    "SERVICE_BUDGET_EXCEEDED",
+                    "The monthly AI revision budget is used up",
                     retryable=False,
                 )
             expires = job.source_url_expires_at
@@ -1464,7 +1494,13 @@ class JobRunner:
             )
         except ImageEditError as exc:
             if exc.called:
-                await self._add_revision_usage(revision_id, job_id)
+                # 처리 여부가 불분명한 호출(응답 대기 초과 등)은 예상 비용으로 보수적 기록
+                unknown = exc.code == "IMAGE_RESULT_UNKNOWN"
+                await self._add_revision_usage(
+                    revision_id,
+                    job_id,
+                    cost_override=self._estimated_call_cost() if unknown else None,
+                )
             if exc.retryable:
                 # 처리되지 않은 것이 확실한 오류만 재시도한다 → '보냈음' 표시를 지운다
                 async with self._session() as session:

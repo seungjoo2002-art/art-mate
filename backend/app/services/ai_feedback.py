@@ -309,7 +309,7 @@ class AiFeedbackService:
         if current is not None:
             current.revoked_at = now  # 이전 동의(버전·보호자 대기)는 철회 처리 (이력 보존)
             await self.session.flush()
-        guardian = consent_policy.needs_guardian(band, self.settings)
+        guardian = consent_policy.needs_guardian(band, self.settings, purpose)
         consent = AiProcessingConsent(
             id=uuid.uuid4(),
             user_id=user.id,

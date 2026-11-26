@@ -80,9 +80,17 @@ def age_band(birth_year_month: str, today: date) -> AiAgeBand:
     return AiAgeBand.ADULT
 
 
-def needs_guardian(band: AiAgeBand | None, settings: Settings) -> bool:
-    """이 연령 구간에 보호자(법정대리인) 확인이 필요한지."""
+def needs_guardian(
+    band: AiAgeBand | None, settings: Settings, purpose: AiConsentPurpose | None = None
+) -> bool:
+    """이 연령 구간에 보호자(법정대리인) 확인이 필요한지.
+
+    v1.3 작품 이미지(VISUAL_CRITIQUE): OpenAI Services Agreement §3.3(c)는 미성년자(18세 미만)가
+    보호자 동의 없이 서비스를 쓰지 않게 하라고 정한다 → 만 14~17세도 설정과 무관하게 보호자 확인.
+    """
     if band == AiAgeBand.UNDER_14:
+        return True
+    if band == AiAgeBand.TEEN and purpose == AiConsentPurpose.VISUAL_CRITIQUE:
         return True
     return band == AiAgeBand.TEEN and settings.ai_teen_guardian_required
 
@@ -119,7 +127,7 @@ def evaluate(
         and not settings.image_edit_zdr_compatible
     ):
         return ConsentState(False, UNDER_14_BLOCKED)
-    if needs_guardian(band, settings) and consent.guardian_confirmed_at is None:
+    if needs_guardian(band, settings, purpose) and consent.guardian_confirmed_at is None:
         return ConsentState(False, GUARDIAN_PENDING)
     return ConsentState(True, None)
 

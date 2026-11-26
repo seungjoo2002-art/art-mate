@@ -815,3 +815,164 @@ async def test_storage_read_rule_allows_only_kept_replaced_photos(  # type: igno
         p=paths[p1["id"]],
     )
     assert found[0][0] is False
+
+
+# ================================================ 비용 제한 (v1.3 최종 검증)
+
+
+async def test_service_budget_holds_under_concurrent_requests(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, app, world: World
+) -> None:
+    """여러 학생이 동시에 요청해도 서비스 월 예산(진행 중 예상분 포함)을 넘는 생성은 받지 않는다."""
+    # 1회 예상 0.12 → 예산 0.30이면 진행 중 2건까지만 (3번째는 0.36 > 0.30)
+    app.state.settings = app.state.settings.model_copy(
+        update={"image_edit_service_monthly_budget_usd": 0.30, "image_edit_service_daily_limit": 0}
+    )
+    students = [await actors.signup("STUDENT") for _ in range(5)]
+    setups = []
+    for student in students:
+        s = await _setup(client, world, student)
+        await _consent(client, student, "VISUAL_CRITIQUE", VISUAL_VERSION)
+        c = await _candidates(client, student, s["artwork"]["id"], s["p1"]["id"])
+        setups.append((student, s, c["candidates"][0]["key"]))
+    responses = await asyncio.gather(
+        *(_create(client, st, s["artwork"]["id"], s["p1"]["id"], [k]) for st, s, k in setups)
+    )
+    codes = sorted(r.status_code for r in responses)
+    assert codes == [202, 202, 429, 429, 429], codes
+    assert all(
+        r.json()["error"]["details"]["scope"] == "SERVICE"
+        for r in responses
+        if r.status_code == 429
+    )
+    rows = await _sql(app, "SELECT count(*) FROM artwork_ai_revisions")
+    assert rows[0][0] == 2
+
+
+async def test_worker_rechecks_budget_and_records_unknown_cost(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, app, world: World
+) -> None:
+    student = await actors.signup("STUDENT")
+    s = await _setup(client, world, student)
+    await _consent(client, student, "VISUAL_CRITIQUE", VISUAL_VERSION)
+    keys = [
+        c["key"]
+        for c in (await _candidates(client, student, s["artwork"]["id"], s["p1"]["id"]))[
+            "candidates"
+        ]
+    ]
+    # 1) 응답 대기 초과(처리 여부 불분명): 재호출 없음 + 1회 예상 비용으로 기록
+    world.editor.outcomes.append(ImageEditError("IMAGE_RESULT_UNKNOWN", "timeout", retryable=False))
+    first = (await _create(client, student, s["artwork"]["id"], s["p1"]["id"], keys[:1])).json()
+    assert await world.drain() == 1
+    row = (
+        await _sql(
+            app,
+            "SELECT status, api_call_count, estimated_cost_usd FROM artwork_ai_revisions "
+            "WHERE id = :i",
+            i=first["id"],
+        )
+    )[0]
+    assert row[0] == "FAILED" and row[1] == 1 and float(row[2]) == pytest.approx(0.12)
+    assert len(world.editor.calls) == 1
+
+    # 2) 요청 뒤 실제 기록이 예산을 넘으면 Worker가 보내기 직전에 막는다 (호출 0)
+    second = (await _create(client, student, s["artwork"]["id"], s["p1"]["id"], keys[1:2])).json()
+    await _sql(
+        app,
+        "UPDATE artwork_ai_revisions SET estimated_cost_usd = 9.95 WHERE id = :i",
+        i=first["id"],
+    )
+    assert await world.drain() == 1
+    blocked = (
+        await client.get(f"{API}/ai-revisions/{second['id']}", headers=student.headers)
+    ).json()
+    assert blocked["status"] == "FAILED" and blocked["error_code"] == "SERVICE_BUDGET_EXCEEDED"
+    assert len(world.editor.calls) == 1
+    usage = await _sql(
+        app, "SELECT api_call_count FROM artwork_ai_revisions WHERE id = :i", i=second["id"]
+    )
+    assert usage[0][0] == 0
+
+
+async def test_lost_worker_records_estimated_cost(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, app, world: World
+) -> None:
+    student = await actors.signup("STUDENT")
+    s = await _setup(client, world, student)
+    await _consent(client, student, "VISUAL_CRITIQUE", VISUAL_VERSION)
+    c1 = await _candidates(client, student, s["artwork"]["id"], s["p1"]["id"])
+    made = (
+        await _create(
+            client, student, s["artwork"]["id"], s["p1"]["id"], [c1["candidates"][0]["key"]]
+        )
+    ).json()
+    await _sql(
+        app,
+        "UPDATE ai_processing_jobs SET status='RUNNING', attempts=1, locked_by='dead', "
+        "lease_expires_at = now() - interval '1 minute', started_at = now() "
+        "WHERE job_type = 'IMAGE_REVISE'",
+    )
+    await _sql(app, "UPDATE artwork_ai_revisions SET status='RUNNING', api_started_at = now()")
+    assert await world.drain() == 1
+    row = (
+        await _sql(
+            app,
+            "SELECT status, error_code, api_call_count, estimated_cost_usd "
+            "FROM artwork_ai_revisions WHERE id = :i",
+            i=made["id"],
+        )
+    )[0]
+    assert row[:3] == ("FAILED", "IMAGE_RESULT_UNKNOWN", 1)
+    assert float(row[3]) == pytest.approx(0.12)
+    assert world.editor.calls == []
+
+
+async def test_teen_visual_consent_requires_guardian(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, app, world: World
+) -> None:
+    """만 14~17세 작품 이미지 동의는 보호자 확인 전까지 무효 (OpenAI 약관 §3.3(c))."""
+    app.state.settings = app.state.settings.model_copy(
+        update={"ai_teens_enabled": True, "ai_teen_guardian_required": False}
+    )
+    teen = await actors.signup("STUDENT")
+    year = __import__("datetime").date.today().year - 16
+    granted = await client.post(
+        f"{API}/ai-processing-consents",
+        json={
+            "policy_version": VISUAL_VERSION,
+            "agreed": True,
+            "birth_year_month": f"{year}-01",
+            "purpose": "VISUAL_CRITIQUE",
+        },
+        headers=teen.headers,
+    )
+    assert granted.status_code == 201, granted.text
+    body = granted.json()
+    assert body["is_valid"] is False and body["reason"] == "GUARDIAN_PENDING"
+    assert body["guardian_token"]
+    assert body["consent"]["granted_by"] == "GUARDIAN"
+    # 요약 동의는 기존 설정대로 (보호자 확인 요구 꺼짐 → 바로 유효)
+    summary = await client.post(
+        f"{API}/ai-processing-consents",
+        json={"policy_version": AI_VERSION, "agreed": True, "birth_year_month": f"{year}-01"},
+        headers=teen.headers,
+    )
+    assert summary.json()["is_valid"] is True
+    # 보호자 확인 후 유효
+    confirmed = await client.post(
+        f"{API}/guardian-consents/confirm",
+        json={
+            "token": body["guardian_token"],
+            "guardian_name": "보호자",
+            "relationship": "PARENT",
+            "agreed": True,
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    status = (
+        await client.get(
+            f"{API}/ai-processing-consents/me?purpose=VISUAL_CRITIQUE", headers=teen.headers
+        )
+    ).json()
+    assert status["is_valid"] is True

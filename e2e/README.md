@@ -83,3 +83,29 @@ uv run python ../e2e/real_image_edit_check.py --image sketch.jpg --stage SKETCH 
   --improvement "FORM|WEAKNESS|유리병 입구의 타원이 지나치게 납작하다." --out ../e2e-out/real        # 요청 내용만 (무료)
 uv run python ../e2e/real_image_edit_check.py ... --yes                                            # 실제 호출 1건
 ```
+
+## 휴대폰 실기기 검수 환경 — v1.3 AI 수정본 (`mobile_test_server.py`)
+
+운영 API·DB·Supabase·OpenAI를 쓰지 않고 이 PC 한 대로 띄운다. 추가 서버·유료 서비스 없음.
+
+- 실제 API(이 브랜치) + 테스트 전용 PostgreSQL(0017) + Supabase 대체(`/__sb`: Storage 디스크 저장·Auth 빈 응답)
+  + 같은 커밋 프론트 빌드 + 백그라운드 Worker(가짜 AI 첨삭 정리, **모의 이미지 수정**: 8초 뒤 원본에 'MOCK EDIT'과
+  주황 원을 그린 이미지) — 상태 변화·Storage 저장·비교·이력이 실제 서비스와 같은 코드로 동작
+- 테스트 계정 로그인 링크(비밀번호 없음), 모의 실패 다음 1회 지정, 생성 시간 조절: `<주소>/__test/`
+- 백엔드는 실제 `SupabaseStorage` 클라이언트로 대체 서버를 부르므로 업로드·Signed URL·학생 토큰 저장 흐름이 운영과 같다.
+  Storage RLS 자체는 여기서 검사하지 않는다 (DB 테스트에서 검증).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File e2e\mobile_test_env.ps1 -Reset     # Wi-Fi 주소로 실행
+# 휴대폰(같은 Wi-Fi)에서 http://<PC Wi-Fi IP>:8020/__test/
+```
+
+Wi-Fi가 '공용' 네트워크면 Windows 방화벽이 휴대폰 접속을 막는다. 검수하는 동안만 관리자 PowerShell에서:
+
+```powershell
+New-NetFirewallRule -DisplayName "ARTMATE mobile test 8020" -Direction Inbound -Protocol TCP -LocalPort 8020 -RemoteAddress LocalSubnet -Action Allow
+Remove-NetFirewallRule -DisplayName "ARTMATE mobile test 8020"     # 검수 후 삭제
+```
+
+학교·공용 Wi-Fi처럼 기기끼리 통신이 막힌 망이면 HTTPS 터널(예: Cloudflare Quick Tunnel, 무료·계정 불필요)의 주소를
+`-Origin`으로 넘긴다 (테스트 데이터만 터널을 거친다).
