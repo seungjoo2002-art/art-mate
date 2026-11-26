@@ -34,6 +34,10 @@ class Notification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     recommendation_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("practice_recommendations.id", ondelete="CASCADE")
     )
+    # v1.3 AI 수정본 생성 완료 알림 (수정본을 지우면 알림도 함께)
+    ai_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artwork_ai_revisions.id", ondelete="CASCADE")
+    )
     # 같은 이벤트 식별 키 (예: report:{id}, task-reminder:{id}:{주차})
     dedupe_key: Mapped[str] = mapped_column(String(150))
     read_at: Mapped[datetime | None]

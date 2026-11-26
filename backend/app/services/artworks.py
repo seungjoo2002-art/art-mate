@@ -58,6 +58,7 @@ from app.integrations.supabase.storage import (
 )
 from app.models.academy_class import AcademyClass
 from app.models.ai_feedback import FeedbackNote
+from app.models.ai_revision import ArtworkAiRevision
 from app.models.artwork import (
     MAX_WORK_MINUTES,
     Artwork,
@@ -107,6 +108,11 @@ from app.schemas.artworks import (
 from app.schemas.common import PaginationParams
 from app.services.access import AccessService, managed_student_ids
 from app.services.ai_cleanup import purge_for_recordings
+from app.services.ai_revision_cleanup import (
+    release_replaced_originals,
+    revisions_for_photos,
+    soft_delete_revisions,
+)
 from app.services.artwork_stages import (
     StageSpec,
     active_stages,
@@ -116,7 +122,7 @@ from app.services.artwork_stages import (
     replace_stages,
     resolve_stage,
 )
-from app.services.feedback_image_refs import is_feedback_reference
+from app.services.feedback_image_refs import is_kept_reference
 from app.services.images import (
     check_declared_file,
     inspect_image,
@@ -387,7 +393,7 @@ class ArtworkService:
                 .limit(1)
             )
         ).first() is not None
-        if not replaced or not await is_feedback_reference(self.session, photo.id):
+        if not replaced or not await is_kept_reference(self.session, photo.id):
             return None
         return photo
 
@@ -726,6 +732,21 @@ class ArtworkService:
                 ArtworkPhoto.storage_cleanup_pending.is_(False),
             )
             .values(storage_cleanup_pending=True, updated_at=func.now())
+        )
+        # v1.3 AI 수정본: 삭제 표시·진행 중 작업 취소 (파일은 AI 수정본 정리에서)
+        await soft_delete_revisions(
+            self.session,
+            list(
+                (
+                    await self.session.execute(
+                        select(ArtworkAiRevision.id).where(
+                            ArtworkAiRevision.artwork_id == artwork.id,
+                            ArtworkAiRevision.deleted_at.is_(None),
+                        )
+                    )
+                ).scalars()
+            ),
+            code="ARTWORK_DELETED",
         )
         # v1.1 원본 제시물 사진도 함께 삭제 처리 (파일은 아래 cleanup_storage가 정리)
         await self.session.execute(
@@ -1072,8 +1093,9 @@ class ArtworkService:
             replaced.deleted_at = now
             replaced.is_representative = False
             # 피드백 기준 사진이었으면 파일은 남겨 둔다: 그 피드백은 계속 교체 전 사진을 본다
-            # (작품을 지울 때 함께 정리). 아니면 예전처럼 Storage에서 지운다
-            replaced.storage_cleanup_pending = not await is_feedback_reference(
+            # (작품을 지울 때 함께 정리). v1.3: AI 수정본의 원본이면 비교를 위해 남겨 둔다.
+            # 아니면 예전처럼 Storage에서 지운다
+            replaced.storage_cleanup_pending = not await is_kept_reference(
                 self.session, replaced.id
             )
             await self.session.flush()
@@ -1103,6 +1125,24 @@ class ArtworkService:
         if replaced is not None:
             await self.cleanup_storage(owner, token)
         return photo_read(photo)
+
+    async def _drop_revisions_for_slot(self, photo: ArtworkPhoto) -> None:
+        slot = [photo.id]
+        previous = photo.replaces_photo_id
+        for _ in range(10):
+            if previous is None:
+                break
+            slot.append(previous)
+            previous = (
+                await self.session.execute(
+                    select(ArtworkPhoto.replaces_photo_id).where(ArtworkPhoto.id == previous)
+                )
+            ).scalar_one_or_none()
+        revision_ids = await revisions_for_photos(self.session, slot)
+        if revision_ids:
+            await soft_delete_revisions(self.session, revision_ids, code="PHOTO_DELETED")
+            await self.session.flush()
+            await release_replaced_originals(self.session, slot[1:])
 
     async def set_representative(
         self, owner: Profile, artwork_id: uuid.UUID, photo_id: uuid.UUID, value: bool
@@ -1144,6 +1184,9 @@ class ArtworkService:
         await self.session.flush()
         # VER.2: 이 사진으로 만든 게시물 이미지는 내림 (게시물은 남고 사진만 빠짐)
         await retire_post_images(self.session, SharedArtworkImage.source_photo_id == photo.id)
+        # v1.3: 원본 사진을 지우면 이 자리(교체 전 사진 포함)의 AI 수정본도 함께 지운다
+        # (원본 없이 비교 화면이 깨지지 않게). 학생 원본 사진·피드백 정책은 그대로
+        await self._drop_revisions_for_slot(photo)
         if was_representative:
             # 같은 단계의 가장 먼저 올린 사진이 대표를 이어받는다
             successor = (

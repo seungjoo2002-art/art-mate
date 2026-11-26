@@ -20,6 +20,7 @@ export const updatePreferences = (patch) =>
 export function notificationLink(n) {
   if (n.type === 'REPORT_READY' && n.report_id) return `/growth/reports/${n.report_id}`
   if (n.recommendation_id) return `/growth/recommendations/${n.recommendation_id}`
+  if (n.ai_revision_id) return `/ai-revisions/${n.ai_revision_id}` // v1.3 AI 수정본 완성
   if (n.type === 'GOAL_CHECK') return '/my/edit'
   return null
 }

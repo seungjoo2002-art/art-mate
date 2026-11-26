@@ -23,6 +23,7 @@ from app.models.ai_feedback import (
     FeedbackSummary,
     FeedbackTranscript,
 )
+from app.models.ai_revision import ArtworkAiRevision
 from app.models.artwork import (
     Artwork,
     ArtworkExamStage,
@@ -73,6 +74,7 @@ __all__ = [
     "AiProcessingConsent",
     "AiProcessingJob",
     "Artwork",
+    "ArtworkAiRevision",
     "ArtworkExamStage",
     "ArtworkPhoto",
     "ArtworkReferencePhoto",

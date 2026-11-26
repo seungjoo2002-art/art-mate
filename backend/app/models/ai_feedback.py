@@ -154,6 +154,17 @@ class AiProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             " OR (artwork_id IS NOT NULL AND (recording_id IS NULL) <> (note_id IS NULL))",
             name="summarize_has_source",
         ),
+        # v1.3 AI 수정본 생성 작업: 수정본 행 필수, 진행 중 작업은 수정본당 1개
+        CheckConstraint(
+            "job_type <> 'IMAGE_REVISE' OR (revision_id IS NOT NULL AND artwork_id IS NOT NULL)",
+            name="image_revise_has_revision",
+        ),
+        Index(
+            "uq_ai_processing_jobs_active_revision",
+            "revision_id",
+            unique=True,
+            postgresql_where=text("status IN ('QUEUED', 'RUNNING') AND revision_id IS NOT NULL"),
+        ),
         CheckConstraint("attempts >= 0 AND attempts <= max_attempts", name="attempts_range"),
         CheckConstraint(
             "status <> 'RUNNING' OR (lease_expires_at IS NOT NULL AND locked_by IS NOT NULL)",
@@ -179,6 +190,10 @@ class AiProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # v0.7 GROWTH_REPORT 작업의 대상 리포트
     report_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("growth_reports.id", ondelete="CASCADE")
+    )
+    # v1.3 IMAGE_REVISE 작업의 대상 AI 수정본
+    revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artwork_ai_revisions.id", ondelete="CASCADE")
     )
     # v0.7 중복 방지 키 (녹음이 없는 작업)
     dedupe_key: Mapped[str | None] = mapped_column(String(100))

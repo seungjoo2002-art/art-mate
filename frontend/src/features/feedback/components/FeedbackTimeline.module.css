@@ -196,6 +196,24 @@
   color: var(--color-text);
 }
 
+/* v1.3 '피드백 보기' + 바로 아래 'AI 수정본 보기' (같은 폭) */
+.viewColumn {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.viewColumn .viewButton {
+  flex: none;
+  width: 100%;
+}
+
+.stageFoot:has(.viewColumn) {
+  align-items: flex-start;
+}
+
 .viewButton:active {
   background: var(--color-bg);
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bot, LogOut, Mic, TrendingUp } from 'lucide-react'
+import { Bot, LogOut, Mic, Sparkles, TrendingUp } from 'lucide-react'
 import { useAuth } from '../../app/providers/AuthContext'
 import TopBar from '../../components/layout/TopBar'
 import DatasetConsentCard from '../../features/dataset/DatasetConsentCard'
@@ -40,6 +40,13 @@ export default function MySettingsPage() {
             revoke={revokeGrowthConsent}
             confirmMessage={AI_REVOKE_MESSAGE}
           />
+          <ConsentRow
+            icon={Sparkles}
+            title="AI 수정본 (작품 이미지)"
+            load={loadVisualConsent}
+            revoke={revokeVisualConsent}
+            confirmMessage={AI_REVOKE_MESSAGE}
+          />
         </Group>
 
         <section className={styles.group}>
@@ -65,6 +72,8 @@ const loadAiSummaryConsent = () => getAiConsent('FEEDBACK_SUMMARY')
 const revokeAiSummaryConsent = () => revokeAiConsent('FEEDBACK_SUMMARY')
 const loadGrowthConsent = () => getAiConsent('GROWTH_COACHING')
 const revokeGrowthConsent = () => revokeAiConsent('GROWTH_COACHING')
+const loadVisualConsent = () => getAiConsent('VISUAL_CRITIQUE')
+const revokeVisualConsent = () => revokeAiConsent('VISUAL_CRITIQUE')
 const AI_REVOKE_MESSAGE =
   '동의를 철회할까요? 진행 중인 AI 작업은 취소되고, 이미 만든 결과는 남아요.'
 

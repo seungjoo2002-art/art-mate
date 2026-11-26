@@ -219,6 +219,69 @@ class Settings(BaseSettings):
         default="2026-12-ai-v2", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
     )
 
+    # --- AI 시각적 첨삭 (v1.3, AI 수정본) ------------------------------------
+    # 학생이 고른 작품 사진 + 기존 AI 첨삭 정리의 개선사항을 OpenAI 이미지 수정 API로 보내
+    # 학습용 수정 예시를 만든다. 기본 꺼짐. 배포 환경에서는 운영자 확인(아래 두 값)도 필요하다.
+    image_edit_enabled: bool = False
+    # 운영자 확인: 작품 이미지 외부 전송 동의서·개인정보 처리방침 갱신·법률 검토 완료 (배포 환경
+    # 필수)
+    image_edit_operator_confirmed: bool = False
+    # 모델 ID는 이 기본값 한 곳에만 둔다 (환경변수로 변경). 공식 문서 확인(2026-11):
+    # gpt-image-2.5-flare / gpt-image-2.5-sunburst 모두 /v1/images/edits 지원·ZDR 호환 목록 포함
+    image_edit_model: str = Field(
+        default="gpt-image-2.5-flare", pattern=r"^[a-z0-9][a-z0-9._-]{1,63}$"
+    )
+    image_edit_quality: Literal["low", "medium", "high", "xhigh", "max", "auto"] = "medium"
+    # "match": 원본 비율에 가까운 지원 크기(1024x1536·1536x1024·1024x1024), "auto", 또는
+    # "1024x1536" 형식
+    image_edit_size: str = Field(default="match", pattern=r"^(match|auto|\d{3,4}x\d{3,4})$")
+    image_edit_output_format: Literal["jpeg", "png", "webp"] = "jpeg"
+    # jpeg·webp 압축 품질 (0~100)
+    image_edit_output_compression: int = Field(default=90, ge=50, le=100)
+    # 모델로 보내기 전 원본 긴 변 상한 (입력 이미지 토큰·비용 관리, 비율 유지)
+    image_edit_max_input_px: int = Field(default=1536, ge=512, le=4096)
+    # 공식 문서: "복잡한 프롬프트는 최대 2분". 응답 대기(읽기) 시간 초과는 처리 여부가 불분명하므로
+    # 자동 재호출하지 않는다
+    image_edit_timeout_seconds: float = Field(default=240.0, ge=30, le=600)
+    # 자동 재시도 포함 최대 시도 수 (일시적 오류만 재시도: 전송 전 연결 실패·429 rate limit·5xx)
+    image_edit_max_attempts: int = Field(default=2, ge=1, le=3)
+    # 사용자별 생성 한도 (Asia/Seoul 기준 일·월, 0 = 제한 없음). 재사용은 차감하지 않는다
+    image_edit_daily_limit: int = Field(default=3, ge=0, le=1000)
+    image_edit_monthly_limit: int = Field(default=20, ge=0, le=10000)
+    # 서비스 전체 한도 (0 = 제한 없음): 하루 생성 수, 월 예상 비용(USD)
+    image_edit_service_daily_limit: int = Field(default=30, ge=0, le=100000)
+    image_edit_service_monthly_budget_usd: float = Field(default=10.0, ge=0, le=100000)
+    # 예상 비용 계산 단가 (USD / 1M 토큰, 공식 가격표 2026-11 gpt-image-2.5)
+    image_edit_price_text_input: float = Field(default=5.0, ge=0)
+    image_edit_price_image_input: float = Field(default=8.0, ge=0)
+    image_edit_price_image_output: float = Field(default=30.0, ge=0)
+    # 한도 확인·진행 중 예산 계산에 쓰는 1회 예상 비용 (실측 후 조정)
+    image_edit_estimated_cost_usd: float = Field(default=0.12, ge=0, le=10)
+    # Worker가 원본 사진을 받을 Signed URL 유효시간 (요청 사용자 토큰으로 발급)
+    image_edit_source_url_seconds: int = Field(default=86400, ge=600, le=86400)
+    # AI 수정본 비공개 버킷 (storage-setup.sql 과 같아야 한다)
+    image_edit_bucket: str = Field(default="ai-revisions", pattern=r"^[a-z0-9][a-z0-9_-]{1,62}$")
+    # Worker 결과(DB 임시 저장)를 학생이 이 기간 안에 열지 않으면 임시 이미지를 지우고 만료 처리
+    image_edit_staging_retention_days: int = Field(default=14, ge=1, le=90)
+    # 결과 이미지 최대 크기 (DB 임시 저장 상한)
+    image_edit_max_result_bytes: int = Field(
+        default=8 * 1024 * 1024, ge=256 * 1024, le=20 * 1024 * 1024
+    )
+    # 작품 이미지 외부 전송 동의서 버전 (첨삭 요약·성장 분석 동의와 별개)
+    ai_visual_consent_version: str = Field(
+        default="2026-12-visual-v1", min_length=1, max_length=20, pattern=r"^[A-Za-z0-9._-]+$"
+    )
+    # OpenAI 문서상 ZDR 호환 이미지 모델 (2026-11 확인). 만 14세 미만은 이 목록의 모델 +
+    # AI_ZDR_APPROVED(조직에 ZDR이 실제로 승인·적용됨)일 때만 허용
+    image_edit_zdr_models: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: [
+            "gpt-image-2.5-flare",
+            "gpt-image-2.5-flare-2026-09-08",
+            "gpt-image-2.5-sunburst",
+            "gpt-image-2.5-sunburst-2026-09-08",
+        ]
+    )
+
     # --- AI 첨삭 학습 데이터셋 (v0.9.8) --------------------------------------
     # AI 학습 활용 동의서 버전 (AI 요약 동의와 별개). 바꾸면 다시 동의해야 학습 데이터에 포함된다
     dataset_consent_version: str = Field(
@@ -311,6 +374,13 @@ class Settings(BaseSettings):
                         "http:// 또는 https:// 로 시작해야 합니다"
                     )
             return origins
+        return value
+
+    @field_validator("image_edit_zdr_models", mode="before")
+    @classmethod
+    def _split_models(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
     @field_validator("artwork_allowed_content_types", mode="before")
@@ -451,6 +521,25 @@ class Settings(BaseSettings):
     @property
     def growth_ai_active(self) -> bool:
         return self.growth_ai_enabled and not self.ai_terms_blocked
+
+    @property
+    def image_edit_active(self) -> bool:
+        """AI 수정본 생성 요청을 받을 수 있음 (v1.3). 배포 환경은 운영자 확인 두 가지 필요."""
+        if not self.image_edit_enabled:
+            return False
+        if self.is_deployed:
+            return self.ai_provider_terms_confirmed and self.image_edit_operator_confirmed
+        return True
+
+    @property
+    def image_edit_configured(self) -> bool:
+        """Worker에 OpenAI 키가 있음 (이미지 수정은 OpenAI만 사용, 요약 제공자 설정과 무관)."""
+        key = self.openai_api_key
+        return key is not None and bool(key.get_secret_value())
+
+    @property
+    def image_edit_zdr_compatible(self) -> bool:
+        return self.image_edit_model in self.image_edit_zdr_models
 
     @property
     def llm_configured(self) -> bool:

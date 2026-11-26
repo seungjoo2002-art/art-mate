@@ -100,6 +100,12 @@ class ErrorCode(StrEnum):
     FEEDBACK_INVALID_STATE = "FEEDBACK_INVALID_STATE"
     FEEDBACK_VERSION_CONFLICT = "FEEDBACK_VERSION_CONFLICT"
     FEEDBACK_NOT_APPROVED = "FEEDBACK_NOT_APPROVED"
+    # v1.3 AI 시각적 첨삭 (AI 수정본)
+    AI_REVISION_DISABLED = "AI_REVISION_DISABLED"  # 기능 꺼짐·운영자 확인 전
+    AI_REVISION_NO_IMPROVEMENTS = "AI_REVISION_NO_IMPROVEMENTS"  # 반영할 개선사항 없음·미선택
+    # 피드백이 바뀌어 개선사항을 다시 불러와야 함
+    AI_REVISION_CANDIDATES_CHANGED = "AI_REVISION_CANDIDATES_CHANGED"
+    AI_REVISION_LIMIT_REACHED = "AI_REVISION_LIMIT_REACHED"  # 일간·월간·서비스 한도
     # v0.7 성장 코치
     GROWTH_AI_NOT_CONFIGURED = "GROWTH_AI_NOT_CONFIGURED"
     INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
@@ -272,6 +278,11 @@ class DatasetExportDisabledError(ServiceUnavailableError):
 class AiNotConfiguredError(ServiceUnavailableError):
     code = ErrorCode.AI_NOT_CONFIGURED
     message = "AI feedback summary is not enabled"
+
+
+class AiRevisionDisabledError(ServiceUnavailableError):
+    code = ErrorCode.AI_REVISION_DISABLED
+    message = "AI revision examples are not enabled"
 
 
 class DatabaseUnavailableError(ServiceUnavailableError):

@@ -12,8 +12,15 @@ import styles from './FeedbackTimeline.module.css'
  * sections: [{ key, stageId, title, node, photoId? }] — stageId가 없으면(예전 응답) 모든 피드백이 전체 피드백
  *   photoId: 지금 슬라이드에서 보는 사진 → 새 피드백의 기본 기준 사진
  * actions: 맨 아래 (작품 쪽에서 넘긴 버튼 등)
+ * renderStageExtras({ artworkId, stageId, title, photoId }) (v1.3, 선택): 단계 '피드백 보기' 바로 아래
+ *   같은 폭으로 (AI 수정본 보기 버튼, 라우터에서 주입)
  */
-export default function FeedbackTimeline({ artworkId, sections, actions = null }) {
+export default function FeedbackTimeline({
+  artworkId,
+  sections,
+  actions = null,
+  renderStageExtras,
+}) {
   const { items, error, reload } = useArtworkFeedback(artworkId)
   const stageIds = new Set(sections.map((s) => s.stageId).filter(Boolean))
   const counts = items ? countByStage(items, stageIds) : null
@@ -52,7 +59,19 @@ export default function FeedbackTimeline({ artworkId, sections, actions = null }
                 photoId={section.photoId}
                 compact
               />
-              {viewLink(`${section.title} 단계`, section.stageId, section.photoId)}
+              {renderStageExtras ? (
+                <div className={styles.viewColumn}>
+                  {viewLink(`${section.title} 단계`, section.stageId, section.photoId)}
+                  {renderStageExtras({
+                    artworkId,
+                    stageId: section.stageId,
+                    title: section.title,
+                    photoId: section.photoId,
+                  })}
+                </div>
+              ) : (
+                viewLink(`${section.title} 단계`, section.stageId, section.photoId)
+              )}
             </div>
           )}
         </section>

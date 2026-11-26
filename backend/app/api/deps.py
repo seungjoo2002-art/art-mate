@@ -85,6 +85,14 @@ def get_optional_shared_storage(request: Request) -> StorageClient | None:
 
 
 SharedStorage = Annotated[StorageClient | None, Depends(get_optional_shared_storage)]
+
+
+def get_optional_revision_storage(request: Request) -> StorageClient | None:
+    """v1.3 AI 수정본 비공개 버킷 (ai-revisions)."""
+    return getattr(request.app.state, "revision_storage", None)
+
+
+RevisionStorage = Annotated[StorageClient | None, Depends(get_optional_revision_storage)]
 # Storage가 필요 없는 요청(작품 생성 등)도 있는 서비스용. 필요한 시점에 서비스가 503을 낸다.
 OptionalStorage = Annotated[StorageClient | None, Depends(get_optional_storage)]
 DatabaseDep = Annotated[Database, Depends(get_database)]

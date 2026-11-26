@@ -59,3 +59,27 @@ python -X utf8 ../e2e/local_reference_flow.py ../e2e-out/tokens.json ../e2e-out
 - 다른 학생의 접근 404
 
 메모리 Storage의 미리보기 URL은 브라우저에서 열리지 않으므로 스크린샷의 이미지는 빈 칸으로 보인다. 레이아웃 확인용이다.
+
+## 로컬 전체 스택 E2E — v1.3 AI 수정본
+
+같은 서버(`local_server.py`, 가짜 이미지 편집기 포함 — 실제 OpenAI 호출 없음)와 빌드를 쓴다. 메모리 Storage의
+가짜 Signed URL(`https://storage.test/...`)은 Playwright가 `/__e2e/storage/get` 응답으로 채워 이미지가 실제로 보인다.
+다시 돌릴 때는 DB를 새로 만들고 서버를 재시작한다 (학생별 하루 생성 한도 3).
+
+```bash
+python -X utf8 ../e2e/local_ai_revision_flow.py ../e2e-out/tokens.json ../e2e-out
+```
+
+모바일(390px, 터치)·데스크톱(1280px): 아카이브 'AI 수정본 보기 (N개)' 위치·폭, 피드백 화면 개선사항(사진별 분리·
+기본 전체 선택), 동의 화면, 생성 대기·화면 이동·새로고침 후 복원(재호출 없음), 비교 슬라이더(비율·contain·터치/마우스/
+키보드, 사진 슬라이드와 충돌 없음, 세로 스크롤 유지), 원본·AI 수정작 모드, 수정 이력·삭제, 사진 교체 후 이력 분리,
+대표·사진 수 미포함, 다른 학생 404.
+
+## 실제 OpenAI 이미지 수정 점검 (유료, 승인된 소량만)
+
+```bash
+cd backend
+uv run python ../e2e/real_image_edit_check.py --image sketch.jpg --stage SKETCH --subject "..." --type "소묘" \
+  --improvement "FORM|WEAKNESS|유리병 입구의 타원이 지나치게 납작하다." --out ../e2e-out/real        # 요청 내용만 (무료)
+uv run python ../e2e/real_image_edit_check.py ... --yes                                            # 실제 호출 1건
+```

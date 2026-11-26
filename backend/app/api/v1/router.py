@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     academies,
     admin,
     ai_feedback,
+    ai_revisions,
     artworks,
     classes,
     community,
@@ -44,6 +45,8 @@ api_v1_router.include_router(ai_feedback.archive)
 api_v1_router.include_router(ai_feedback.staff_feedback)
 api_v1_router.include_router(ai_feedback.artwork_notes)
 api_v1_router.include_router(ai_feedback.notes)
+api_v1_router.include_router(ai_revisions.router)
+api_v1_router.include_router(ai_revisions.admin)
 api_v1_router.include_router(artworks.router)
 api_v1_router.include_router(artworks.staff_router)
 api_v1_router.include_router(reference_photos.router)

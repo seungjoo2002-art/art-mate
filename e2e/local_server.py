@@ -4,8 +4,11 @@ Replaced external services only: Supabase Auth (test ES256 key), Storage (in-mem
 LLM (grounded fake that echoes source sentences). Writes user tokens to argv[2].
 POST /__e2e/drain runs the job queue once (like the GitHub Actions worker).
 POST /__e2e/storage/put stores a browser upload (relayed by Playwright) in the in-memory Storage.
+GET /__e2e/storage/get serves an in-memory object (Playwright fulfils fake Signed URLs with it).
+v1.3: AI 수정본 — 가짜 이미지 편집기(원본을 받아 눈에 띄게 바꾼 이미지, 실제 OpenAI 호출 없음).
 """
 
+import io
 import json
 import re
 import sys
@@ -18,13 +21,15 @@ DB = sys.argv[3]
 sys.path.insert(0, BACKEND)
 
 import uvicorn  # noqa: E402
-from fastapi import Request  # noqa: E402
+from fastapi import Request, Response  # noqa: E402
+from PIL import Image, ImageDraw, ImageOps  # noqa: E402
 
 from tests.conftest import make_settings  # noqa: E402  (sets ENV_FILE='' — no .env)
 from tests.auth_utils import TEST_SUPABASE_URL, TokenFactory, make_verifier  # noqa: E402
 from tests.fake_ai import FakeFetcher, FakeStt  # noqa: E402
 from tests.fake_storage import FakeStorage  # noqa: E402
 from app.integrations.ai.gemini import LlmResponse  # noqa: E402
+from app.integrations.ai.openai_image import ImageEditResult  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.worker.runner import JobRunner  # noqa: E402
 
@@ -62,6 +67,45 @@ class GroundedLlm:
         )
 
 
+class FakeEditor:
+    """원본을 흑백 + 주황 동그라미로 바꾼 이미지를 돌려주는 가짜 이미지 수정 (실제 호출·비용 없음)."""
+
+    model_name = "e2e-fake-image"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def edit(self, *, images, prompt: str, size: str, user_key: str) -> ImageEditResult:
+        self.calls += 1
+        with Image.open(io.BytesIO(images[0].data)) as src:
+            w, h = (int(v) for v in size.split("x")) if "x" in size else src.size
+            out = ImageOps.grayscale(src).convert("RGB").resize((w, h))
+        draw = ImageDraw.Draw(out)
+        draw.ellipse((w * 0.3, h * 0.3, w * 0.7, h * 0.6), outline=(242, 147, 58), width=12)
+        buf = io.BytesIO()
+        out.save(buf, format="JPEG", quality=85)
+        return ImageEditResult(
+            image=buf.getvalue(),
+            output_format="jpeg",
+            input_tokens=1500,
+            input_image_tokens=1200,
+            input_text_tokens=300,
+            output_tokens=1400,
+            model_name=self.model_name,
+        )
+
+
+class BucketFetcher:
+    """Signed URL의 버킷 이름으로 메모리 Storage를 골라 내려준다 (음성·작품 사진)."""
+
+    def __init__(self, *storages) -> None:
+        self.fetchers = {s.bucket: FakeFetcher(s) for s in storages}
+
+    async def fetch(self, url: str, *, max_bytes: int) -> bytes:
+        bucket = url.split("/object/sign/", 1)[1].split("/", 1)[0]
+        return await self.fetchers[bucket].fetch(url, max_bytes=max_bytes)
+
+
 tokens = TokenFactory()
 users = {name: uuid.uuid4() for name in ("admin", "owner", "teacher2", "student", "other")}
 exp = int(time.time()) + 6 * 3600
@@ -79,6 +123,7 @@ app = create_app(
         stt_enabled=True,
         ai_summary_enabled=True,
         growth_recent_window=2,  # 작품 4개로 최근·이전 비교 확인
+        image_edit_enabled=True,  # v1.3 AI 수정본 (가짜 편집기)
         log_level="WARNING",
     )
 )
@@ -86,7 +131,9 @@ app.state.token_verifier = make_verifier(tokens)
 app.state.storage = FakeStorage()
 app.state.audio_storage = FakeStorage(bucket="feedback-audio")
 app.state.shared_storage = FakeStorage(bucket="shared-artworks")
+app.state.revision_storage = FakeStorage(bucket="ai-revisions")
 llm = GroundedLlm()
+editor = FakeEditor()
 
 
 @app.post("/__e2e/drain", include_in_schema=False)
@@ -96,13 +143,14 @@ async def drain() -> dict:
         app.state.settings,
         stt=FakeStt(),
         llm=llm,
-        fetcher=FakeFetcher(app.state.audio_storage),
+        fetcher=BucketFetcher(app.state.audio_storage, app.state.storage),
         worker_id="e2e",
+        image_editor=editor,
     )
     count = 0
     while count < 20 and await runner.run_once():
         count += 1
-    return {"processed": count, "llm_calls": llm.calls}
+    return {"processed": count, "llm_calls": llm.calls, "image_calls": editor.calls}
 
 
 @app.post("/__e2e/storage/put", include_in_schema=False)
@@ -114,6 +162,22 @@ async def storage_put(request: Request, bucket: str, path: str) -> dict:
     }[bucket]
     target.put(path, await request.body())
     return {"Key": f"{bucket}/{path}"}
+
+
+@app.get("/__e2e/storage/get", include_in_schema=False)
+async def storage_get(bucket: str, path: str) -> Response:
+    """메모리 Storage 객체 (가짜 Signed URL을 Playwright가 이 응답으로 채움, E2E 전용)."""
+    stores = (
+        app.state.storage,
+        app.state.audio_storage,
+        app.state.shared_storage,
+        app.state.revision_storage,
+    )
+    data = {s.bucket: s for s in stores}[bucket].objects.get(path)
+    if data is None:
+        return Response(status_code=404)
+    kind = "image/png" if data.startswith(b"\x89PNG") else "image/jpeg"
+    return Response(content=data, media_type=kind)
 
 
 if __name__ == "__main__":

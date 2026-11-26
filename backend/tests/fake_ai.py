@@ -132,3 +132,33 @@ class FakeFetcher:
         if path not in self.storage.objects:
             raise StorageObjectNotFound("missing")
         return self.storage.objects[path]
+
+
+# --------------------------------------------------------------------------- v1.3 AI 수정본
+
+
+@dataclass
+class FakeImageEditor:
+    """OpenAI 이미지 수정 대체 (실제 호출·비용 없음). outcomes: bytes 결과 또는 ImageEditError."""
+
+    model_name: str = "gpt-image-2.5-flare"
+    outcomes: deque[Any] = field(default_factory=deque)
+    calls: list[dict[str, Any]] = field(default_factory=list)
+
+    async def edit(self, *, images, prompt: str, size: str, user_key: str):  # type: ignore[no-untyped-def]
+        from app.integrations.ai.openai_image import ImageEditError, ImageEditResult
+        from tests.fake_storage import image_bytes
+
+        self.calls.append({"images": images, "prompt": prompt, "size": size, "user_key": user_key})
+        outcome = self.outcomes.popleft() if self.outcomes else image_bytes("JPEG", (48, 64))
+        if isinstance(outcome, ImageEditError):
+            raise outcome
+        return ImageEditResult(
+            image=outcome,
+            output_format="jpeg",
+            input_tokens=1500,
+            input_image_tokens=1200,
+            input_text_tokens=300,
+            output_tokens=1400,
+            model_name=self.model_name,
+        )

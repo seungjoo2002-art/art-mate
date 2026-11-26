@@ -114,6 +114,12 @@ class AiFeatures(BaseModel):
     ai_summary_daily_limit: int = Field(
         description="학생 1명의 하루 AI 정리 요청 한도 (0 = 제한 없음)"
     )
+    ai_revision_status: Literal["ENABLED", "DISABLED", "UNCONFIRMED"] = Field(
+        default="DISABLED",
+        description="v1.3 AI 수정본: ENABLED / DISABLED 꺼짐 / UNCONFIRMED 운영자 확인 전",
+    )
+    ai_revision_daily_limit: int = Field(default=0, description="학생별 하루 생성 한도 (0 = 없음)")
+    ai_revision_monthly_limit: int = Field(default=0, description="학생별 월 생성 한도 (0 = 없음)")
 
 
 class WorkerDispatchInfo(BaseModel):
@@ -191,4 +197,13 @@ async def get_ai_features(request: Request, response: Response) -> AiFeatures:
             else "DISABLED"
         ),
         ai_summary_daily_limit=settings.ai_summary_daily_limit,
+        ai_revision_status=(
+            "ENABLED"
+            if settings.image_edit_active
+            else "UNCONFIRMED"
+            if settings.image_edit_enabled
+            else "DISABLED"
+        ),
+        ai_revision_daily_limit=settings.image_edit_daily_limit,
+        ai_revision_monthly_limit=settings.image_edit_monthly_limit,
     )

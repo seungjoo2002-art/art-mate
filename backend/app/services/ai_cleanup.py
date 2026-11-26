@@ -15,11 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.models.ai_feedback import AiProcessingJob, FeedbackSummary, FeedbackTranscript
+from app.models.ai_revision import ArtworkAiRevision
 from app.models.enums import (
     ACTIVE_JOB_STATUSES,
     AiConsentPurpose,
     AiJobStatus,
     AiJobType,
+    AiRevisionStatus,
     NarrativeStatus,
     TranscriptionStatus,
 )
@@ -30,6 +32,7 @@ from app.models.recording import FeedbackRecording
 PURPOSE_JOB_TYPES: dict[AiConsentPurpose, tuple[AiJobType, ...]] = {
     AiConsentPurpose.FEEDBACK_SUMMARY: (AiJobType.SUMMARIZE,),
     AiConsentPurpose.GROWTH_COACHING: (AiJobType.GROWTH_REPORT, AiJobType.PRACTICE_RECOMMEND),
+    AiConsentPurpose.VISUAL_CRITIQUE: (AiJobType.IMAGE_REVISE,),
 }
 
 
@@ -37,6 +40,8 @@ def consent_version(settings: Settings, purpose: AiConsentPurpose) -> str:
     """현재 동의서 버전 (판정 규칙 전체는 ai_consent_policy.evaluate)."""
     if purpose == AiConsentPurpose.GROWTH_COACHING:
         return settings.ai_growth_consent_version
+    if purpose == AiConsentPurpose.VISUAL_CRITIQUE:
+        return settings.ai_visual_consent_version
     return settings.ai_consent_version
 
 
@@ -137,6 +142,21 @@ async def cancel_jobs_for_owner(
             .values(
                 transcription_status=TranscriptionStatus.FAILED,
                 transcription_updated_at=func.now(),
+                updated_at=func.now(),
+            )
+        )
+    if job_type == AiJobType.IMAGE_REVISE:
+        # v1.3: 생성 대기·중인 AI 수정본도 취소 (이미 받은 결과·완성본은 그대로)
+        await session.execute(
+            update(ArtworkAiRevision)
+            .where(
+                ArtworkAiRevision.owner_id == owner_id,
+                ArtworkAiRevision.status.in_([AiRevisionStatus.QUEUED, AiRevisionStatus.RUNNING]),
+            )
+            .values(
+                status=AiRevisionStatus.CANCELLED,
+                error_code=code,
+                finished_at=func.now(),
                 updated_at=func.now(),
             )
         )

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
 import time
 import uuid
@@ -40,6 +41,7 @@ from app.core.config import Settings
 from app.core.exceptions import ConflictError
 from app.db.session import Database
 from app.integrations.ai.gemini import LlmError, SummaryLlm
+from app.integrations.ai.openai_image import EditImage, ImageEditError, ImageEditor
 from app.integrations.ai.stt import SpeechToText, SttError
 from app.integrations.supabase.storage import (
     AudioFetcher,
@@ -57,12 +59,15 @@ from app.models.ai_feedback import (
     FeedbackSummary,
     FeedbackTranscript,
 )
-from app.models.artwork import Artwork
+from app.models.ai_revision import ArtworkAiRevision
+from app.models.artwork import Artwork, ArtworkPhoto, ArtworkStageDef
 from app.models.enums import (
     ACTIVE_JOB_STATUSES,
+    PRACTICAL_TYPE_LABELS,
     AiConsentPurpose,
     AiJobStatus,
     AiJobType,
+    AiRevisionStatus,
     ConsentType,
     FeedbackItemKind,
     FeedbackItemOrigin,
@@ -70,6 +75,7 @@ from app.models.enums import (
     FeedbackStatus,
     GrowthScope,
     NarrativeStatus,
+    PhotoStatus,
     RecommendationSource,
     RecordingStatus,
     ReviewAction,
@@ -83,7 +89,17 @@ from app.schemas.growth import Evidence
 from app.services import ai_consent_policy as consent_policy
 from app.services import stt_correction
 from app.services.ai_feedback import review_mode_for
-from app.services.ai_redaction import redact_segments
+from app.services.ai_redaction import redact_segments, redact_text
+from app.services.ai_revision_cleanup import expire_staged_results
+from app.services.ai_revision_images import (
+    EXTENSIONS,
+    InvalidImage,
+    choose_size,
+    inspect_result,
+    prepare_source,
+)
+from app.services.ai_revision_prompt import build_prompt as build_revision_prompt
+from app.services.ai_revisions import estimate_cost
 from app.services.ai_summary import (
     KIND_FIELDS,
     PROMPT_VERSION,
@@ -158,8 +174,11 @@ class JobRunner:
         fetcher: AudioFetcher,
         worker_id: str | None = None,
         job_types: frozenset[AiJobType] | None = None,
+        image_editor: ImageEditor | None = None,
     ) -> None:
         self.database = database
+        # v1.3 AI 수정본 (OpenAI 이미지 수정). 없으면 IMAGE_REVISE 작업을 처리할 수 없다
+        self.image_editor = image_editor
         self.settings = settings
         self.stt = stt
         self.llm = llm
@@ -305,6 +324,12 @@ class JobRunner:
             expired = await expire_recording_audio(session, self.settings)
             await session.commit()
         async with self._session() as session:
+            # v1.3: 보관 기간 안에 학생이 열지 않은 AI 수정본 임시 결과(DB) 정리
+            expired_results = await expire_staged_results(session, self.settings)
+            await session.commit()
+        if expired_results:
+            logger.info("ai revision results expired", extra={"count": expired_results})
+        async with self._session() as session:
             notified = await NotificationService(session).sweep_all()
         logger.info("maintenance done", extra={"expired_audio": expired, "notifications": notified})
         return {"expired_audio": expired, "notifications": notified}
@@ -349,11 +374,31 @@ class JobRunner:
         if status in (AiJobStatus.SUCCEEDED, AiJobStatus.FAILED, AiJobStatus.CANCELLED):
             job.source_url = None
             job.source_url_expires_at = None
+            if job.job_type == AiJobType.IMAGE_REVISE:
+                job.params = {}  # 제시물 사진 Signed URL도 지운다
 
     async def _on_terminal(
         self, session: AsyncSession, job: AiProcessingJob, *, cancelled: bool
     ) -> None:
-        """작업이 실패·취소로 끝났을 때 연결된 성장 리포트의 설명문 상태를 맞춘다."""
+        """작업이 실패·취소로 끝났을 때 연결된 성장 리포트 설명문·AI 수정본 상태를 맞춘다."""
+        if job.job_type == AiJobType.IMAGE_REVISE and job.revision_id is not None:
+            await session.execute(
+                update(ArtworkAiRevision)
+                .where(
+                    ArtworkAiRevision.id == job.revision_id,
+                    ArtworkAiRevision.status.in_(
+                        [AiRevisionStatus.QUEUED, AiRevisionStatus.RUNNING]
+                    ),
+                )
+                .values(
+                    status=AiRevisionStatus.CANCELLED if cancelled else AiRevisionStatus.FAILED,
+                    error_code=job.last_error_code,
+                    error_message=(job.last_error_message or "")[:300] or None,
+                    finished_at=func.now(),
+                    updated_at=func.now(),
+                )
+            )
+            return
         if job.job_type != AiJobType.GROWTH_REPORT or job.report_id is None:
             return
         await session.execute(
@@ -434,6 +479,15 @@ class JobRunner:
                 job.last_error_code = failure.code
                 job.last_error_message = str(failure)
                 await self._set_recording_status(session, job)
+                if job.job_type == AiJobType.IMAGE_REVISE and job.revision_id is not None:
+                    await session.execute(
+                        update(ArtworkAiRevision)
+                        .where(
+                            ArtworkAiRevision.id == job.revision_id,
+                            ArtworkAiRevision.status == AiRevisionStatus.RUNNING,
+                        )
+                        .values(status=AiRevisionStatus.QUEUED, updated_at=func.now())
+                    )
             else:
                 self._finish(job, AiJobStatus.FAILED, now, failure.code, str(failure))
                 await self._set_recording_status(session, job, failed=True)
@@ -468,6 +522,7 @@ class JobRunner:
             AiJobType.SUMMARIZE: self._summarize,
             AiJobType.GROWTH_REPORT: self._growth_report,
             AiJobType.PRACTICE_RECOMMEND: self._practice_recommend,
+            AiJobType.IMAGE_REVISE: self._image_revise,
         }
         handler = handlers[job_type]
         try:
@@ -534,7 +589,8 @@ class JobRunner:
             await session.execute(
                 select(AiProcessingConsent).where(
                     AiProcessingConsent.user_id == owner_id,
-                    AiProcessingConsent.provider == consent_policy.provider_for(self.settings),
+                    AiProcessingConsent.provider
+                    == consent_policy.provider_for(self.settings, purpose),
                     AiProcessingConsent.purpose == purpose,
                     AiProcessingConsent.revoked_at.is_(None),
                 )
@@ -1238,3 +1294,238 @@ class JobRunner:
             job.last_error_code = None
             job.last_error_message = None
             await session.commit()
+
+    # ------------------------------------------------------------------ IMAGE_REVISE (v1.3)
+
+    async def _add_revision_usage(
+        self,
+        revision_id: uuid.UUID,
+        job_id: uuid.UUID,
+        *,
+        text_tokens: int = 0,
+        image_tokens: int = 0,
+        output_tokens: int = 0,
+        **values: Any,
+    ) -> None:
+        """이미지 수정 API 호출 1번의 사용량·예상 비용을 수정본과 작업에 누적 (성공·실패 모두)."""
+        cost = estimate_cost(
+            self.settings,
+            text_tokens=text_tokens,
+            image_tokens=image_tokens,
+            output_tokens=output_tokens,
+        )
+        async with self._session() as session:
+            await session.execute(
+                update(ArtworkAiRevision)
+                .where(ArtworkAiRevision.id == revision_id)
+                .values(
+                    api_call_count=ArtworkAiRevision.api_call_count + 1,
+                    input_tokens=ArtworkAiRevision.input_tokens + text_tokens + image_tokens,
+                    input_image_tokens=ArtworkAiRevision.input_image_tokens + image_tokens,
+                    output_tokens=ArtworkAiRevision.output_tokens + output_tokens,
+                    estimated_cost_usd=ArtworkAiRevision.estimated_cost_usd + cost,
+                    updated_at=func.now(),
+                    **values,
+                )
+            )
+            await session.execute(
+                update(AiProcessingJob)
+                .where(AiProcessingJob.id == job_id)
+                .values(
+                    api_call_count=AiProcessingJob.api_call_count + 1,
+                    input_tokens=AiProcessingJob.input_tokens + text_tokens + image_tokens,
+                    output_tokens=AiProcessingJob.output_tokens + output_tokens,
+                )
+            )
+            await session.commit()
+
+    async def _fetch_image(self, url: str | None, *, what: str) -> bytes:
+        if not url:
+            raise JobFailure(
+                "SOURCE_URL_EXPIRED", f"The {what} link expired; request again", retryable=False
+            )
+        try:
+            return await self.fetcher.fetch(url, max_bytes=self.settings.artwork_max_upload_bytes)
+        except StorageObjectNotFound:
+            raise JobFailure(
+                "SOURCE_URL_EXPIRED",
+                f"The {what} is gone or its link expired; request again",
+                retryable=False,
+            ) from None
+        except StorageObjectTooLarge:
+            raise JobFailure(
+                "SOURCE_TOO_LARGE", f"The {what} is too large", retryable=False
+            ) from None
+        except StorageError:
+            raise JobFailure(
+                "STORAGE_UNAVAILABLE", "Storage is unavailable", retryable=True
+            ) from None
+
+    async def _image_revise(self, job_id: uuid.UUID) -> None:
+        settings = self.settings
+        async with self._session() as session:
+            job = await session.get(AiProcessingJob, job_id)
+            assert job is not None and job.revision_id is not None
+            revision_id = job.revision_id
+            revision = await session.get(ArtworkAiRevision, revision_id)
+            if (
+                revision is None
+                or revision.deleted_at is not None
+                or revision.status == AiRevisionStatus.CANCELLED
+            ):
+                raise JobCancelled("AI_REVISION_DELETED")
+            artwork = await session.get(Artwork, revision.artwork_id)
+            if artwork is None or artwork.deleted_at is not None:
+                raise JobCancelled("ARTWORK_DELETED")
+            photo = await session.get(ArtworkPhoto, revision.photo_id)
+            if photo is None or photo.status != PhotoStatus.ACTIVE:
+                # 대기 중에 원본을 교체·삭제함 → 새 사진으로 다시 요청해야 한다
+                raise JobCancelled("PHOTO_CHANGED")
+            await self._check_ai_consent(session, job.owner_id, AiConsentPurpose.VISUAL_CRITIQUE)
+            if self.image_editor is None:
+                raise JobFailure(
+                    "IMAGE_NOT_CONFIGURED",
+                    "Image editing is not enabled on the worker",
+                    retryable=False,
+                )
+            if revision.api_started_at is not None and revision.api_finished_at is None:
+                # 이전 시도가 요청을 보낸 뒤 멈춤(Worker 중단 등) → 이미 처리·과금됐을 수 있으므로
+                # 자동으로 다시 보내지 않는다 (학생이 직접 다시 만들 수 있음)
+                raise JobFailure(
+                    "IMAGE_RESULT_UNKNOWN",
+                    "A previous attempt stopped after sending the request",
+                    retryable=False,
+                )
+            expires = job.source_url_expires_at
+            if expires is not None and expires <= clock.utc_now():
+                raise JobFailure(
+                    "SOURCE_URL_EXPIRED", "The photo link expired; request again", retryable=False
+                )
+            stage = await session.get(ArtworkStageDef, revision.stage_id)
+            assert stage is not None
+            owner = await session.get(Profile, job.owner_id)
+            names = (owner.real_name, owner.display_name) if owner else ()
+            improvements = []
+            for item in revision.improvements:
+                text_value, _ = redact_text(item["text"], names)
+                improvements.append({**item, "text": text_value})
+            practical = (
+                PRACTICAL_TYPE_LABELS.get(artwork.practical_type)
+                if artwork.practical_type
+                else None
+            )
+            source_url = job.source_url
+            reference_url = (job.params or {}).get("reference_url")
+            expected_sha = revision.source_sha256
+            stage_kind, stage_name, subject = stage.legacy_stage, stage.name, artwork.topic
+            owner_key = str(job.owner_id)
+            revision.status = AiRevisionStatus.RUNNING
+            revision.started_at = revision.started_at or clock.utc_now()
+            await session.commit()
+
+        source = await self._fetch_image(source_url, what="photo")
+        if hashlib.sha256(source).hexdigest() != expected_sha:
+            raise JobFailure("SOURCE_CHANGED", "The original photo changed", retryable=False)
+        try:
+            prepared = prepare_source(source, max_px=settings.image_edit_max_input_px)
+            images = [EditImage(prepared.data, prepared.content_type, "artwork.jpg")]
+            if reference_url:
+                reference = prepare_source(
+                    await self._fetch_image(reference_url, what="reference photo"),
+                    max_px=settings.image_edit_max_input_px,
+                )
+                images.append(EditImage(reference.data, reference.content_type, "reference.jpg"))
+        except InvalidImage:
+            raise JobFailure(
+                "SOURCE_INVALID", "The photo could not be read", retryable=False
+            ) from None
+        prompt = build_revision_prompt(
+            stage=stage_kind,
+            stage_name=stage_name,
+            subject=subject,
+            practical_type=practical,
+            has_reference=len(images) > 1,
+            improvements=improvements,
+        )
+        size = choose_size(prepared.width, prepared.height, settings.image_edit_size)
+
+        async with self._session() as session:
+            await self._locked_own_job(session, job_id)  # 취소됐으면 보내지 않는다
+            await session.execute(
+                update(ArtworkAiRevision)
+                .where(ArtworkAiRevision.id == revision_id)
+                .values(api_started_at=func.now(), api_finished_at=None)
+            )
+            await session.commit()
+        started = time.monotonic()
+        try:
+            result = await self.image_editor.edit(
+                images=images, prompt=prompt, size=size, user_key=owner_key
+            )
+        except ImageEditError as exc:
+            if exc.called:
+                await self._add_revision_usage(revision_id, job_id)
+            if exc.retryable:
+                # 처리되지 않은 것이 확실한 오류만 재시도한다 → '보냈음' 표시를 지운다
+                async with self._session() as session:
+                    await session.execute(
+                        update(ArtworkAiRevision)
+                        .where(ArtworkAiRevision.id == revision_id)
+                        .values(api_started_at=None)
+                    )
+                    await session.commit()
+            raise JobFailure(exc.code, str(exc), retryable=exc.retryable) from None
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        text_tokens = result.input_text_tokens or max(
+            0, result.input_tokens - result.input_image_tokens
+        )
+        await self._add_revision_usage(
+            revision_id,
+            job_id,
+            text_tokens=text_tokens,
+            image_tokens=result.input_image_tokens,
+            output_tokens=result.output_tokens,
+            api_finished_at=func.now(),
+        )
+        try:
+            info = inspect_result(result.image, max_bytes=settings.image_edit_max_result_bytes)
+        except InvalidImage:
+            raise JobFailure(
+                "IMAGE_INVALID_RESPONSE", "The returned image could not be read", retryable=False
+            ) from None
+
+        async with self._session() as session:
+            job = await self._locked_own_job(session, job_id)
+            revision = (
+                await session.execute(
+                    select(ArtworkAiRevision)
+                    .where(ArtworkAiRevision.id == revision_id)
+                    .with_for_update()
+                )
+            ).scalar_one()
+            if revision.deleted_at is not None:
+                raise JobCancelled("AI_REVISION_DELETED")
+            now = clock.utc_now()
+            ext = EXTENSIONS[info.content_type]
+            revision.storage_path = f"{revision.owner_id}/{revision.artwork_id}/{revision.id}.{ext}"
+            revision.result_staging = info.data
+            revision.content_type = info.content_type
+            revision.size_bytes = len(info.data)
+            revision.width = info.width
+            revision.height = info.height
+            revision.staged_at = now
+            revision.finished_at = now
+            revision.status = AiRevisionStatus.STORING
+            revision.error_code = None
+            revision.error_message = None
+            revision.settings = {**revision.settings, "requested_size": size}
+            self._finish(job, AiJobStatus.SUCCEEDED, now)
+            job.last_error_code = None
+            job.last_error_message = None
+            await session.flush()
+            await NotificationService(session).ai_revision_ready(job.owner_id, revision_id)
+            await session.commit()
+        logger.info(
+            "ai revision generated",
+            extra={"job_id": str(job_id), "generation_ms": elapsed_ms, "size": size},
+        )

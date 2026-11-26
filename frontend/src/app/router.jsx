@@ -5,6 +5,10 @@ import ArtworkCreatePage from '../features/artworks/pages/ArtworkCreatePage'
 import ArtworkDetailPage from '../features/artworks/pages/ArtworkDetailPage'
 import ArtworkEditPage from '../features/artworks/pages/ArtworkEditPage'
 import ArtworkFeedbackPage from '../features/artworks/pages/ArtworkFeedbackPage'
+import AiRevisionLink from '../features/artworks/aiRevisions/AiRevisionLink'
+import AiRevisionRedirect from '../features/artworks/aiRevisions/AiRevisionRedirect'
+import AiRevisionsPage from '../features/artworks/aiRevisions/AiRevisionsPage'
+import RevisionPanel from '../features/artworks/aiRevisions/RevisionPanel'
 import PostDetailPage from '../features/community/pages/PostDetailPage'
 import PostEditPage from '../features/community/pages/PostEditPage'
 import PostWritePage from '../features/community/pages/PostWritePage'
@@ -43,8 +47,17 @@ import PracticePage from '../pages/student/PracticePage'
 import ProtectedRoute from './ProtectedRoute'
 import PublicOnlyRoute from './PublicOnlyRoute'
 
-const renderArtworkTimeline = (props) => <FeedbackTimeline {...props} />
-const renderArtworkFeedback = (props) => <FeedbackList {...props} />
+// v1.3 AI 수정본: 단계 '피드백 보기' 아래 버튼, 사진 피드백 아래 '피드백 반영 수정하기'
+const renderStageRevisions = ({ artworkId, stageId, title, photoId }) => (
+  <AiRevisionLink artworkId={artworkId} stageId={stageId} stageLabel={title} photoId={photoId} />
+)
+const renderPhotoRevision = (props) => <RevisionPanel key={props.photo.id} {...props} />
+const renderArtworkTimeline = (props) => (
+  <FeedbackTimeline {...props} renderStageExtras={renderStageRevisions} />
+)
+const renderArtworkFeedback = (props) => (
+  <FeedbackList {...props} renderPhotoExtras={renderPhotoRevision} />
+)
 
 export const router = createBrowserRouter([
   // 로그인 전
@@ -99,6 +112,12 @@ export const router = createBrowserRouter([
             path: '/artworks/:artworkId/feedback',
             element: <ArtworkFeedbackPage renderFeedback={renderArtworkFeedback} />,
           },
+          {
+            // v1.3 단계별 AI 수정본 (?photo=사진 id&revision=수정본 id)
+            path: '/artworks/:artworkId/stages/:stageId/ai-revisions',
+            element: <AiRevisionsPage />,
+          },
+          { path: '/ai-revisions/:revisionId', element: <AiRevisionRedirect /> },
           { path: '/artworks/:artworkId/recordings/new', element: <FeedbackRecordPage /> },
           { path: '/artworks/:artworkId/exam', element: <ExamProgressPage /> },
           { path: '/artworks/:artworkId/exam/result', element: <ExamResultPage /> },

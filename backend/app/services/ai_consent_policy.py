@@ -40,13 +40,19 @@ TEEN_NOT_ENABLED = "TEEN_NOT_ENABLED"  # 만 14~17세 전송을 운영자가 아
 UNDER_14_BLOCKED = "UNDER_14_BLOCKED"  # 만 14세 미만 (법정대리인 확인 방법·ZDR 승인 전)
 
 
-def provider_for(settings: Settings) -> AiProvider:
+def provider_for(settings: Settings, purpose: AiConsentPurpose | None = None) -> AiProvider:
+    """목적별 외부 AI 제공자. v1.3 작품 이미지(VISUAL_CRITIQUE)는 OpenAI만 쓴다 (Gemini API 약관은
+    18세 미만이 이용할 가능성이 높은 서비스를 금지 → 이미지 수정에 쓰지 않음)."""
+    if purpose == AiConsentPurpose.VISUAL_CRITIQUE:
+        return AiProvider.OPENAI
     return AiProvider.OPENAI if settings.ai_provider == "openai" else AiProvider.GOOGLE_GEMINI
 
 
 def required_version(settings: Settings, purpose: AiConsentPurpose) -> str:
     if purpose == AiConsentPurpose.GROWTH_COACHING:
         return settings.ai_growth_consent_version
+    if purpose == AiConsentPurpose.VISUAL_CRITIQUE:
+        return settings.ai_visual_consent_version
     return settings.ai_consent_version
 
 
@@ -94,7 +100,7 @@ def evaluate(
         consent is None
         or consent.revoked_at is not None
         or consent.policy_version != required_version(settings, purpose)
-        or consent.provider != provider_for(settings)
+        or consent.provider != provider_for(settings, purpose)
         or consent.age_band is None
     ):
         return ConsentState(False, NOT_CONSENTED)
@@ -103,6 +109,14 @@ def evaluate(
         return ConsentState(False, TEEN_NOT_ENABLED)
     if band == AiAgeBand.UNDER_14 and not (
         settings.ai_under14_enabled and settings.ai_zdr_approved
+    ):
+        return ConsentState(False, UNDER_14_BLOCKED)
+    # v1.3 작품 이미지: 모델이 ZDR 호환 목록에 있어야 함 (ZDR '호환'과 조직의 ZDR '승인'은 별개 —
+    # 승인 여부는 위의 AI_ZDR_APPROVED가 나타낸다)
+    if (
+        band == AiAgeBand.UNDER_14
+        and purpose == AiConsentPurpose.VISUAL_CRITIQUE
+        and not settings.image_edit_zdr_compatible
     ):
         return ConsentState(False, UNDER_14_BLOCKED)
     if needs_guardian(band, settings) and consent.guardian_confirmed_at is None:
