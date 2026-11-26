@@ -220,6 +220,41 @@ class HttpSignedUrlFetcher:
             raise StorageError("Storage request failed") from None
 
 
+class SignedUrlUploader(Protocol):
+    """Worker가 Signed upload URL로 파일을 올린다 (v1.3.1, 사용자 토큰·service_role 없이)."""
+
+    async def upload(self, url: str, data: bytes, *, content_type: str) -> None: ...
+
+
+class HttpSignedUploader:
+    """요청한 학생 토큰으로 미리 발급한 '이 파일 1개 전용' Signed upload URL에 PUT."""
+
+    def __init__(
+        self, *, timeout: float, transport: httpx.AsyncBaseTransport | None = None
+    ) -> None:
+        self._timeout = timeout
+        self._transport = transport
+
+    async def upload(self, url: str, data: bytes, *, content_type: str) -> None:
+        try:
+            async with httpx.AsyncClient(
+                timeout=self._timeout, transport=self._transport
+            ) as client:
+                response = await client.put(
+                    url, content=data, headers={"Content-Type": content_type, "x-upsert": "false"}
+                )
+        except httpx.HTTPError as exc:
+            # URL에는 서명 토큰이 있으므로 로그에 남기지 않는다
+            logger.warning("signed url upload failed", extra={"error_type": type(exc).__name__})
+            raise StorageError("Storage request failed") from None
+        text = response.text.lower()
+        if response.status_code in (400, 409) and ("already exists" in text or "duplicate" in text):
+            raise StorageObjectExists("Object already exists")
+        if response.status_code >= 400:
+            logger.warning("signed url upload error", extra={"status": response.status_code})
+            raise StorageError(f"Storage responded with {response.status_code}")
+
+
 def build_storage(settings: Settings, bucket: str | None = None) -> StorageClient | None:
     """버킷 하나당 클라이언트 하나. 기본은 작품 사진 버킷 (`STORAGE_BUCKET`)."""
     if not settings.storage_configured:

@@ -24,7 +24,7 @@ from tests.db.conftest import Actor
 from tests.db.test_photo_replace_refs import _replace
 from tests.db.test_v09_learning_cycle import note_ai_json
 from tests.db.test_v098_timeline_refs import _photo, _sql
-from tests.fake_ai import FakeFetcher, FakeImageEditor, FakeLlm, FakeStt
+from tests.fake_ai import FakeFetcher, FakeImageEditor, FakeLlm, FakeStt, FakeUploader
 from tests.fake_storage import FakeStorage
 
 API = "/api/v1"
@@ -976,3 +976,122 @@ async def test_teen_visual_consent_requires_guardian(  # type: ignore[no-untyped
         )
     ).json()
     assert status["is_valid"] is True
+
+
+# ================================================ v1.3.1 생성 직후 바로 저장 (Signed upload URL)
+
+
+def _direct_world(app, uploader) -> World:  # type: ignore[no-untyped-def]
+    editor, llm = FakeImageEditor(), FakeLlm()
+    runner = JobRunner(
+        app.state.database,
+        app.state.settings,
+        stt=FakeStt(),
+        llm=llm,
+        fetcher=FakeFetcher(app.state.storage),
+        worker_id="w-v131",
+        image_editor=editor,
+        uploader=uploader,
+    )
+    return World(runner, editor, llm, app.state.storage, app.state.revision_storage)
+
+
+async def _request_one(client, world: World, actors):  # type: ignore[no-untyped-def]
+    student = await actors.signup("STUDENT")
+    s = await _setup(client, world, student)
+    await _consent(client, student, "VISUAL_CRITIQUE", VISUAL_VERSION)
+    c1 = await _candidates(client, student, s["artwork"]["id"], s["p1"]["id"])
+    made = await _create(
+        client, student, s["artwork"]["id"], s["p1"]["id"], [c1["candidates"][0]["key"]]
+    )
+    assert made.status_code == 202, made.text
+    return student, s, made.json()
+
+
+async def test_result_is_stored_right_after_generation(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, app
+) -> None:
+    """화면을 열지 않아도 Worker가 요청 때 받은 URL로 바로 저장 → SUCCEEDED, DB에 이미지 없음."""
+    uploader = FakeUploader(app.state.revision_storage)
+    world = _direct_world(app, uploader)
+    student, _s, made = await _request_one(client, world, actors)
+    job = await _sql(
+        app,
+        "SELECT params ? 'result_upload_url' FROM ai_processing_jobs WHERE revision_id = :r",
+        r=made["id"],
+    )
+    assert job[0][0] is True  # 요청 때 학생 토큰으로 발급
+    signs = [c for c in world.revisions.calls if c[0] == "upload_url"]
+    assert len(signs) == 1 and signs[0][2] == student.headers["Authorization"].split()[1]
+    assert await world.drain() == 1
+    row = (
+        await _sql(
+            app,
+            "SELECT status, result_staging IS NULL, stored_at IS NOT NULL, storage_path "
+            "FROM artwork_ai_revisions WHERE id = :i",
+            i=made["id"],
+        )
+    )[0]
+    assert row[:3] == ("SUCCEEDED", True, True)
+    assert row[3] in world.revisions.objects and len(uploader.urls) == 1
+    # 작업이 끝나면 URL은 지운다
+    params = await _sql(
+        app, "SELECT params FROM ai_processing_jobs WHERE revision_id = :r", r=made["id"]
+    )
+    assert params[0][0] == {}
+    notes = (await client.get(f"{API}/notifications", headers=student.headers)).json()
+    assert any(n["type"] == "AI_REVISION_READY" for n in notes["items"])
+    got = (await client.get(f"{API}/ai-revisions/{made['id']}", headers=student.headers)).json()
+    assert got["status"] == "SUCCEEDED" and got["url"]
+    # 서버가 다시 올리지 않음 (이미 저장됨)
+    assert not [c for c in world.revisions.calls if c[0] == "upload"]
+
+
+async def test_direct_store_failure_falls_back_to_staging(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, app
+) -> None:
+    uploader = FakeUploader(app.state.revision_storage, fail=True)
+    world = _direct_world(app, uploader)
+    student, _s, made = await _request_one(client, world, actors)
+    assert await world.drain() == 1
+    row = (
+        await _sql(
+            app,
+            "SELECT status, result_staging IS NOT NULL FROM artwork_ai_revisions WHERE id = :i",
+            i=made["id"],
+        )
+    )[0]
+    assert row == ("STORING", True)
+    got = (await client.get(f"{API}/ai-revisions/{made['id']}", headers=student.headers)).json()
+    assert got["status"] == "SUCCEEDED" and got["url"]
+    assert len(world.editor.calls) == 1
+
+
+async def test_expired_or_missing_upload_url_falls_back(  # type: ignore[no-untyped-def]
+    client: httpx.AsyncClient, actors, app
+) -> None:
+    uploader = FakeUploader(app.state.revision_storage)
+    world = _direct_world(app, uploader)
+    student, s, made = await _request_one(client, world, actors)
+    await _sql(
+        app,
+        "UPDATE ai_processing_jobs SET params = jsonb_set(params, '{result_upload_expires_at}', "
+        "to_jsonb((now() - interval '1 minute')::text)) WHERE revision_id = :r",
+        r=made["id"],
+    )
+    assert await world.drain() == 1
+    assert uploader.urls == []
+    status = await _sql(app, "SELECT status FROM artwork_ai_revisions WHERE id = :i", i=made["id"])
+    assert status[0][0] == "STORING"
+
+    # URL 발급 자체가 실패해도 생성 요청은 그대로 받는다
+    app.state.revision_storage.fail.add("upload_url")
+    c1 = await _candidates(client, student, s["artwork"]["id"], s["p1"]["id"])
+    second = await _create(
+        client, student, s["artwork"]["id"], s["p1"]["id"], [c1["candidates"][1]["key"]]
+    )
+    assert second.status_code == 202, second.text
+    params = await _sql(
+        app, "SELECT params FROM ai_processing_jobs WHERE revision_id = :r", r=second.json()["id"]
+    )
+    assert "result_upload_url" not in params[0][0]

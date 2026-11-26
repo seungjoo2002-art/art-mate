@@ -162,3 +162,22 @@ class FakeImageEditor:
             output_tokens=1400,
             model_name=self.model_name,
         )
+
+
+@dataclass
+class FakeUploader:
+    """Signed upload URL(FakeStorage 형식)로 올린 것처럼 메모리 Storage에 저장 (v1.3.1)."""
+
+    storage: FakeStorage
+    fail: bool = False
+    urls: list[str] = field(default_factory=list)
+
+    async def upload(self, url: str, data: bytes, *, content_type: str) -> None:
+        from app.integrations.supabase.storage import StorageError
+
+        self.urls.append(url)
+        if self.fail:
+            raise StorageError("simulated upload failure")
+        marker = f"/object/upload/sign/{self.storage.bucket}/"
+        path = unquote(urlsplit(url).path).split(marker, 1)[1]
+        self.storage.objects[path] = data
